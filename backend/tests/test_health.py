@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 
+@pytest.mark.req("17025-7.11.3")
 def test_health_returns_ok(client: TestClient) -> None:
     response = client.get("/api/health")
 
@@ -15,6 +16,7 @@ def test_health_returns_ok(client: TestClient) -> None:
     assert response.json() == {"status": "ok"}
 
 
+@pytest.mark.req("F6", "17025-7.11.3")
 @pytest.mark.parametrize("origin", ["capacitor://localhost", "https://localhost"])
 def test_cors_allows_capacitor_origins(client: TestClient, origin: str) -> None:
     response = client.options(

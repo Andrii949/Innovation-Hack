@@ -43,11 +43,17 @@ SELECT format(
       EXECUTE %L;
       EXECUTE %L;
     END IF;
+    IF to_regclass('public.alembic_version') IS NOT NULL THEN
+      EXECUTE %L;
+      EXECUTE %L;
+    END IF;
   END;
   $body$;
   $fn$,
   format('REVOKE ALL ON TABLE public.audit_log FROM %I', :'app_user'),
-  format('GRANT SELECT, INSERT ON TABLE public.audit_log TO %I', :'app_user')
+  format('GRANT SELECT, INSERT ON TABLE public.audit_log TO %I', :'app_user'),
+  format('REVOKE ALL ON TABLE public.alembic_version FROM %I', :'app_user'),
+  format('GRANT SELECT ON TABLE public.alembic_version TO %I', :'app_user')
 )\gexec
 
 DROP EVENT TRIGGER IF EXISTS enforce_audit_log_privileges;

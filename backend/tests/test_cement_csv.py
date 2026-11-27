@@ -2,6 +2,8 @@ import csv
 from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CSV_PATH = REPO_ROOT / "data" / "seed" / "cement_parameters.csv"
 EXPECTED_COLUMNS = [
@@ -22,6 +24,7 @@ def _load_rows() -> list[dict[str, str]]:
         return list(reader)
 
 
+@pytest.mark.req("F9", "17025-7.11.2")
 def test_cement_csv_has_25_valid_rows() -> None:
     assert CSV_PATH.is_file()
     rows = _load_rows()
@@ -43,6 +46,7 @@ def test_cement_csv_has_25_valid_rows() -> None:
             assert Decimal(min_raw) <= Decimal(max_raw)
 
 
+@pytest.mark.req("F9", "17025-7.11.2")
 def test_cement_csv_key_parameters_and_open_consistency() -> None:
     by_name = {row["name"]: row for row in _load_rows()}
     assert len(by_name) == 25
@@ -63,3 +67,17 @@ def test_cement_csv_key_parameters_and_open_consistency() -> None:
         "",
         "true",
     )
+
+
+@pytest.mark.req("F9", "17025-7.11.2")
+def test_cement_csv_accredited_counts_and_strength_splits() -> None:
+    rows = _load_rows()
+    accredited_count = sum(1 for row in rows if row["accredited"] == "true")
+    non_accredited_count = sum(1 for row in rows if row["accredited"] == "false")
+    assert (accredited_count, non_accredited_count) == (7, 18)
+
+    by_name = {row["name"]: row for row in rows}
+    assert by_name["wytrzymałość zapraw na ściskanie (kN)"]["unit"] == "kN"
+    assert by_name["wytrzymałość zapraw na ściskanie (MPa)"]["unit"] == "MPa"
+    assert by_name["wytrzymałość zapraw na zginanie (kN)"]["unit"] == "kN"
+    assert by_name["wytrzymałość zapraw na zginanie (MPa)"]["unit"] == "MPa"

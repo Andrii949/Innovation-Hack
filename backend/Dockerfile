@@ -38,7 +38,10 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 RUN mkdir -p alembic/versions
 COPY app ./app
-RUN uv sync --locked --no-dev --no-editable
+COPY scripts ./scripts
+RUN uv sync --locked --no-dev --no-editable \
+    && mkdir -p /workspace/backend/app/print/fonts \
+    && cp -n /usr/share/fonts/truetype/dejavu/*.ttf /workspace/backend/app/print/fonts/
 
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh \
