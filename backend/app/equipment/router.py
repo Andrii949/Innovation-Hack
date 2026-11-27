@@ -12,6 +12,8 @@ from app.equipment._core import Status
 from app.equipment.schemas import (
     AuthorizedUserOut,
     AuthorizedUsersUpdate,
+    CalibrationCreate,
+    CalibrationOut,
     EquipmentCard,
     EquipmentCreate,
     EquipmentOut,
@@ -23,9 +25,12 @@ from app.equipment.service import (
     get_equipment_by_qr,
     get_equipment_for_user,
     list_authorized_users,
+    list_calibrations,
     list_equipment_for_user,
+    record_calibration,
     restore,
     serialize_authorized_user,
+    serialize_calibration,
     serialize_equipment_card,
     serialize_equipment_out,
     set_authorized_users,
@@ -151,5 +156,27 @@ def put_equipment_authorized_users(
 ) -> list[AuthorizedUserOut]:
     users = set_authorized_users(db, user, equipment_id, payload.user_ids)
     out = [serialize_authorized_user(u) for u in users]
+    db.commit()
+    return out
+
+
+@router.get("/{equipment_id}/calibrations")
+def get_equipment_calibrations(
+    equipment_id: int,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[CalibrationOut]:
+    return list_calibrations(db, user, equipment_id)
+
+
+@router.post("/{equipment_id}/calibrations", status_code=status.HTTP_201_CREATED)
+def post_equipment_calibration(
+    equipment_id: int,
+    payload: CalibrationCreate,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CalibrationOut:
+    cal = record_calibration(db, user, equipment_id, payload)
+    out = serialize_calibration(db, cal)
     db.commit()
     return out

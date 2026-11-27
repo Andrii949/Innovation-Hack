@@ -1,6 +1,7 @@
 import itertools
 from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,7 @@ from app.config import get_settings
 from app.core.clock import get_today
 from app.db import get_db
 from app.equipment._core import next_due_month
-from app.equipment.models import Calibration, Equipment
+from app.equipment.models import Calibration, CalibrationPoint, Equipment
 from app.equipment.service import new_public_id, parse_month_str
 from app.main import app
 from fastapi.testclient import TestClient
@@ -184,3 +185,44 @@ def make_equipment(db: Session) -> Callable[..., Equipment]:
         return eq
 
     return _make_equipment
+
+
+@pytest.fixture
+def make_calibration(db: Session) -> Callable[..., Calibration]:
+    def _make_calibration(
+        eq: Equipment,
+        month: str,
+        result: str = "OK",
+        *,
+        vendor: str = "GUM",
+        certificate_no: str | None = None,
+    ) -> Calibration:
+        cal_date = parse_month_str(month)
+        due = (
+            next_due_month(cal_date, eq.calibration_interval_months)
+            if eq.calibration_required and eq.calibration_interval_months is not None
+            else None
+        )
+        cal = Calibration(
+            equipment_id=eq.id,
+            calibrated_month=cal_date,
+            vendor=vendor,
+            certificate_no=certificate_no,
+            result=result,
+            next_due_month=due,
+            source="MANUAL",
+            points=[
+                CalibrationPoint(
+                    point="1",
+                    error=Decimal("0"),
+                    uncertainty=Decimal("0.01"),
+                    unit="j.",
+                )
+            ],
+        )
+        db.add(cal)
+        db.flush()
+        db.refresh(cal)
+        return cal
+
+    return _make_calibration

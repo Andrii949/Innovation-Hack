@@ -9,16 +9,20 @@ from app.audit.context import audit_context
 from app.auth.models import Lab, User
 from app.auth.permissions import Permission, require, visible_lab_ids
 from app.config import get_settings
-from app.equipment._core import Status, due_status, month_window, next_due_month
-from app.equipment.models import Calibration, Equipment, EquipmentAuthorization
+from app.equipment._core import Status, due_status, month_window, next_due_month, parse_decimal
+from app.equipment.models import Calibration, CalibrationPoint, Equipment, EquipmentAuthorization
 from app.equipment.schemas import (
     AuthorizedUserOut,
+    CalibrationCreate,
+    CalibrationOut,
+    CalibrationPointOut,
     EquipmentCard,
     EquipmentCreate,
     EquipmentOut,
     EquipmentUpdate,
 )
 from app.errors import AppError
+from app.files.service import attach, list_attachment_ids
 from app.settings.service import get_setting
 
 PUBLIC_ID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
@@ -496,3 +500,137 @@ def set_authorized_users(
     db.flush()
     db.refresh(eq)
     return [users_by_id[uid] for uid in unique_ids]
+
+
+def serialize_calibration(db: Session, cal: Calibration) -> CalibrationOut:
+    att_ids = list_attachment_ids(db, owner_type="calibration", owner_id=cal.id)
+    return CalibrationOut(
+        id=cal.id,
+        equipment_id=cal.equipment_id,
+        calibrated_month=format_month_date(cal.calibrated_month) or "",
+        vendor=cal.vendor,
+        certificate_no=cal.certificate_no,
+        adjustments=cal.adjustments,
+        result=cal.result,
+        next_due_month=format_month_date(cal.next_due_month),
+        note=cal.note,
+        source=cal.source,
+        ocr_meta=cal.ocr_meta,
+        created_by=cal.created_by,
+        created_at=cal.created_at.isoformat(),
+        points=[
+            CalibrationPointOut(
+                id=pt.id,
+                point=pt.point,
+                error=format(pt.error, "f"),
+                uncertainty=format(pt.uncertainty, "f"),
+                unit=pt.unit,
+            )
+            for pt in cal.points
+        ],
+        attachment_ids=att_ids,
+    )
+
+
+def list_calibrations(db: Session, user: User, equipment_id: int) -> list[CalibrationOut]:
+    eq = get_equipment_for_user(db, user, equipment_id)
+    rows = db.scalars(
+        select(Calibration)
+        .where(Calibration.equipment_id == eq.id)
+        .order_by(Calibration.calibrated_month.desc(), Calibration.id.desc())
+    ).all()
+    return [serialize_calibration(db, row) for row in rows]
+
+
+def record_calibration(
+    db: Session,
+    user: User,
+    equipment_id: int,
+    data: CalibrationCreate,
+) -> Calibration:
+    eq = get_equipment_or_404(db, equipment_id)
+    require(user, Permission.CALIBRATION_WRITE, lab_id=eq.lab_id)
+
+    clean_vendor = data.vendor.strip()
+    if not clean_vendor:
+        raise AppError(
+            422,
+            "VALIDATION_ERROR",
+            "Wymagane podanie firmy wzorcującej",
+            details=[{"field": "vendor", "message": "Pole vendor jest wymagane"}],
+        )
+
+    cal_date = parse_month_str(data.calibrated_month, field_name="calibrated_month")
+    parsed_points: list[CalibrationPoint] = []
+    for item in data.points:
+        clean_point = item.point.strip()
+        clean_unit = item.unit.strip()
+        if not clean_point or not clean_unit:
+            raise AppError(
+                422,
+                "VALIDATION_ERROR",
+                "Punkt wzorcowania oraz jednostka są wymagane",
+            )
+        try:
+            err_dec = parse_decimal(item.error)
+            unc_dec = parse_decimal(item.uncertainty)
+        except ValueError as exc:
+            raise AppError(
+                422,
+                "INVALID_NUMBER",
+                "Nieprawidłowy format liczby pomiarowej w punktach wzorcowania",
+            ) from exc
+        parsed_points.append(
+            CalibrationPoint(
+                point=clean_point,
+                error=err_dec,
+                uncertainty=unc_dec,
+                unit=clean_unit,
+            )
+        )
+
+    due_date = (
+        next_due_month(cal_date, eq.calibration_interval_months)
+        if eq.calibration_required and eq.calibration_interval_months is not None
+        else None
+    )
+
+    cal = Calibration(
+        equipment_id=eq.id,
+        calibrated_month=cal_date,
+        vendor=clean_vendor,
+        certificate_no=data.certificate_no.strip() if data.certificate_no else None,
+        adjustments=data.adjustments,
+        result=data.result,
+        next_due_month=due_date,
+        note=data.note,
+        source="MANUAL",
+        ocr_meta=None,
+        created_by=user.id,
+        points=parsed_points,
+    )
+    db.add(cal)
+    db.flush()
+
+    if data.attachment_ids:
+        attach(
+            db,
+            user,
+            data.attachment_ids,
+            owner_type="calibration",
+            owner_id=cal.id,
+            lab_id=eq.lab_id,
+        )
+
+    if (
+        data.result == "NOK"
+        and bool(get_setting(db, "withdraw_on_calibration_nok"))
+        and eq.withdrawn_at is None
+    ):
+        cert_suffix = f" ({cal.certificate_no})" if cal.certificate_no else ""
+        eq.withdrawn_at = datetime.now(UTC)
+        eq.withdrawn_reason = f"Negatywny wynik wzorcowania{cert_suffix}"
+        db.flush()
+
+    db.refresh(cal)
+    return cal

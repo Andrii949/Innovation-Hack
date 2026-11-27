@@ -1,6 +1,6 @@
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.equipment._core import Status
 
@@ -98,3 +98,47 @@ class EquipmentCard(EquipmentOut):
     check_plans: list[CheckPlanSummaryOut]
     can_write: bool
     qr_url: str
+
+
+class CalibrationPointInput(BaseModel):
+    point: str
+    error: str
+    uncertainty: str
+    unit: str
+
+
+class CalibrationPointOut(BaseModel):
+    id: int
+    point: str
+    error: str
+    uncertainty: str
+    unit: str
+
+
+class CalibrationCreate(BaseModel):
+    calibrated_month: str
+    vendor: str
+    certificate_no: str | None = None
+    adjustments: str | None = None
+    result: Literal["OK", "NOK"]
+    points: list[CalibrationPointInput] = Field(min_length=1)
+    note: str | None = None
+    attachment_ids: list[int] = []
+
+
+class CalibrationOut(BaseModel):
+    id: int
+    equipment_id: int
+    calibrated_month: str
+    vendor: str | None
+    certificate_no: str | None
+    adjustments: str | None
+    result: str
+    next_due_month: str | None
+    note: str | None
+    source: str
+    ocr_meta: dict[str, Any] | None
+    created_by: int | None
+    created_at: str
+    points: list[CalibrationPointOut]
+    attachment_ids: list[int]
