@@ -7,6 +7,7 @@ from app.config import get_settings
 from app.db import Base
 from app.equipment.models import (
     Calibration,
+    CalibrationPlan,
     CalibrationPoint,
     CheckPlan,
     CheckRecord,
@@ -37,6 +38,7 @@ _REGISTERED_MODELS = (
     EquipmentAuthorization,
     EquipmentCatalogItem,
     Calibration,
+    CalibrationPlan,
     CalibrationPoint,
     CheckPlan,
     CheckRecord,

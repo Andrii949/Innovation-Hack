@@ -100,7 +100,12 @@ def last_calibration(db: Session, equipment_id: int) -> Calibration | None:
 
 
 def equipment_due_month(eq: Equipment, last: Calibration | None) -> date | None:
-    if not eq.calibration_required or last is None or eq.calibration_interval_months is None:
+    if (
+        not eq.calibration_required
+        or last is None
+        or last.result == "NOK"
+        or eq.calibration_interval_months is None
+    ):
         return None
     return next_due_month(last.calibrated_month, eq.calibration_interval_months)
 
@@ -112,6 +117,8 @@ def equipment_status(eq: Equipment, last: Calibration | None, today: date) -> St
         return Status.NOT_REQUIRED
     if last is None or eq.calibration_interval_months is None:
         return Status.NO_DATA
+    if last.result == "NOK":
+        return Status.OVERDUE
     due = next_due_month(last.calibrated_month, eq.calibration_interval_months)
     alert_from, valid_until = month_window(due, eq.lead_months)
     return due_status(alert_from, valid_until, today)
@@ -397,7 +404,11 @@ def list_equipment_for_user(
     if query:
         needle = query.strip().lower()
         items = [
-            item for item in items if needle in item.code.lower() or needle in item.name.lower()
+            item
+            for item in items
+            if needle in item.code.lower()
+            or needle in item.name.lower()
+            or (item.serial_no is not None and needle in item.serial_no.lower())
         ]
     return items
 
@@ -667,7 +678,9 @@ def record_calibration(
 
     due_date = (
         next_due_month(cal_date, eq.calibration_interval_months)
-        if eq.calibration_required and eq.calibration_interval_months is not None
+        if data.result == "OK"
+        and eq.calibration_required
+        and eq.calibration_interval_months is not None
         else None
     )
 
@@ -694,15 +707,18 @@ def record_calibration(
             }
             break
 
+    clean_adjustments = data.adjustments.strip() if data.adjustments else ""
+    clean_note = data.note.strip() if data.note else ""
+
     cal = Calibration(
         equipment_id=eq.id,
         calibrated_month=cal_date,
         vendor=clean_vendor,
         certificate_no=data.certificate_no.strip() if data.certificate_no else None,
-        adjustments=data.adjustments,
+        adjustments=clean_adjustments or None,
         result=data.result,
         next_due_month=due_date,
-        note=data.note,
+        note=clean_note or None,
         source=source,
         ocr_meta=ocr_meta,
         created_by=user.id,

@@ -306,6 +306,8 @@ def update_reagent(db: Session, user: User, reagent_id: int, data: ReagentUpdate
 def receive_lot(db: Session, user: User, reagent_id: int, data: LotCreate) -> ReagentLot:
     reagent = get_reagent_or_404(db, reagent_id)
     require(user, Permission.REAGENT_WRITE, lab_id=reagent.lab_id)
+    if not reagent.active:
+        raise AppError(409, "REAGENT_INACTIVE", "Odczynnik jest nieaktywny")
     lot = ReagentLot(
         reagent_id=reagent.id,
         lot_no=data.lot_no,
@@ -340,6 +342,8 @@ def record_stock_count(
 ) -> StockCount:
     reagent = get_reagent_or_404(db, reagent_id)
     require(user, Permission.STOCK_WRITE, lab_id=reagent.lab_id)
+    if not reagent.active:
+        raise AppError(409, "REAGENT_INACTIVE", "Odczynnik jest nieaktywny")
     count = StockCount(
         reagent_id=reagent.id,
         quantity=_parse_quantity(data.quantity, "quantity"),

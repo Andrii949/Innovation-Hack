@@ -61,12 +61,12 @@ export function Results({
   token,
   permissions,
   equipmentId,
-}: WorkspaceProps & { equipmentId?: number }) {
+  onClearEquipment,
+}: WorkspaceProps & { equipmentId?: number; onClearEquipment?: () => void }) {
   const [revision, setRevision] = useState(0);
   const [filter, setFilter] = useState("");
   const [csv, setCsv] = useState<File>();
   const [importing, setImporting] = useState(false);
-  const [repeatId, setRepeatId] = useState<number>();
   const after = () => setRevision((value) => value + 1);
   const canWrite = permissions.includes("result:write");
   const admin = permissions.includes("settings:write");
@@ -124,6 +124,10 @@ export function Results({
         ? resultFields
         : resultFields.filter(({ key }) => key !== "equipment_id"),
     [equipmentId, resultFields],
+  );
+  const repeatFields = useMemo(
+    () => resultFields.filter(({ key }) => key !== "parameter_id"),
+    [resultFields],
   );
   const selectedDevice = devices?.data?.find((device) => device.id === equipmentId);
   const resultInitial = useMemo<ApiRecord>(() => ({ parameter_id: filter }), [filter]);
@@ -191,6 +195,23 @@ export function Results({
           )}
         </CardHeader>
         <CardContent className="grid gap-3">
+          {equipmentId !== undefined && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/50 px-3 py-2 text-sm">
+              <span>
+                Filtrowanie po urządzeniu:{" "}
+                <strong>
+                  {selectedDevice
+                    ? `${textValue(selectedDevice.code)} · ${textValue(selectedDevice.name)}`
+                    : `#${equipmentId}`}
+                </strong>
+              </span>
+              {onClearEquipment && (
+                <Button type="button" variant="outline" size="sm" onClick={onClearEquipment}>
+                  Pokaż wszystkie urządzenia
+                </Button>
+              )}
+            </div>
+          )}
           <Control label="Filtruj po parametrze" htmlFor="filter-result-parameter">
             <select
               id="filter-result-parameter"
@@ -215,26 +236,9 @@ export function Results({
                   {canReview && (row.in_range === false || row.review_decision != null) && (
                     <ResultReview token={token} row={row} after={after} />
                   )}
-                  {canWrite &&
-                    (row.in_range === false || row.review_decision === "REPEAT") &&
-                    (repeatId === row.id ? (
-                      <Action
-                        label="Wpisz powtórzenie"
-                        fields={resultFields}
-                        initial={row}
-                        save={(payload) =>
-                          api("/test-results", token, "POST", { ...payload, repeat_of_id: row.id })
-                        }
-                        after={() => {
-                          setRepeatId(undefined);
-                          after();
-                        }}
-                      />
-                    ) : (
-                      <Button variant="ghost" size="sm" onClick={() => setRepeatId(Number(row.id))}>
-                        Powtórz
-                      </Button>
-                    ))}
+                  {canWrite && (row.in_range === false || row.review_decision === "REPEAT") && (
+                    <RepeatResult token={token} row={row} fields={repeatFields} after={after} />
+                  )}
                 </>
               )}
             />
@@ -504,6 +508,39 @@ const resultReviewFields: Field[] = [
   },
   { key: "note", label: "Uzasadnienie", required: true, type: "note" },
 ];
+
+function RepeatResult({
+  token,
+  row,
+  fields,
+  after,
+}: {
+  token: string;
+  row: ApiRecord;
+  fields: Field[];
+  after: () => void;
+}) {
+  const initial = useMemo<ApiRecord>(
+    () => ({ equipment_id: row.equipment_id, sample_label: row.sample_label }),
+    [row.equipment_id, row.sample_label],
+  );
+  return (
+    <Action
+      label="Powtórz"
+      description={`Powtórzenie pomiaru dla: ${textValue(row.parameter_name)} (${textValue(row.sample_label)}).`}
+      fields={fields}
+      initial={initial}
+      save={(payload) =>
+        api("/test-results", token, "POST", {
+          ...payload,
+          parameter_id: Number(row.parameter_id),
+          repeat_of_id: Number(row.id),
+        })
+      }
+      after={after}
+    />
+  );
+}
 
 function ResultReview({ token, row, after }: { token: string; row: ApiRecord; after: () => void }) {
   if (row.review_decision === "ACCEPTED" || row.review_decision === "REPEAT") {

@@ -234,3 +234,38 @@ def test_admin_receives_and_disposes_lot(
     assert disposed.status_code == 200
     assert after[r.id]["lots"] == []
     assert after[r.id]["current_stock"] == "0"
+
+
+def test_inactive_reagent_rejects_lot_and_stock_count(
+    client: TestClient,
+    db: Session,
+    make_lab: MakeLab,
+    make_reagent: MakeReagent,
+    make_user: MakeUser,
+    auth: Auth,
+) -> None:
+    r = make_reagent(make_lab("A"))
+    r.active = False
+    db.flush()
+    headers = auth(make_user("admin", all_labs=True))
+
+    lot_res = client.post(
+        f"/api/reagents/{r.id}/lots",
+        headers=headers,
+        json={
+            "lot_no": "X-1",
+            "expiry_date": "2027-01-01",
+            "quantity": "10",
+            "received_on": "2026-11-27",
+        },
+    )
+    count_res = client.post(
+        f"/api/reagents/{r.id}/stock-counts",
+        headers=headers,
+        json={"quantity": "5", "counted_on": "2026-11-27"},
+    )
+
+    assert lot_res.status_code == 409
+    assert lot_res.json()["error"] == "REAGENT_INACTIVE"
+    assert count_res.status_code == 409
+    assert count_res.json()["error"] == "REAGENT_INACTIVE"

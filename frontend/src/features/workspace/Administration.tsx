@@ -32,10 +32,10 @@ const catalogFields: Field[] = [
   ...modelFields.map((field) =>
     Object.assign({}, field, { required: field.key !== "software_version" }),
   ),
-  { key: "suggested_lab_code", label: "Kod sugerowanej pracowni" },
+  { key: "suggested_lab_code", label: "Kod sugerowanej pracowni", clear: true },
   ...calibrationFields.filter((field) => field.key !== "calibration_interval_months"),
   { key: "calibration_interval_months", label: "Cykl (miesiące)", type: "number" },
-  { key: "search_aliases", label: "Hasła wyszukiwania" },
+  { key: "search_aliases", label: "Hasła wyszukiwania", clear: true },
   { key: "active", label: "Aktywny", type: "boolean" },
 ];
 
@@ -115,8 +115,13 @@ const notificationLabels: Record<string, string> = {
 
 export function Administration(props: WorkspaceProps) {
   const { permissions } = props;
+  const defaultTab = permissions.includes("equipment:write")
+    ? "catalog"
+    : permissions.includes("settings:write")
+      ? "templates"
+      : "users";
   return (
-    <Tabs defaultValue="catalog" className="min-w-0">
+    <Tabs defaultValue={defaultTab} className="min-w-0">
       <TabsList className="h-auto w-full flex-wrap justify-start p-1.5">
         {permissions.includes("equipment:write") && (
           <TabsTrigger value="catalog">Katalog modeli</TabsTrigger>
@@ -126,13 +131,11 @@ export function Administration(props: WorkspaceProps) {
             <TabsTrigger value="templates">Szablony sprawdzeń</TabsTrigger>
             <TabsTrigger value="settings">Ustawienia ogólne</TabsTrigger>
             <TabsTrigger value="rules">Reguły powiadomień</TabsTrigger>
+            <TabsTrigger value="labs">Pracownie</TabsTrigger>
           </>
         )}
         {permissions.includes("users:write") && (
-          <>
-            <TabsTrigger value="users">Użytkownicy</TabsTrigger>
-            <TabsTrigger value="labs">Pracownie</TabsTrigger>
-          </>
+          <TabsTrigger value="users">Użytkownicy</TabsTrigger>
         )}
       </TabsList>
       {permissions.includes("equipment:write") && (
@@ -151,17 +154,15 @@ export function Administration(props: WorkspaceProps) {
           <TabsContent value="rules">
             <Rules {...props} />
           </TabsContent>
-        </>
-      )}
-      {permissions.includes("users:write") && (
-        <>
-          <TabsContent value="users">
-            <Users {...props} />
-          </TabsContent>
           <TabsContent value="labs">
             <Labs {...props} />
           </TabsContent>
         </>
+      )}
+      {permissions.includes("users:write") && (
+        <TabsContent value="users">
+          <Users {...props} />
+        </TabsContent>
       )}
     </Tabs>
   );
@@ -488,7 +489,7 @@ function Users({ token }: WorkspaceProps) {
 
 export function Audit({ token }: WorkspaceProps) {
   const [offset, setOffset] = useState(0);
-  const state = useApi<ApiRecord[]>("/audit", token);
+  const state = useApi<ApiRecord[]>(`/audit?limit=51&offset=${offset}`, token);
   return (
     <Card>
       <CardHeader>
@@ -498,18 +499,18 @@ export function Audit({ token }: WorkspaceProps) {
       <CardContent className="grid gap-4">
         {state?.data ? (
           <>
-            <Rows rows={state.data.slice(offset, offset + 50)} columns={auditColumns} />
+            <Rows rows={state.data.slice(0, 50)} columns={auditColumns} />
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 disabled={offset === 0}
-                onClick={() => setOffset((value) => value - 50)}
+                onClick={() => setOffset((value) => Math.max(0, value - 50))}
               >
                 Nowsze
               </Button>
               <Button
                 variant="outline"
-                disabled={state.data.length <= offset + 50}
+                disabled={state.data.length <= 50}
                 onClick={() => setOffset((value) => value + 50)}
               >
                 Starsze

@@ -82,7 +82,7 @@ def test_nok_withdraws_equipment(
     assert "W/124/2026" in body["withdrawn_reason"]
 
 
-def test_nok_keeps_dates_status_when_setting_off(
+def test_nok_marks_overdue_without_withdrawing_when_setting_off(
     client: TestClient,
     db: Session,
     admin_a: Any,
@@ -100,6 +100,8 @@ def test_nok_keeps_dates_status_when_setting_off(
             "vendor": "Laboratorium wzorcujące X",
             "certificate_no": "W/125/2026",
             "result": "NOK",
+            "note": "   ",
+            "adjustments": "",
             "points": [
                 {
                     "point": "500 g",
@@ -111,9 +113,16 @@ def test_nok_keeps_dates_status_when_setting_off(
         },
     )
     assert r.status_code == 201
+    assert r.json()["next_due_month"] is None
+    assert r.json()["note"] is None
+    assert r.json()["adjustments"] is None
+
     body = client.get(f"/api/equipment/{eq_a.id}", headers=auth(admin_a)).json()
-    assert body["status"] == "OK"
+    assert body["status"] == "OVERDUE"
     assert body["withdrawn_at"] is None
+
+    schedule = client.get("/api/schedule?kind=CALIBRATION", headers=auth(admin_a)).json()
+    assert any(item["ref_id"] == eq_a.id and item["status"] == "OVERDUE" for item in schedule)
 
 
 def test_worker_cannot_record_calibration(

@@ -60,8 +60,33 @@ def _set_dates(plan: CalibrationPlan, dates: PlanDates) -> None:
 
 
 def _active_equipment(equipment: Equipment) -> None:
-    if not equipment.calibration_required or equipment.withdrawn_at is not None:
-        raise AppError(409, "VALIDATION_ERROR", "Urządzenie nie jest dostępne do zaplanowania")
+    if equipment.withdrawn_at is not None:
+        raise AppError(409, "EQUIPMENT_WITHDRAWN", "Urządzenie jest wycofane")
+    if not equipment.calibration_required:
+        raise AppError(409, "CALIBRATION_NOT_REQUIRED", "Urządzenie nie wymaga wzorcowania")
+
+
+def _ensure_no_same_device_overlap(
+    db: Session,
+    equipment_id: int,
+    dispatch_on: date,
+    return_on: date,
+    *,
+    exclude_id: int | None = None,
+) -> None:
+    stmt = select(CalibrationPlan.id).where(
+        CalibrationPlan.equipment_id == equipment_id,
+        CalibrationPlan.dispatch_on <= return_on,
+        CalibrationPlan.return_on >= dispatch_on,
+    )
+    if exclude_id is not None:
+        stmt = stmt.where(CalibrationPlan.id != exclude_id)
+    if db.scalars(stmt.limit(1)).first() is not None:
+        raise AppError(
+            409,
+            "CALIBRATION_PLAN_CONFLICT",
+            "Urządzenie ma już nakładający się plan wysyłki.",
+        )
 
 
 def _availability(db: Session, plan: CalibrationPlan) -> tuple[int, int | None, str | None]:
@@ -86,7 +111,7 @@ def _availability(db: Session, plan: CalibrationPlan) -> tuple[int, int | None, 
         )
     ).all()
     if not peers:
-        return 0, None, None
+        return 0, 0, None
     active = {equipment_id for equipment_id, withdrawn_at in peers if withdrawn_at is None}
     conflicts = db.scalars(
         select(CalibrationPlan).where(CalibrationPlan.equipment_id.in_(active), *overlap)
@@ -155,6 +180,7 @@ def create_plan(data: PlanCreate, user: CurrentUser, db: Database) -> PlanOut:
     _active_equipment(equipment)
     plan = CalibrationPlan(equipment=equipment, created_by=user.id)
     _set_dates(plan, data)
+    _ensure_no_same_device_overlap(db, equipment.id, plan.dispatch_on, plan.return_on)
     db.add(plan)
     db.flush()
     out = _out(db, plan)
@@ -170,9 +196,12 @@ def edit_plan(plan_id: int, data: PlanDates, user: CurrentUser, db: Database) ->
     _lock_lab(db, plan.equipment.lab_id)
     db.refresh(plan)
     if plan.approved_at is not None:
-        raise AppError(409, "VALIDATION_ERROR", "Zatwierdzonego planu nie można edytować")
+        raise AppError(409, "CALIBRATION_PLAN_CONFLICT", "Zatwierdzonego planu nie można edytować")
     _active_equipment(plan.equipment)
     _set_dates(plan, data)
+    _ensure_no_same_device_overlap(
+        db, plan.equipment_id, plan.dispatch_on, plan.return_on, exclude_id=plan.id
+    )
     db.flush()
     out = _out(db, plan)
     db.commit()
@@ -191,7 +220,7 @@ def approve_plan(plan_id: int, user: CurrentUser, db: Database) -> PlanOut:
     _active_equipment(plan.equipment)
     _, _, warning = _availability(db, plan)
     if warning is not None:
-        raise AppError(409, "VALIDATION_ERROR", warning)
+        raise AppError(409, "CALIBRATION_PLAN_CONFLICT", warning)
     plan.approved_by = user.id
     plan.approved_at = datetime.now(UTC)
     db.flush()

@@ -149,3 +149,13 @@ def test_native_debug_cleartext_and_ios_entitlements() -> None:
     assert "com.apple.developer.nfc.readersession.formats" in entitlements
     assert "<string>NDEF</string>" in entitlements
     assert "aps-environment" in entitlements
+
+
+@pytest.mark.req("17025-7.11.3")
+def test_frontend_dockerfile_copies_public_assets_and_blank_fcm_is_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dockerfile = (REPO_ROOT / "frontend" / "Dockerfile").read_text(encoding="utf-8")
+    assert "COPY public ./public" in dockerfile
+    monkeypatch.setenv("FCM_CREDENTIALS_FILE", "")
+    assert Settings().fcm_credentials_file is None

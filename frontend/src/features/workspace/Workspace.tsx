@@ -20,6 +20,7 @@ import {
   type ApiRecord,
   apiVoid,
   errorMessage,
+  onUnauthorized,
   textValue,
 } from "@/api/workspaceClient";
 import { BrandMark, PlantSkyline } from "@/components/BrandMark";
@@ -37,6 +38,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Toaster } from "@/components/ui/sonner";
 import { parseEquipmentUrl } from "@/lib/qr";
+import { clearServerUrl, getServerUrl, isNativeApp } from "@/platform/server";
 import { clearToken, getToken, setToken } from "@/platform/tokenStore";
 
 import { Administration, Audit, roleLabel } from "./Administration";
@@ -76,7 +78,7 @@ const sections = [
 ] as const;
 type Section = (typeof sections)[number]["key"] | "notifications";
 
-export function Workspace() {
+export function Workspace({ onChangeServer }: { onChangeServer?: () => void } = {}) {
   const [session, setSession] = useState<Session | null>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -128,6 +130,26 @@ export function Workspace() {
     window.addEventListener("popstate", syncPath);
     return () => window.removeEventListener("popstate", syncPath);
   }, []);
+
+  const signedIn = session != null;
+  useEffect(() => {
+    if (!signedIn) {
+      return undefined;
+    }
+    return onUnauthorized(() => {
+      void clearToken();
+      setSession(null);
+      setError("Sesja wygasła. Zaloguj się ponownie.");
+    });
+  }, [signedIn]);
+
+  const native = isNativeApp();
+  const serverUrl = native ? getServerUrl() : null;
+
+  function changeServer() {
+    clearServerUrl();
+    onChangeServer?.();
+  }
 
   function openPublic(id: string | null) {
     const path = id === null ? "/" : `/e/${id}`;
@@ -206,17 +228,35 @@ export function Workspace() {
     <div className="min-h-dvh bg-background">
       <header className="sticky top-0 z-30 border-t-4 border-t-brand-lime border-b bg-white">
         <div className="mx-auto flex h-[4.25rem] max-w-[90rem] items-center gap-3 px-3 sm:px-7">
-          <a href="/" className="flex min-w-0 flex-1 items-center gap-3">
-            <BrandMark className="size-9 sm:size-10" />
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-bold text-brand-navy sm:text-base">
-                Laboratorium zakładowe
+          {user ? (
+            <button
+              type="button"
+              onClick={() => navigate(permitted[0]?.key ?? "schedule")}
+              className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            >
+              <BrandMark className="size-9 sm:size-10" />
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-bold text-brand-navy sm:text-base">
+                  Laboratorium zakładowe
+                </span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  Cementownia Warta S.A.
+                </span>
               </span>
-              <span className="block truncate text-xs text-muted-foreground">
-                Cementownia Warta S.A.
+            </button>
+          ) : (
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <BrandMark className="size-9 sm:size-10" />
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-bold text-brand-navy sm:text-base">
+                  Laboratorium zakładowe
+                </span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  Cementownia Warta S.A.
+                </span>
               </span>
-            </span>
-          </a>
+            </div>
+          )}
           {user && (
             <Button
               variant="ghost"
@@ -234,7 +274,7 @@ export function Workspace() {
               )}
             </Button>
           )}
-          {(user || reviewPassword) && (
+          {(user || reviewPassword || native) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -242,15 +282,25 @@ export function Workspace() {
                   size="sm"
                   disabled={busy}
                   className="max-w-[46vw]"
-                  aria-label={reviewPassword ? "Wybierz rolę" : "Menu konta"}
+                  aria-label={reviewPassword ? "Wybierz rolę" : user ? "Menu konta" : "Serwer"}
                 >
                   <ShieldCheck />
-                  <span className="truncate">{user ? roleLabel(user.role) : "Wybierz rolę"}</span>
+                  <span className="truncate">
+                    {user ? roleLabel(user.role) : reviewPassword ? "Wybierz rolę" : "Serwer"}
+                  </span>
                   <ChevronDown />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
                 {user && <DropdownMenuLabel>{user.full_name}</DropdownMenuLabel>}
+                {native && serverUrl !== null && (
+                  <>
+                    <DropdownMenuLabel className="truncate text-xs font-normal text-muted-foreground">
+                      Serwer: {serverUrl}
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem onSelect={changeServer}>Zmień serwer</DropdownMenuItem>
+                  </>
+                )}
                 {reviewPassword && (
                   <>
                     <DropdownMenuLabel className="text-xs text-muted-foreground">
@@ -304,7 +354,14 @@ export function Workspace() {
           {session === undefined ? (
             <Loading />
           ) : (
-            <LoginForm busy={busy} error={error} login={login} equipment={publicId !== null} />
+            <LoginForm
+              busy={busy}
+              error={error}
+              login={login}
+              equipment={publicId !== null}
+              serverUrl={serverUrl}
+              onChangeServer={onChangeServer ? changeServer : undefined}
+            />
           )}
         </main>
       ) : (
@@ -367,6 +424,7 @@ export function Workspace() {
                 token={session.token}
                 permissions={session.user.permissions}
                 equipmentId={equipmentId}
+                onClearEquipment={() => setEquipmentId(undefined)}
               />
             )}
             {activeSection === "reagents" && (
@@ -401,11 +459,15 @@ function LoginForm({
   busy,
   error,
   equipment,
+  serverUrl,
+  onChangeServer,
 }: {
   login: (name: string, password: string) => Promise<void>;
   busy: boolean;
   error: string;
   equipment: boolean;
+  serverUrl: string | null;
+  onChangeServer?: () => void;
 }) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -441,6 +503,22 @@ function LoginForm({
             {busy ? "Logowanie…" : "Zaloguj się"}
           </Button>
         </form>
+        {serverUrl !== null && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span className="truncate">Serwer: {serverUrl}</span>
+            {onChangeServer && (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto p-0"
+                onClick={onChangeServer}
+              >
+                Zmień serwer
+              </Button>
+            )}
+          </div>
+        )}
         {reviewPassword && (
           <p className="mt-4 text-xs text-muted-foreground">
             Do przeglądu aplikacji wybierz rolę w prawym górnym rogu.

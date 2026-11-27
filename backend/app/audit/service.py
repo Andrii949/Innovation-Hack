@@ -46,6 +46,8 @@ def list_audit_logs(
     entity_id: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    limit: int = 200,
+    offset: int = 0,
 ) -> list[AuditLog]:
     stmt = select(AuditLog)
     if entity is not None:
@@ -56,5 +58,5 @@ def list_audit_logs(
         stmt = stmt.where(AuditLog.at >= datetime.combine(date_from, time.min, tzinfo=UTC))
     if date_to is not None:
         stmt = stmt.where(AuditLog.at <= datetime.combine(date_to, time.max, tzinfo=UTC))
-    stmt = stmt.order_by(AuditLog.at.desc(), AuditLog.id.desc())
+    stmt = stmt.order_by(AuditLog.at.desc(), AuditLog.id.desc()).offset(offset).limit(limit)
     return list(db.scalars(stmt).all())
