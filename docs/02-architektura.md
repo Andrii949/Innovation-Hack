@@ -21,9 +21,10 @@ może zmienić. F1–F9 to funkcje z tabeli w 01 §3.3.
 | D7 | Liczby pomiarowe jako `Decimal` / `NUMERIC`, nigdy `float`; na wejściu przecinek albo kropka | zakresy typu 0,005–0,105 %; polskie przyzwyczajenie do przecinka | propozycja |
 | D8 | Logowanie tokenem sesji (nagłówek `Authorization: Bearer`), w bazie tylko skrót tokenu; hasła Argon2 | aplikacja Capacitor ma inny origin niż serwer, więc ciasteczka są zawodne; sesję można od razu unieważnić (zgubiony telefon, odebrane uprawnienia) | propozycja |
 | D9 | Powiadomienia o terminach liczy osobny proces (worker), bez duplikatów | powiadomienie ma historię (przeczytane, rozwiązane); ponowne uruchomienie niczego nie dubluje | propozycja |
-| D10 | QR zawiera link `https://<serwer>/e/<public_id>` | aparat systemowy otworzy link w przeglądarce, skaner w aplikacji wyciągnie ID; kod `121/A` się nie nadaje (ma „/”, numery powtarzają się między pracowniami) | propozycja |
+| D10 | QR i tag NFC zawierają ten sam link `https://<serwer>/e/<public_id>` | QR czyta każdy aparat i drukarka etykiet, a zbliżenie telefonu do tagu (NDEF URI) otwiera tę samą kartę bez skanowania; kod `121/A` się nie nadaje (ma „/”, numery powtarzają się między pracowniami); tag to tylko wskaźnik, dostęp nadal wymaga logowania i uprawnień | propozycja |
 | D11 | Adres serwera ustawiany w aplikacji mobilnej przy pierwszym uruchomieniu | jedna aplikacja w sklepie, wiele firm, każda z własnym serwerem (D4) | propozycja |
 | D12 | Druki formalne (karta urządzenia z historią, raport walidacji) generuje backend przez binarkę `typst`; etykiety QR zostają w przeglądarce | PDF jest zapisem (17025 7.5.2) — musi powstać po stronie serwera, niezależnie od przeglądarki użytkownika; jedna binarka zamiast przeglądarki w obrazie, szablony `.typ` podglądane tym samym narzędziem co produkcja | propozycja |
+| D13 | OCR świadectwa przez zewnętrzne API (model multimodalny/LLM albo OCR, np. Qwen-VL), wyłączony domyślnie | pełny „raport wzorcowania” ma wiele stron i tabel, a przepisywanie firmy, numeru, miesiąca i punktów zajmuje czas; wynik jest tylko szkicem pól — admin zatwierdza i decyduje OK / NIE OK (17025 7.5.2), oryginał skanu zostaje w plikach; klucz zostaje na serwerze, a dokument opuszcza go tylko w tej jednej, świadomej operacji | propozycja |
 
 ---
 
@@ -58,7 +59,7 @@ flowchart LR
 | Komponent | Technologia | Odpowiada za |
 |---|---|---|
 | Frontend | React + TypeScript + Vite, shadcn/ui (Tailwind CSS, Radix UI), TanStack Query | ekrany biura i pracowni — jeden kod |
-| Aplikacja mobilna | Capacitor 8 + pluginy: skaner kodów, aparat, push | ten sam frontend na Androidzie i iOS |
+| Aplikacja mobilna | Capacitor 8 + pluginy: skaner kodów, NFC, aparat, push | ten sam frontend na Androidzie i iOS |
 | API | FastAPI, SQLAlchemy 2, Alembic, Pydantic v2 | logika, uprawnienia, historia zmian, pliki |
 | Worker | ten sam kod Pythona, osobny proces | przeliczanie terminów, powiadomienia, wysyłka push i e-mail |
 | Baza | PostgreSQL 16+ | dane i historia zmian |
@@ -98,9 +99,9 @@ erDiagram
 | `Role` (`role`) | `name`, `permissions` (lista, §5) | 01 §3.2 |
 | `User` (`app_user` — `user` jest zarezerwowane w PostgreSQL) | `login`, `full_name`, `password_hash`, `role_id`, `all_labs`, zakres pracowni (`user_lab`), `active` | 01 §3.2 |
 | `UserSession` (`user_session` — nazwa `Session` koliduje z sesją SQLAlchemy) | `user_id`, `token_hash`, `expires_at`, `revoked_at`, `device_info` | D8 |
-| `Equipment` (`equipment`) | `public_id` (do QR), `lab_id`, `number` → kod `121/A`; `name`, `category`, `manufacturer`, `model`, `serial_no`, `software_version`, `location`; `calibration_required`, `calibration_interval_months`, `calibration_mode` (`EXTERNAL` / `ON_SITE`), `lead_months`, `acceptance_criteria`; `withdrawn_at`, `withdrawn_reason`; `notes` | F1, 17025 6.4.13 |
+| `Equipment` (`equipment`) | `public_id` (do QR i NFC), `lab_id`, `number` → kod `121/A`; `name`, `category`, `manufacturer`, `model`, `serial_no`, `software_version`, `location`; `calibration_required`, `calibration_interval_months`, `calibration_mode` (`EXTERNAL` / `ON_SITE`), `lead_months`, `acceptance_criteria`; `withdrawn_at`, `withdrawn_reason`; `notes` | F1, 17025 6.4.13 |
 | `EquipmentAuthorization` | `equipment_id`, `user_id` | F7 |
-| `Calibration` | `equipment_id`, `calibrated_month` (ze świadectwa), `vendor`, `certificate_no`, `adjustments`, `result` (`OK` / `NOK` — decyzja admina), `next_due_month` (kopia na pamiątkę), `note`, załączniki | F4, 6.4.13 e |
+| `Calibration` | `equipment_id`, `calibrated_month` (ze świadectwa), `vendor`, `certificate_no`, `adjustments`, `result` (`OK` / `NOK` — decyzja admina), `next_due_month` (kopia na pamiątkę), `note`, `source` (`MANUAL` / `OCR`), `ocr_meta` (dostawca, model, pewność pól, `attachment_id`), załączniki | F4, 6.4.13 e |
 | `CalibrationPoint` | `calibration_id`, `point` (np. „500 g”), `error`, `uncertainty`, `unit` | F4 („punkty wzorcowania” z rozmowy) |
 | `FormTemplate` | `name`, `fields`: lista `{key, label, type: number/text/bool/date, unit, min, max, required}` | 01 §3.1 (pola konfigurowalne) |
 | `CheckPlan` | `equipment_id`, `name` (np. „Sprawdzenie temperatury”, „Konserwacja”), `interval_months`, `lead_months`, `form_template_id`, `active` | F5, 6.4.10, 6.4.13 g |
@@ -239,6 +240,7 @@ Role i ich uprawnienia są danymi w bazie — tabela wyżej to ustawienie domyś
 | Parametry badań i zakresy | Ustawienia → Parametry (import CSV) | 25 wierszy z 01 §4 (wytrzymałości w kN i MPa osobno) |
 | Reakcja na wynik poza zakresem | parametr albo ustawienie ogólne | `FLAG` — zapis z oznaczeniem i wymogiem powtórzenia |
 | Wycofanie po wzorcowaniu „NIE OK” | ustawienie ogólne | włączone (17025 6.4.9; czekamy na pyt. 2 w 01) |
+| OCR świadectw: włączony, limit stron | Ustawienia → Integracje (model, URL i klucz tylko w env) | wyłączony; limit 5 stron; `OCR_API_URL`, `OCR_API_KEY`, `OCR_MODEL`, `OCR_TIMEOUT_S` w env |
 | Odbiorcy i kanały powiadomień | Ustawienia → Powiadomienia | tabela niżej, kanał: w aplikacji |
 | Czas sesji, limit plików, cykl workera, limit prób logowania | ustawienia ogólne | 12 h, 10 MB, 60 min, 5 prób / 15 min |
 
@@ -271,6 +273,7 @@ Błędy zawsze w formacie `{"error": "<KOD>", "message": "<tekst po polsku>"}`.
 | Urządzenia | `GET/POST /equipment`, `GET/PATCH /equipment/{id}`, `GET /equipment/by-qr/{public_id}`, `POST /equipment/{id}/withdraw`, `POST /equipment/{id}/restore` | odczyt: wszyscy w zakresie; zmiany: admin |
 | Upoważnienia | `GET/PUT /equipment/{id}/authorized-users` | admin |
 | Wzorcowania | `GET/POST /equipment/{id}/calibrations` | zapis: admin |
+| OCR wzorcowań | `POST /equipment/{id}/calibrations/extract` (body `{"attachment_id": …}`) | `calibration:write`; nic nie zapisuje |
 | Sprawdzenia | `GET/POST /equipment/{id}/check-plans`, `PATCH /check-plans/{id}`, `GET/POST /check-plans/{id}/records` | plany: admin; wpisy: upoważnieni |
 | Odczynniki | `GET/POST /reagents`, `PATCH /reagents/{id}`, `POST /reagents/{id}/lots`, `PATCH /lots/{id}`, `POST /reagents/{id}/stock-counts` | spis: pracownicy pracowni; reszta: admin |
 | Wyniki | `GET/POST /test-parameters`, `PATCH /test-parameters/{id}`, `POST /test-parameters/import`, `GET/POST /test-results` | parametry: admin; wyniki: `result:write` |
@@ -301,13 +304,16 @@ Kody błędów:
 | `VALIDATION_ERROR` | 422 | inne błędy danych (lista pól w `details`) |
 | `FILE_TOO_LARGE` | 413 | — |
 | `UNSUPPORTED_FILE_TYPE` | 415 | dozwolone: JPEG, PNG, PDF (rozpoznawane po zawartości, nie po nazwie) |
+| `OCR_DISABLED` | 409 | OCR wyłączony w ustawieniach albo brak konfiguracji dostawcy |
+| `OCR_FAILED` | 502 | dostawca zwrócił błąd albo odpowiedź nie przechodzi walidacji |
+| `OCR_TIMEOUT` | 504 | przekroczono `OCR_TIMEOUT_S` |
 | `RENDER_FAILED` | 500 | `typst` nie złożył dokumentu; szczegóły (stderr) tylko w logu serwera |
 
 ---
 
 ## 8. Najważniejsze przepływy
 
-### 8.1 Skan QR → wpis sprawdzenia (F5, F6, F7)
+### 8.1 Skan QR albo zbliżenie NFC → wpis sprawdzenia (F5, F6, F7)
 
 ```mermaid
 sequenceDiagram
@@ -329,6 +335,12 @@ sequenceDiagram
 ```
 
 Bez zalogowania: aplikacja pamięta adres `/e/...` i po zalogowaniu wraca na kartę urządzenia.
+
+**NFC:** tag NDEF zawiera dokładnie ten sam `qr_url`, więc aplikacja i aparat systemowy
+dostają ten sam `public_id` — nie ma osobnego endpointu ani osobnych uprawnień. Tag czytany
+w aplikacji przez plugin (Android reader mode, iOS Core NFC); na nowszych iPhone'ach system
+czyta NDEF w tle i otwiera kartę w przeglądarce. Tag można sklonować — to tylko wskaźnik,
+nie sekret; dostęp nadal daje token sesji.
 
 ### 8.2 Wynik wzorcowania → nowy termin (F4)
 
@@ -390,6 +402,41 @@ sequenceDiagram
   end
 ```
 
+### 8.5 Świadectwo → OCR → formularz (F4, D13)
+
+```mermaid
+sequenceDiagram
+  actor S as Specjalista
+  participant Web as Przeglądarka
+  participant API
+  participant OCR as Zewnętrzne API OCR/LLM
+  S->>Web: upload skanu (PDF/JPEG/PNG)
+  Web->>API: POST /api/attachments
+  S->>Web: „Odczytaj ze skanu”
+  Web->>API: POST /api/equipment/{id}/calibrations/extract {attachment_id}
+  API->>API: uprawnienia, OCR włączony?, typ i rozmiar
+  API->>API: PDF → obrazy stron (limit 5)
+  API->>OCR: strony + stały prompt (JSON: firma, nr, miesiąc, punkty)
+  OCR-->>API: JSON (liczby jako tekst, pewność pól)
+  API->>API: walidacja Pydantic + parser liczb; złe pola odrzucone
+  API-->>Web: szkic pól (bez zapisu w bazie)
+  S->>Web: poprawia, uzupełnia, wybiera OK / NIE OK
+  Web->>API: POST /api/equipment/{id}/calibrations (+ attachment_ids)
+  API-->>Web: zapis, termin i status; historia: source=OCR, dostawca i model
+```
+
+Zasady:
+
+- `extract` nie zapisuje nic; to odczyt, który można powtórzyć.
+- Odpowiedź dostawcy jest niezaufana: liczby przechodzą ten sam parser co wpis ręczny
+  (przecinek/kropka → `Decimal`), śmieci są odrzucane per pole, a teksty (firma, numer)
+  trafiają do formularza jako propozycja — nie do bazy.
+- Wysyłamy tylko plik wskazany przez `attachment_id` i tylko przy włączonym OCR; klucz API
+  zostaje na serwerze, aplikacja go nie zna. Limit stron (5), `max_upload_mb` (T16) i
+  `OCR_TIMEOUT_S` (60 s) ograniczają koszt; bez automatycznych ponowień.
+- Oryginał skanu zostaje jako załącznik wpisu (7.5.2), a `source` / `ocr_meta` pozwalają
+  odtworzyć, które pola przyszły z modelu.
+
 ---
 
 ## 9. Frontend i aplikacja mobilna
@@ -418,6 +465,7 @@ tekstem (biały tekst ma kontrast 2,0:1). Tokeny w `frontend/src/index.css`.
 | Potrzeba | Plugin | Uwagi |
 |---|---|---|
 | Skan QR | `@capacitor/barcode-scanner` (oficjalny) | jedno wywołanie `scanBarcode`; działa też w przeglądarce (html5-qrcode). Alternatywa: `@capacitor-mlkit/barcode-scanning` |
+| Odczyt tagów NFC | plugin NFC dla Capacitor 8 (kandydaci: `@capawesome-team/capacitor-nfc`, `@capacitor-community/nfc`; zgodność sprawdzić w T24) | tylko rekord NDEF URI z `public_id`; w przeglądarce brak — zostaje QR; iOS wymaga `NFCReaderUsageDescription` i uprawnienia do typów tagów |
 | Zdjęcie dokumentu | `@capacitor/camera` | w przeglądarce zapas: `<input type="file" accept="image/*" capture="environment">` |
 | Push | `@capacitor-firebase/messaging` | daje token FCM na obu platformach. Oficjalny `@capacitor/push-notifications` na iOS zwraca token APNs, którego FCM nie przyjmie |
 | Token sesji | bezpieczny magazyn (Keychain / Keystore), np. `capacitor-secure-storage-plugin` | sprawdzić zgodność z Capacitor 8; w przeglądarce `sessionStorage` |
@@ -429,10 +477,13 @@ Ważne szczegóły:
   że GET działa, a POST nie (odrzucony preflight).
 - **Adres serwera (D11):** ekran przy pierwszym uruchomieniu — wpisanie adresu albo skan
   „QR konfiguracyjnego” z panelu admina.
-- **QR:** trasa `/e/:publicId` działa w przeglądarce i w aplikacji. Otwarcie aplikacji
+- **QR i NFC:** trasa `/e/:publicId` działa w przeglądarce i w aplikacji. Otwarcie aplikacji
   natywnej prosto z aparatu systemowego (universal links) na iOS wymaga domeny osiągalnej
-  dla Apple — przy serwerze wewnętrznym zostaje skaner w aplikacji.
+  dla Apple — przy serwerze wewnętrznym zostaje skaner w aplikacji. Tag NFC niesie ten sam
+  URL (NDEF): system czyta go bez aplikacji na nowszych iPhone'ach, a w aplikacji przez Core
+  NFC / reader mode Androida. NFC nie zastępuje QR — drukarka etykiet nie zapisuje tagów.
 - **Etykiety (17025 6.4.8):** strona do druku: kod, nazwa, następny termin MM/RRRR, QR.
+  Tag NFC (opcjonalnie) zapisujemy tym samym linkiem; nie wchodzi na wydruk.
 - **Push:** treść bez danych („Masz nowe powiadomienia w aplikacji”), szczegóły aplikacja
   pobiera z API. Push wymaga projektu Firebase, klucza APNs (konto Apple Developer) i wyjścia
   serwera do internetu. Pliki konfiguracyjne Firebase nie trafiają do publicznego repo.
@@ -456,6 +507,7 @@ backend/app/
   auth/              # pracownie, użytkownicy, role, sesje, logowanie, uprawnienia
   settings/  files/  forms/
   equipment/         # urządzenia, upoważnienia, wzorcowania, sprawdzenia
+  integrations/      # OCR: ocr.py — klient OpenAI-compatible (Qwen-VL, OpenAI, vLLM)
   reagents/          # odczynniki, partie, spisy
   results/           # parametry i wyniki badań
   schedule/          # DueItem, /schedule
@@ -472,6 +524,7 @@ backend/app/
 | Baza | SQLAlchemy 2 (synchronicznie) + psycopg 3, Alembic |
 | Hasła | `pwdlib[argon2]` (to obecnie pokazuje dokumentacja FastAPI zamiast passlib) |
 | Push | `firebase-admin` (FCM HTTP v1) |
+| OCR | `httpx` (klient OpenAI-compatible), `pdftoppm` (poppler) do stron PDF |
 | Druki PDF | `typst` 0.15.x — binarka wywoływana przez `subprocess`, nie `typst-py` |
 | Testy, lint | pytest + httpx (TestClient), ruff, `pdftotext` (poppler) do sprawdzania PDF |
 
@@ -511,6 +564,24 @@ z T29), renderuje backend przez binarkę `typst`; przeglądarka tylko otwiera go
 - **Etykiety QR (T21):** zostają w przeglądarce (`window.print()`), bo liczy się precyzja
   arkusza naklejek; PDF tylko tam, gdzie wydruk jest dowodem (17025 7.5.2).
 
+### OCR świadectw (D13)
+
+`POST /api/equipment/{id}/calibrations/extract` nic nie zapisuje — zwraca szkic pól.
+
+- **Dostawca:** jeden klient zgodny z OpenAI (`POST {OCR_API_URL}/chat/completions`), więc
+  działa z Qwen-VL (tryb zgodny DashScope), OpenAI i lokalnym vLLM/Ollama. Model i URL z env;
+  klucz tylko z env — nigdy w bazie, logu ani odpowiedzi API.
+- **Wejście:** załącznik z T16 (PDF/JPEG/PNG), własny i nieprzypięty albo w zakresie pracowni
+  urządzenia; PDF renderujemy do PNG przez `pdftoppm -r 200`, bo nie każdy dostawca przyjmuje
+  PDF. Limit 5 stron i `max_upload_mb`.
+- **Wyjście:** stały prompt prosi o JSON z polami `vendor`, `certificate_no`,
+  `calibrated_month`, `adjustments`, `points[{point,error,uncertainty,unit}]`, `confidence`.
+  Serwer waliduje Pydantic i parserem liczb; złe pole → `null` + ostrzeżenie, nie 502.
+- **Błędy:** brak konfiguracji lub wyłączone ustawienie → 409 `OCR_DISABLED`; błąd dostawcy
+  albo zły JSON → 502 `OCR_FAILED`; timeout → 504 `OCR_TIMEOUT`. Bez ponowień (koszt).
+- **Bezpieczeństwo:** wysyłka tylko po jawnym kliknięciu — sam upload nic nie wysyła poza
+  serwer; nie logujemy treści dokumentu ani odpowiedzi, tylko metadane (model, czas, rozmiar).
+
 ---
 
 ## 11. Wdrożenie
@@ -518,8 +589,10 @@ z T29), renderuje backend przez binarkę `typst`; przeglądarka tylko otwiera go
 `docker compose` z usługami: `db` (PostgreSQL), `api`, `worker`, `web` (Caddy: HTTPS,
 zbudowany frontend, `/api` → `api`). Ten sam zestaw działa na serwerze w zakładzie i w chmurze.
 
-Zmienne środowiskowe: `DATABASE_URL`, `CORS_ORIGINS`, `PUBLIC_BASE_URL` (do linków w QR),
-`FILES_DIR`, opcjonalnie `FCM_CREDENTIALS_FILE` i `SMTP_*`. Plik `.env.example` bez sekretów.
+Zmienne środowiskowe: `DATABASE_URL`, `CORS_ORIGINS`, `PUBLIC_BASE_URL` (do linków w QR i NFC),
+`FILES_DIR`, opcjonalnie `FCM_CREDENTIALS_FILE`, `SMTP_*` oraz OCR: `OCR_API_URL`,
+`OCR_API_KEY`, `OCR_MODEL`, `OCR_TIMEOUT_S` (brak URL lub klucza = OCR wyłączony, niezależnie
+od ustawienia). Plik `.env.example` bez sekretów.
 
 Kopie zapasowe: codzienny `pg_dump` i kopia wolumenu z plikami (17025 7.11.3).
 
@@ -535,9 +608,10 @@ Kopie zapasowe: codzienny `pg_dump` i kopia wolumenu z plikami (17025 7.11.3).
 | 7.11.3 — awarie | logi aplikacji; rejestr awarii — później |
 | 7.11.2 — walidacja | testy akceptacyjne powiązane z wymaganiami (raport walidacji), historia zmian konfiguracji |
 | 7.5.2 — zmiany zapisów | historia zmian |
-| 6.4.8 — oznakowanie | etykieta z terminem i QR |
+| 7.5.2 — OCR | szkic z modelu zatwierdza człowiek; oryginał skanu i metadane (dostawca, model, pewność) zostają w zapisie |
+| 6.4.8 — oznakowanie | etykieta z terminem, QR i opcjonalnym tagiem NFC (ten sam link) |
 | 6.4.9 — wycofanie | status „Wycofane”, blokada wpisów |
-| Cyberbezpieczeństwo | HTTPS, Argon2, tokeny odwoływalne i trzymane jako skrót, push bez treści, pliki tylko przez API z kontrolą typu i rozmiaru |
+| Cyberbezpieczeństwo | HTTPS, Argon2, tokeny odwoływalne i trzymane jako skrót, push bez treści, pliki tylko przez API z kontrolą typu i rozmiaru, klucz OCR wyłącznie w env i wysyłka dopiero po jawnej akcji użytkownika |
 
 ---
 
@@ -550,6 +624,9 @@ Kopie zapasowe: codzienny `pg_dump` i kopia wolumenu z plikami (17025 7.11.3).
 | Telefon bez dostępu do sieci zakładu (pyt. 13 w 01) | na demo serwer testowy z HTTPS; praca offline — później |
 | Dev na Androidzie po HTTP blokowany (cleartext, mixed content) | API przez HTTPS (serwer testowy albo tunel); HTTP tylko w buildzie debug |
 | Litery pracowni poza `A` nieznane (pyt. 16 w 01) | w danych demo `W` i `P` jako założenie, do zmiany w ustawieniach |
+| Zewnętrzny dostawca OCR niedostępny albo limituje koszt (pyt. 18) | OCR wyłączony domyślnie, bez ponowień, limit stron i timeout; wpis ręczny zawsze działa |
+| Skan świadectwa zawiera dane poufne (pyt. 18) | wysyłka tylko po jawnej akcji użytkownika; sam upload nic nie wysyła; dostawcę zatwierdza laboratorium |
+| Tag NFC zgubiony, sklonowany albo uszkodzony | tag to wskaźnik, nie sekret — dostęp daje token sesji; QR na etykiecie zostaje |
 
 ## 14. Poza tą architekturą (później)
 
@@ -564,9 +641,9 @@ interwałów (ILAC-G24), pełny dziennik napraw (6.4.13 h), klasy dokumentów (p
 | F1 Rejestr urządzeń | `equipment` | Urządzenia, karta urządzenia |
 | F2 Harmonogram | `schedule` | Harmonogram (tabela + grafik miesięczny), Moje zadania |
 | F3 Powiadomienia | `notifications`, worker | dzwonek, lista powiadomień, Ustawienia → Powiadomienia |
-| F4 Wzorcowanie | `equipment` (Calibration), `files` | formularz wzorcowania na karcie |
+| F4 Wzorcowanie | `equipment` (Calibration), `files`, `integrations` (OCR) | formularz wzorcowania na karcie |
 | F5 Sprawdzenia | `equipment` (CheckPlan, CheckRecord), `forms` | formularz na telefonie |
-| F6 QR | `equipment` (`public_id`) | Skanuj, `/e/:publicId`, druk etykiet |
+| F6 QR i NFC | `equipment` (`public_id`) | Skanuj / zbliż tag, `/e/:publicId`, druk etykiet, zapis tagu |
 | F7 Uprawnienia | `auth`, `equipment` | lista upoważnionych na karcie |
 | F8 Odczynniki i CRM | `reagents` | Odczynniki, Spis odczynników |
 | F9 Kontrola zakresu | `core/ranges`, `results` | Wyniki, Ustawienia → Parametry |
@@ -579,3 +656,5 @@ interwałów (ILAC-G24), pełny dziennik napraw (6.4.13 h), klasy dokumentów (p
 - [Przejście na Capacitor 8 (Xcode 26+)](https://github.com/companionintelligence/CI-Spatial-Atlas/pull/65)
 - [FastAPI: pwdlib i Argon2 zamiast passlib](https://tutorialibre.com/courses/programming-frameworks/fastapi/authentication-authorization-security/oauth2-jwt/password-hashing/)
 - [Web push na iOS w 2026](https://relaybell.com/blog/ios-web-push-2026)
+- [Android — NFC basics](https://developer.android.com/develop/connectivity/nfc/nfc), [Apple — Core NFC](https://developer.apple.com/documentation/corenfc), [NFC Forum — NDEF](https://nfc-forum.org/what-is-nfc/)
+- [Qwen2.5-VL](https://github.com/QwenLM/Qwen2.5-VL), [OpenAI — vision](https://platform.openai.com/docs/guides/images), [Anthropic — vision](https://docs.anthropic.com/en/docs/build-with-claude/vision)

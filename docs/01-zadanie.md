@@ -165,9 +165,9 @@ dla Warty.
 | 1 | Rejestr urządzeń | Spis sprzętu każdej pracowni (inwentaryzacja urządzeń): kod (np. `121/A`), pracownia, częstotliwość wzorcowania, ostatnie i następne wzorcowanie. | [T] [M] | pyt. 6 |
 | 2 | Harmonogram / tabela terminów | Widok jednej pracowni albo wszystkich: co jest i kiedy mija termin (wzorcowanie, sprawdzenie, ważność odczynnika). Zastępuje ręczne harmonogramy. | [T] [M] | — |
 | 3 | Powiadomienia w aplikacji | Przypomnienie przed terminem. Wyprzedzenie ustawiane dla każdej pozycji osobno, w miesiącach: 1–12 (typowo 1 mies. dla wzorcowania, ~6 mies. dla CRM z zagranicy). Także: mało odczynnika, kończy się ważność. Odbiorcy i kanał — konfigurowalne. | [T] [M] | — |
-| 4 | Wpis wyniku wzorcowania | Po powrocie świadectwa admin wpisuje: firmę, błąd pomiaru, niepewność, opcjonalnie skan świadectwa — i **sam zaznacza OK / nie OK**. Następny termin = data ze świadectwa + częstotliwość urządzenia; wystarczy miesiąc i rok. Parametry i pola są konfigurowalne. | [T] [M] | pyt. 2 |
+| 4 | Wpis wyniku wzorcowania | Po powrocie świadectwa admin wpisuje: firmę, błąd pomiaru, niepewność, opcjonalnie skan świadectwa. OCR pełnego raportu wzorcowania (zewnętrzne API: model multimodalny/LLM albo OCR, np. Qwen-VL) proponuje pola formularza — admin sprawdza i **sam zaznacza OK / nie OK**. Następny termin = data ze świadectwa + częstotliwość urządzenia; wystarczy miesiąc i rok. Parametry i pola są konfigurowalne. | [T] [M] | pyt. 2, 18 |
 | 5 | Sprawdzenia okresowe | Pracownik zapisuje sprawdzenie (np. temperatura co miesiąc, waga co kwartał) z telefonu zamiast w papierowej karcie; admin widzi to od razu. | [T] [M] | pyt. 4 |
-| 6 | Kody QR na urządzeniach | Skan telefonem służbowym → karta urządzenia (terminy, historia) i szybki wpis sprawdzenia. | [T] [M] | — |
+| 6 | Kody QR i NFC na urządzeniach | Etykieta z QR i opcjonalny tag NFC przy urządzeniu; oba niosą ten sam link. Skan telefonem służbowym albo zbliżenie telefonu → karta urządzenia (terminy, historia) i szybki wpis sprawdzenia. QR zostaje, bo działa z każdego aparatu; NFC jest wygodniejszym nośnikiem tego samego identyfikatora. | [T] [M] | pyt. 19 |
 | 7 | Uprawnienia do urządzeń | Lista osób upoważnionych do urządzenia (jak w karcie ewidencji). Nieupoważniony po skanie widzi „brak uprawnień” i nic nie wpisze. | [T] [M] | — |
 | 8 | Odczynniki i CRM | Pracownik okresowo (raz w tygodniu / miesiącu) wpisuje, ile zostało. Poniżej progu minimalnego → powiadomienie „mało”. Data ważności → powiadomienie z wyprzedzeniem. Bez codziennego wpisywania zużycia. Częstotliwość, kto wpisuje i próg — konfigurowalne. | [T] [M] | — |
 | 9 | Kontrola zakresu wyników (cement) | Przy wpisie wyniku system sprawdza **tylko**, czy wartość mieści się w zakresie z formularza (sekcja 4). Poza zakresem → błąd na czerwono. Nie oceniamy, czy wynik jest „dobry” — tylko zakres. Reakcja na błąd (blokada / oznaczenie) — konfigurowalna. Dane przykładowe. | [T] [M] [Z] | — |
@@ -179,8 +179,8 @@ dla Warty.
 - Pracownia środowiskowa; z formularza bierzemy tylko cement (pomijamy gazy, środowisko, paliwa, popioły, sam klinkier) [T] [M].
 - Ocena wyniku względem karty wyrobu danej marki cementu — sprawdzamy tylko zakres [T].
 - Prognoza zużycia odczynników z planu badań — wybraliśmy stan okresowy + próg [T].
-- Automatyczna ocena OK / nie OK po wzorcowaniu — decyduje admin [T].
-- Odczytywanie świadectw ze zdjęcia (OCR) — wystarczy ręcznie wpisać błąd i niepewność [M].
+- Automatyczna ocena OK / nie OK po wzorcowaniu — nawet gdy pola wypełni OCR, decyduje admin [T].
+- OCR jako jedyna droga wpisu — świadectwo zawsze można wpisać ręcznie; OCR (zewnętrzne API: LLM multimodalny albo OCR, np. Qwen-VL) tylko proponuje wartości i wymaga zatwierdzenia [T]. Wysyłka skanu do zewnętrznego dostawcy jest wyłączona domyślnie (pyt. 18).
 - Obsługa ofert i zamówień (wzorcowania, odczynniki) — problemem jest czas, nie sam proces [M].
 - Rezerwacja urządzeń — w laboratorium jej nie ma [M].
 - Pełny system wyników (LIMS) — pokazujemy tylko mechanizm kontroli zakresu, „tu chodzi o jakiś mechanizm działania” [M].
@@ -276,3 +276,8 @@ Przekreślone = zamknięte. Zostają pytania o fakty i o środowisko, których n
 
 16. Czy możecie podać kilka przykładowych pozycji do demo: urządzenia z kodami (jaką literę mają pracownie wytrzymałościowa i paliw, skoro analityczna to A?) oraz kilka odczynników i CRM?
 17. Do organizatorów: co ma pokazać „uniwersalność” rozwiązania (uwaga pana Krzysztofa)?
+
+**G. Identyfikacja i OCR**
+
+18. Czy skany świadectw wzorcowania mogą być wysyłane do zewnętrznego dostawcy OCR/LLM (np. Qwen-VL, OpenAI) — jaki kraj/region, czy jest umowa powierzenia przetwarzania? Który dostawca jest dopuszczony? (Do czasu odpowiedzi funkcja jest wyłączona, wpis ręczny działa.)
+19. Czy można nakleić na urządzenia tagi NFC (miejsce na naklejkę, koszt, kto zapisuje link)? QR wystarcza do startu.

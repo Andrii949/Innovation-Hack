@@ -12,7 +12,7 @@ jest tylko z zestawień typu „Top 10”, piszemy to wprost. Pełna lista link�
 
 | Punkt | Co mówi (skrót) | Co to znaczy dla nas |
 |---|---|---|
-| 6.4.8 | Wyposażenie wymagające wzorcowania albo mające okres ważności jest oznakowane, zakodowane lub inaczej zidentyfikowane tak, żeby użytkownik od razu widział jego status | Etykieta: kod (`121/A`), następny termin MM/RRRR i kod QR; skan pokazuje aktualny status |
+| 6.4.8 | Wyposażenie wymagające wzorcowania albo mające okres ważności jest oznakowane, zakodowane lub inaczej zidentyfikowane tak, żeby użytkownik od razu widział jego status | Etykieta: kod (`121/A`), następny termin MM/RRRR i kod QR; opcjonalnie tag NFC z tym samym linkiem. Skan QR albo zbliżenie telefonu pokazuje aktualny status — QR i NFC to dwa nośniki jednego identyfikatora |
 | 6.4.9 | Wyposażenie przeciążone, dające wątpliwe wyniki, uszkodzone lub poza wymaganiami jest wycofywane z użytku, izolowane albo wyraźnie oznakowane, dopóki nie potwierdzi się, że działa poprawnie; laboratorium ocenia skutki i uruchamia procedurę pracy niezgodnej (7.10) | Status „Wycofane”, blokada wpisów, powód wycofania |
 | 6.4.10 | Jeżeli do utrzymania zaufania do działania wyposażenia konieczne są **sprawdzenia pośrednie**, przeprowadza się je zgodnie z procedurą | To są „sprawdzenia okresowe” z rozmowy: plan sprawdzeń z formularzem i kryteriami |
 | 6.4.13 | Zapisy dla wyposażenia: a) identyfikacja, z wersją oprogramowania i firmware, b) producent, typ, nr seryjny, c) dowód sprawdzenia zgodności z wymaganiami, d) aktualna lokalizacja, e) daty i wyniki wzorcowań, adiustacje, kryteria akceptacji, termin następnego wzorcowania **lub** interwał, f) materiały odniesienia: wyniki, kryteria, daty, okres ważności, g) plan konserwacji i wykonane konserwacje, h) uszkodzenia, awarie, modyfikacje, naprawy | Lista pól karty urządzenia (mapowanie: 02 §3.3) |
@@ -79,6 +79,15 @@ Porównania tych programów pochodzą głównie od konkurencyjnych producentów.
 | ERPNext / Frappe (GPL) | Quality Inspection: min/max → automatycznie „Rejected”; Asset Maintenance: zadania z cyklem i wymaganym certyfikatem; Auto Reorder: próg → zapotrzebowanie; Notification: „Days Before” dla pola daty i powiadomienia w aplikacji | Cały ERP: ciężka instalacja, długa nauka; alerty sprawdzane raz dziennie |
 | Odoo | Quality: pomiar z normą i tolerancją min/max | Moduł Quality tylko w płatnej wersji Enterprise; do Community są moduły firm trzecich |
 
+### 2.6 NFC i OCR — technika, nie produkt
+
+| Temat | Co wiadomo | Wniosek |
+|---|---|---|
+| Tagi NFC | Etykiety NTAG (ISO/IEC 14443-A) mieszczą rekord NDEF URI; telefon czyta go bez aplikacji (Android; nowsze iPhone'y w tle) albo w aplikacji przez Core NFC / reader mode | Ten sam link co QR — brak nowego API i nowych uprawnień |
+| Zapis tagów | NDEF zapisuje się aplikacją typu NFC Tools albo własnym ekranem; tag można zablokować przed zapisem | W demo wystarczy zewnętrzna aplikacja; zapis w systemie — P2 |
+| OCR/LLM | modele multimodalne (np. Qwen-VL, GPT-4o, Claude) przyjmują obraz strony i zwracają JSON; jakość zależy od skanu i promptu, a błędne lub zmyślone pola są realne | tylko szkic pól, walidacja i zatwierdzenie przez człowieka; oryginał skanu zostaje zapisem (7.5.2) |
+| Dokumenty wielostronicowe | dostawcy różnią się obsługą PDF; bezpieczniej renderować strony do PNG i wysyłać obrazy | limit stron (5), `pdftoppm`, timeout |
+
 ---
 
 ## 3. Co przejmujemy (wzorce)
@@ -90,6 +99,8 @@ Porównania tych programów pochodzą głównie od konkurencyjnych producentów.
 | Min/max → automatyczna flaga | ERPNext Quality Inspection, Odoo Measure | Kontrola zakresu wyników i pól sprawdzeń |
 | Próg minimalny → alert | LabCollector, ERPNext (reorder level) | „Mało odczynnika” |
 | QR prowadzi do karty | Snipe-IT | QR na etykiecie otwiera kartę urządzenia |
+| Drugi nośnik identyfikatora (NFC) | praktyka asset management; tagi NDEF | Tag NFC z tym samym linkiem co QR; QR zostaje, bo nie wymaga naklejki elektronicznej |
+| OCR/LLM jako szkic, nie zapis | rozwiązania do faktur i świadectw | Pola proponowane przez model, zatwierdza admin; dostawca i model w historii |
 | Status liczony z dat | SENAITE („out of date”) | Status urządzenia liczony, nie wpisywany ręcznie |
 | Ścieżka audytu | GAGEtrak (dodatek), SENAITE; wymóg 7.5.2 | Historia każdej zmiany |
 | Powiadomienia w aplikacji obok e-maila | ERPNext (System Notification) | Dzwonek w aplikacji + opcjonalnie push i e-mail |
@@ -103,9 +114,10 @@ Porównania tych programów pochodzą głównie od konkurencyjnych producentów.
 2. Ceny są tylko na zapytanie — nie da się ich porównać w czasie hackathonu.
 3. Żaden darmowy system nie ma wszystkiego: Snipe-IT nie ma cykli ani odczynników, Odoo Quality
    jest płatne, ERPNext to cały ERP, SENAITE to cały LIMS.
-4. Co możemy pokazać jako przewagę: prosty telefon w pracowni (skan → wpis), wyprzedzenie
-   ustawiane dla każdej pozycji, konfiguracja zamiast kodu (inne laboratoria akredytowane)
-   i zapisy zgodne z 6.4.13 i 7.5.2 od pierwszego dnia.
+4. Co możemy pokazać jako przewagę: prosty telefon w pracowni (skan QR albo zbliżenie NFC → wpis),
+   wyprzedzenie ustawiane dla każdej pozycji, konfiguracja zamiast kodu (inne laboratoria
+   akredytowane), OCR świadectwa jako szkic zatwierdzany przez człowieka i zapisy zgodne
+   z 6.4.13 i 7.5.2 od pierwszego dnia.
 
 ---
 
@@ -132,6 +144,11 @@ Porównania tych programów pochodzą głównie od konkurencyjnych producentów.
 
 - [ToolLedger — porównanie programów do wzorcowania](https://toolledger.com/compare/calibration-software/), [Axiospec — porównanie](https://axiospec.com/compare/best-calibration-management-software)
 - [LabCollector — Reagents & Supplies](https://labcollector.com/support/knowledge-base/category/modules/reagentsupplies/), [LabCollector — podręcznik funkcji](https://www.labcollector.com/media/features_manual_lc.pdf), [Scispot — zestawienie programów do inwentaryzacji](https://www.scispot.com/blog/top-lab-inventory-tracking-software-solutions)
+
+**NFC i OCR**
+
+- NFC: [Android — NFC basics](https://developer.android.com/develop/connectivity/nfc/nfc), [Apple — Core NFC](https://developer.apple.com/documentation/corenfc), [NFC Forum — NDEF](https://nfc-forum.org/what-is-nfc/)
+- OCR/LLM: [Qwen2.5-VL](https://github.com/QwenLM/Qwen2.5-VL), [OpenAI — vision](https://platform.openai.com/docs/guides/images), [Anthropic — vision](https://docs.anthropic.com/en/docs/build-with-claude/vision)
 
 **Open source**
 
