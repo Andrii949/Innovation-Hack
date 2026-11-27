@@ -7,6 +7,7 @@ from alembic import command
 from alembic.config import Config
 from app.config import get_settings
 from app.core.clock import get_today
+from app.db import get_db
 from app.main import app
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine
@@ -33,7 +34,12 @@ def db(engine: Engine) -> Iterator[Session]:
     """Session inside a transaction rolled back after each test."""
     with engine.connect() as connection:
         transaction = connection.begin()
-        session = Session(bind=connection, join_transaction_mode="create_savepoint")
+        session = Session(
+            bind=connection,
+            autoflush=False,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
         try:
             yield session
         finally:
@@ -42,7 +48,14 @@ def db(engine: Engine) -> Iterator[Session]:
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
+def client(db: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "files_dir", tmp_path / "files")
+
+    def _override_db() -> Iterator[Session]:
+        yield db
+
+    app.dependency_overrides[get_db] = _override_db
     app.dependency_overrides[get_today] = lambda: TODAY
     with TestClient(app) as test_client:
         yield test_client

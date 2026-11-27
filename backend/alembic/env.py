@@ -3,7 +3,10 @@ from logging.config import fileConfig
 from alembic import context
 from app.config import get_settings
 from app.db import Base
+from app.settings.models import Setting
 from sqlalchemy import create_engine, pool
+
+_REGISTERED_MODELS = (Setting,)
 
 config = context.config
 
