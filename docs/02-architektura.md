@@ -24,7 +24,8 @@ może zmienić. F1–F9 to funkcje z tabeli w 01 §3.3.
 | D10 | QR i tag NFC zawierają ten sam link `https://<serwer>/e/<public_id>` | QR czyta każdy aparat i drukarka etykiet, a zbliżenie telefonu do tagu (NDEF URI) otwiera tę samą kartę bez skanowania; kod `121/A` się nie nadaje (ma „/”, numery powtarzają się między pracowniami); tag to tylko wskaźnik, dostęp nadal wymaga logowania i uprawnień | propozycja |
 | D11 | Adres serwera ustawiany w aplikacji mobilnej przy pierwszym uruchomieniu | jedna aplikacja w sklepie, wiele firm, każda z własnym serwerem (D4) | propozycja |
 | D12 | Druki formalne (karta urządzenia z historią, raport walidacji) generuje backend przez binarkę `typst`; etykiety QR zostają w przeglądarce | PDF jest zapisem (17025 7.5.2) — musi powstać po stronie serwera, niezależnie od przeglądarki użytkownika; jedna binarka zamiast przeglądarki w obrazie, szablony `.typ` podglądane tym samym narzędziem co produkcja | propozycja |
-| D13 | OCR świadectwa przez zewnętrzne API (model multimodalny/LLM albo OCR, np. Qwen-VL), wyłączony domyślnie | pełny „raport wzorcowania” ma wiele stron i tabel, a przepisywanie firmy, numeru, miesiąca i punktów zajmuje czas; wynik jest tylko szkicem pól — admin zatwierdza i decyduje OK / NIE OK (17025 7.5.2), oryginał skanu zostaje w plikach; klucz zostaje na serwerze, a dokument opuszcza go tylko w tej jednej, świadomej operacji | propozycja |
+| D13 | Wykresy F10 liczone z wyników badań (`TestResult`), bez nowej encji „próbka”; raport F11 to PDF zapisany jako załącznik + powiadomienie dla kierownika | jedno źródło pomiarów dla kontroli zakresu, wykresu i raportu; „wysyłka” bez nowego kanału — dzwonek, opcjonalnie e-mail (T17) | propozycja |
+| D14 | OCR świadectwa przez zewnętrzne API (model multimodalny/LLM albo OCR, np. Qwen-VL), wyłączony domyślnie | pełny „raport wzorcowania” ma wiele stron i tabel, a przepisywanie firmy, numeru, miesiąca i punktów zajmuje czas; wynik jest tylko szkicem pól — admin zatwierdza i decyduje OK / NIE OK (17025 7.5.2), oryginał skanu zostaje w plikach; klucz zostaje na serwerze, a dokument opuszcza go tylko w tej jednej, świadomej operacji | propozycja |
 
 ---
 
@@ -62,7 +63,7 @@ flowchart LR
 | Aplikacja mobilna | Capacitor 8 + pluginy: skaner kodów, NFC, aparat, push | ten sam frontend na Androidzie i iOS |
 | API | FastAPI, SQLAlchemy 2, Alembic, Pydantic v2 | logika, uprawnienia, historia zmian, pliki |
 | Worker | ten sam kod Pythona, osobny proces | przeliczanie terminów, powiadomienia, wysyłka push i e-mail |
-| Baza | PostgreSQL 16+ | dane i historia zmian |
+| Baza | PostgreSQL 17 | dane i historia zmian |
 | Pliki | wolumen dyskowy | skany świadectw, zdjęcia kart |
 | Proxy | Caddy | HTTPS, serwowanie frontendu, `/api` → API |
 
@@ -109,8 +110,9 @@ erDiagram
 | `Reagent` | `lab_id`, `name`, `kind` (`REAGENT` / `CRM`), `unit`, `min_stock`, `stock_count_interval_days`, `expiry_lead_months`, `active` | F8 |
 | `ReagentLot` | `reagent_id`, `lot_no`, `expiry_date`, `quantity`, `received_on`, `disposed_on` | F8, 6.4.13 f |
 | `StockCount` | `reagent_id`, `quantity`, `counted_on`, `counted_by` | F8 |
-| `TestParameter` | `material`, `name`, `unit`, `min_value`, `max_value` (puste = bez zakresu), `method`, `accredited`, `out_of_range_action` (`FLAG` / `BLOCK`, puste = ustawienie ogólne), `active` | F9, 01 §4 |
-| `TestResult` | `parameter_id`, `sample_label`, `value`, `min_snapshot`, `max_snapshot`, `in_range`, `repeat_of_id`, `created_by` | F9, 7.5.2 |
+| `TestParameter` | `material`, `name`, `unit`, `min_value`, `max_value` (puste = bez zakresu), `method`, `accredited`, `out_of_range_action` (`FLAG` / `BLOCK`, puste = ustawienie ogólne), `verify_min`, `verify_max` (próg weryfikacji F10, puste = zakres), `active` | F9, F10, 01 §4 |
+| `TestResult` | `parameter_id`, `sample_label`, `value`, `min_snapshot`, `max_snapshot`, `in_range`, `repeat_of_id`, `created_by`, `created_at` — to są „pomiary z próbek” dla wykresów F10 | F9, F10, 7.5.2 |
+| `Report` | `period_from`, `period_to`, `parameter_ids`, `attachment_id` (PDF), `created_by`, `created_at` | F11 |
 | `Notification` | `user_id`, `kind`, `ref_type`, `ref_id`, `title`, `due`, `dedupe_key`, `read_at`, `resolved_at`; unikalne `(user_id, dedupe_key)` | F3 |
 | `NotificationRule` | `kind` → `recipients` (role, czy wg zakresu pracowni), `channels` (`IN_APP`, `PUSH`, `EMAIL`), `enabled` | F3, 01 §3.1 |
 | `DeviceToken` | `user_id`, `platform`, `token` (FCM) | F3 (push) |
@@ -200,16 +202,21 @@ stanu (spis albo przyjęcie), dla `STOCK_COUNT` — dzień, od którego spis jes
 
 ## 5. Uprawnienia
 
-| Uprawnienie | Admin | Pracownik |
-|---|---|---|
-| `equipment:read`, `schedule:read`, `reagent:read`, `result:read` | ✓ | ✓ (swoje pracownie) |
-| `equipment:write` (rejestr, upoważnienia, wycofanie) | ✓ | — |
-| `calibration:write` | ✓ | — |
-| `check:write` | ✓ | ✓, tylko gdy jest na liście upoważnionych |
-| `reagent:write` (odczynniki, partie) | ✓ | — |
-| `stock:write` (spis stanu) | ✓ | ✓ (swoje pracownie) |
-| `result:write` | ✓ | ✓ |
-| `settings:write`, `users:write`, `audit:read` | ✓ | — |
+| Uprawnienie | Kierownik | Admin | Pracownik |
+|---|---|---|---|
+| `equipment:read`, `schedule:read`, `reagent:read`, `result:read` | ✓ | ✓ | ✓ (swoje pracownie) |
+| `report:read` (raporty, wykresy) | ✓ | ✓ | — |
+| `report:write` (generowanie i wysyłka raportu) | — | ✓ | — |
+| `audit:read` | ✓ | ✓ | — |
+| `equipment:write` (rejestr, upoważnienia, wycofanie) | — | ✓ | — |
+| `calibration:write` | — | ✓ | — |
+| `check:write` | — | ✓ | ✓, tylko gdy jest na liście upoważnionych |
+| `reagent:write` (odczynniki, partie) | — | ✓ | — |
+| `stock:write` (spis stanu) | — | ✓ | ✓ (swoje pracownie) |
+| `result:write` | — | ✓ | ✓ |
+| `settings:write`, `users:write` | — | ✓ | — |
+
+Kierownik tylko czyta i dostaje raporty (01 §3.2); domyślnie widzi wszystkie pracownie.
 
 Zasady:
 
@@ -239,6 +246,8 @@ Role i ich uprawnienia są danymi w bazie — tabela wyżej to ustawienie domyś
 | Próg minimalny, częstotliwość spisu, wyprzedzenie ważności | karta odczynnika | spis co 30 dni, wyprzedzenie 1 mies. |
 | Parametry badań i zakresy | Ustawienia → Parametry (import CSV) | 25 wierszy z 01 §4 (wytrzymałości w kN i MPa osobno) |
 | Reakcja na wynik poza zakresem | parametr albo ustawienie ogólne | `FLAG` — zapis z oznaczeniem i wymogiem powtórzenia |
+| Próg weryfikacji wykresów (F10) | parametr (`verify_min`, `verify_max`) | zakres parametru |
+| Zakres raportu dla kierownika (F11): okres, parametry | formularz raportu | ostatni miesiąc, wszystkie parametry z wynikami |
 | Wycofanie po wzorcowaniu „NIE OK” | ustawienie ogólne | włączone (17025 6.4.9; czekamy na pyt. 2 w 01) |
 | OCR świadectw: włączony, limit stron | Ustawienia → Integracje (model, URL i klucz tylko w env) | wyłączony; limit 5 stron; `OCR_API_URL`, `OCR_API_KEY`, `OCR_MODEL`, `OCR_TIMEOUT_S` w env |
 | Odbiorcy i kanały powiadomień | Ustawienia → Powiadomienia | tabela niżej, kanał: w aplikacji |
@@ -257,6 +266,7 @@ Domyślne reguły powiadomień („admini pracowni” = admini, którzy mają t�
 | `STOCK_COUNT_DUE` | pracownicy pracowni | `COUNT_DUE` |
 | `CHECK_OUT_OF_RANGE` | admini pracowni | od razu przy wpisie |
 | `RESULT_OUT_OF_RANGE` | admini | od razu przy wpisie |
+| `REPORT_READY` | kierownicy | od razu po wygenerowaniu raportu (F11) |
 
 ---
 
@@ -282,6 +292,8 @@ Błędy zawsze w formacie `{"error": "<KOD>", "message": "<tekst po polsku>"}`.
 | Pliki | `POST /attachments`, `GET /attachments/{id}` | wg właściciela pliku |
 | Historia | `GET /audit?entity=&entity_id=&from=&to=` | admin |
 | Druki | `GET /equipment/{id}/history.pdf` | odczyt: wszyscy w zakresie |
+| Wykresy (F10) | `GET /test-results/series?parameter_id=&from=&to=` | `result:read` |
+| Raporty (F11) | `POST /reports`, `GET /reports`, `GET /reports/{id}.pdf` | tworzenie: `report:write`; odczyt: `report:read` |
 | Zdrowie | `GET /health` | publiczne |
 
 Kody błędów:
@@ -402,7 +414,7 @@ sequenceDiagram
   end
 ```
 
-### 8.5 Świadectwo → OCR → formularz (F4, D13)
+### 8.5 Świadectwo → OCR → formularz (F4, D14)
 
 ```mermaid
 sequenceDiagram
@@ -436,6 +448,25 @@ Zasady:
   `OCR_TIMEOUT_S` (60 s) ograniczają koszt; bez automatycznych ponowień.
 - Oryginał skanu zostaje jako załącznik wpisu (7.5.2), a `source` / `ocr_meta` pozwalają
   odtworzyć, które pola przyszły z modelu.
+
+### 8.6 Wykres i raport dla kierownika (F10, F11)
+
+```mermaid
+sequenceDiagram
+  actor S as Specjalista
+  participant API
+  participant T as typst
+  actor K as Kierownik
+  S->>API: POST /api/reports (okres, parametry)
+  API->>API: seria wyników + próg weryfikacji → tabela, liczba poza progiem, wykres SVG
+  API->>T: szablon report.typ + JSON (z wykresem)
+  T-->>API: PDF
+  API->>API: PDF jako załącznik (zapis 7.5.2) + powiadomienie REPORT_READY
+  K->>API: GET /api/reports/{id}.pdf
+```
+
+Wykres w przeglądarce rysuje frontend z `GET /test-results/series`; do PDF ten sam wykres
+składa backend jako SVG (punkty, linie progu), bez pakietów `typst` z internetu.
 
 ---
 
@@ -543,8 +574,9 @@ backend/app/
 
 ### Druki PDF (D12)
 
-Dokumenty, które są zapisem, a nie widokiem (karta urządzenia z historią, raport walidacji
-z T29), renderuje backend przez binarkę `typst`; przeglądarka tylko otwiera gotowy PDF.
+Dokumenty, które są zapisem, a nie widokiem (karta urządzenia z historią, raport dla
+kierownika F11, raport walidacji z T29), renderuje backend przez binarkę `typst`;
+przeglądarka tylko otwiera gotowy PDF.
 
 - **Wywołanie:** `subprocess.run([...])` bez powłoki — `typst compile <szablon> <out.pdf>
   --root app/print --input data=<json> --ignore-system-fonts --font-path app/print/fonts`,
@@ -564,7 +596,7 @@ z T29), renderuje backend przez binarkę `typst`; przeglądarka tylko otwiera go
 - **Etykiety QR (T21):** zostają w przeglądarce (`window.print()`), bo liczy się precyzja
   arkusza naklejek; PDF tylko tam, gdzie wydruk jest dowodem (17025 7.5.2).
 
-### OCR świadectw (D13)
+### OCR świadectw (D14)
 
 `POST /api/equipment/{id}/calibrations/extract` nic nie zapisuje — zwraca szkic pól.
 
@@ -624,8 +656,8 @@ Kopie zapasowe: codzienny `pg_dump` i kopia wolumenu z plikami (17025 7.11.3).
 | Telefon bez dostępu do sieci zakładu (pyt. 13 w 01) | na demo serwer testowy z HTTPS; praca offline — później |
 | Dev na Androidzie po HTTP blokowany (cleartext, mixed content) | API przez HTTPS (serwer testowy albo tunel); HTTP tylko w buildzie debug |
 | Litery pracowni poza `A` nieznane (pyt. 16 w 01) | w danych demo `W` i `P` jako założenie, do zmiany w ustawieniach |
-| Zewnętrzny dostawca OCR niedostępny albo limituje koszt (pyt. 18) | OCR wyłączony domyślnie, bez ponowień, limit stron i timeout; wpis ręczny zawsze działa |
-| Skan świadectwa zawiera dane poufne (pyt. 18) | wysyłka tylko po jawnej akcji użytkownika; sam upload nic nie wysyła; dostawcę zatwierdza laboratorium |
+| Zewnętrzny dostawca OCR niedostępny albo limituje koszt (pyt. 23) | OCR wyłączony domyślnie, bez ponowień, limit stron i timeout; wpis ręczny zawsze działa |
+| Skan świadectwa zawiera dane poufne (pyt. 23) | wysyłka tylko po jawnej akcji użytkownika; sam upload nic nie wysyła; dostawcę zatwierdza laboratorium |
 | Tag NFC zgubiony, sklonowany albo uszkodzony | tag to wskaźnik, nie sekret — dostęp daje token sesji; QR na etykiecie zostaje |
 
 ## 14. Poza tą architekturą (później)
@@ -647,6 +679,8 @@ interwałów (ILAC-G24), pełny dziennik napraw (6.4.13 h), klasy dokumentów (p
 | F7 Uprawnienia | `auth`, `equipment` | lista upoważnionych na karcie |
 | F8 Odczynniki i CRM | `reagents` | Odczynniki, Spis odczynników |
 | F9 Kontrola zakresu | `core/ranges`, `results` | Wyniki, Ustawienia → Parametry |
+| F10 Wykresy i weryfikacja | `results` (seria + próg) | Wyniki → Wykres |
+| F11 Raport dla kierownika | `print`, `reports`, `notifications` | Raporty, dzwonek kierownika |
 
 ## Źródła techniczne
 
