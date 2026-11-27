@@ -636,16 +636,16 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Brand: Cementownia Warta — navy #0C3F76 and lime #8DC63F (wartasa.com.pl logo). */
-  --brand-navy: #0c3f76;
-  --brand-navy-deep: #082b52;
+  /* Cementownia Warta web palette. See docs/06-identyfikacja-wizualna.md. */
+  --brand-navy: #0f3f76;
+  --brand-navy-deep: #04243e;
   --brand-navy-ink: #061e3a;
   --brand-lime: #8dc63f;
   --brand-lime-bright: #a5d96b;
   --brand-lime-soft: #f0f7e4;
   --brand-clinker: #6f6c66;
 
-  --background: oklch(0.976 0.006 110);
+  --background: #f3f3f4;
   --foreground: oklch(0.19 0.012 255);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.19 0.012 255);
@@ -681,7 +681,7 @@
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', sans-serif;
+  --font-sans: 'Open Sans', 'Geist Variable', sans-serif;
   --color-brand-navy: var(--brand-navy);
   --color-brand-navy-deep: var(--brand-navy-deep);
   --color-brand-navy-ink: var(--brand-navy-ink);
@@ -773,4 +773,21 @@
   html {
     @apply font-sans;
   }
+}
+
+@font-face {
+  font-family: "Open Sans";
+  src: url("/fonts/OpenSans.ttf") format("truetype");
+  font-weight: 300 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+.warta-hero {
+  background: linear-gradient(
+    112deg,
+    var(--brand-navy-deep) 0%,
+    var(--brand-navy) 75%,
+    #275284 100%
+  );
 }

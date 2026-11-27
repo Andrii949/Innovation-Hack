@@ -78,6 +78,8 @@ class ReagentOut(BaseModel):
     expiry_lead_months: int
     active: bool
     current_stock: str
+    usable_stock_estimate: str | None
+    recommended_lot_no: str | None
     low_stock: bool
     last_counted_on: date | None
     nearest_expiry: date | None

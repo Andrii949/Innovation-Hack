@@ -190,6 +190,7 @@ class EquipmentOut(BaseModel):
 class EquipmentCard(EquipmentOut):
     check_plans: list[CheckPlanSummaryOut]
     can_write: bool
+    can_write_result: bool
     qr_url: str
 
 

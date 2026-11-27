@@ -9,6 +9,7 @@ class Permission(StrEnum):
     EQUIPMENT_READ = "equipment:read"
     EQUIPMENT_WRITE = "equipment:write"
     CALIBRATION_WRITE = "calibration:write"
+    CALIBRATION_APPROVE = "calibration:approve"
     CHECK_WRITE = "check:write"
     SCHEDULE_READ = "schedule:read"
     REAGENT_READ = "reagent:read"
@@ -16,6 +17,7 @@ class Permission(StrEnum):
     STOCK_WRITE = "stock:write"
     RESULT_READ = "result:read"
     RESULT_WRITE = "result:write"
+    RESULT_REVIEW = "result:review"
     REPORT_READ = "report:read"
     REPORT_WRITE = "report:write"
     AUDIT_READ = "audit:read"
@@ -24,7 +26,7 @@ class Permission(StrEnum):
 
 
 DEFAULT_ROLES: dict[str, frozenset[Permission]] = {
-    "admin": frozenset(Permission),
+    "admin": frozenset(Permission) - {Permission.CALIBRATION_APPROVE},
     "manager": frozenset(
         {
             Permission.EQUIPMENT_READ,
@@ -32,6 +34,8 @@ DEFAULT_ROLES: dict[str, frozenset[Permission]] = {
             Permission.REAGENT_READ,
             Permission.RESULT_READ,
             Permission.REPORT_READ,
+            Permission.CALIBRATION_APPROVE,
+            Permission.RESULT_REVIEW,
             Permission.AUDIT_READ,
         }
     ),

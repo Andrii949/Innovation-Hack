@@ -6,14 +6,16 @@ from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.audit.service import log_event
 from app.auth.models import User
-from app.auth.permissions import Permission, require
+from app.auth.permissions import Permission, require, visible_lab_ids
 from app.config import get_settings
 from app.core.ranges import RangeResult, check_range, parse_decimal
+from app.equipment.models import Equipment
+from app.equipment.service import can_user_write_results, format_code, get_equipment_or_404
 from app.errors import AppError
 from app.notifications.models import NotificationKind
 from app.notifications.service import notify_now
@@ -104,6 +106,17 @@ def serialize_result(result: TestResult) -> TestResultOut:
         max_snapshot=format_decimal(result.max_snapshot),
         in_range=result.in_range,
         repeat_of_id=result.repeat_of_id,
+        equipment_id=result.equipment_id,
+        equipment_code=(
+            format_code(result.equipment.number, result.equipment.lab.code)
+            if result.equipment is not None
+            else None
+        ),
+        review_decision=result.review_decision,
+        review_calibration_id=result.review_calibration_id,
+        review_note=result.review_note,
+        reviewed_by=result.reviewed_by,
+        reviewed_at=result.reviewed_at,
         created_by=result.created_by,
         created_at=result.created_at.isoformat(),
     )
@@ -243,6 +256,7 @@ def record_result(db: Session, user: User, data: TestResultCreate) -> TestResult
     if value is None:
         raise AppError(422, "INVALID_NUMBER", "Podaj wartość wyniku")
 
+    equipment_id = data.equipment_id
     if data.repeat_of_id is not None:
         previous = db.get(TestResult, data.repeat_of_id)
         if previous is None or previous.parameter_id != param.id:
@@ -251,6 +265,20 @@ def record_result(db: Session, user: User, data: TestResultCreate) -> TestResult
                 "VALIDATION_ERROR",
                 "Powtórzenie musi wskazywać wynik tego samego parametru",
                 details=[{"field": "repeat_of_id", "message": "invalid"}],
+            )
+
+        if previous.equipment is not None:
+            require(user, Permission.RESULT_WRITE, lab_id=previous.equipment.lab_id)
+            if equipment_id is None:
+                equipment_id = previous.equipment_id
+    if equipment_id is not None:
+        equipment = get_equipment_or_404(db, equipment_id)
+        require(user, Permission.RESULT_WRITE, lab_id=equipment.lab_id)
+        if equipment.withdrawn_at is not None:
+            raise AppError(409, "VALIDATION_ERROR", "Urządzenie jest wycofane")
+        if not can_user_write_results(user, equipment):
+            raise AppError(
+                403, "NOT_AUTHORIZED_FOR_EQUIPMENT", "Brak uprawnień do wpisu dla tego urządzenia"
             )
 
     in_range = check_range(value, param.min_value, param.max_value) is RangeResult.IN_RANGE
@@ -287,6 +315,7 @@ def record_result(db: Session, user: User, data: TestResultCreate) -> TestResult
         max_snapshot=param.max_value,
         in_range=in_range,
         repeat_of_id=data.repeat_of_id,
+        equipment_id=equipment_id,
         created_by=user.id,
     )
     db.add(result)
@@ -296,7 +325,7 @@ def record_result(db: Session, user: User, data: TestResultCreate) -> TestResult
         notify_now(
             db,
             kind=NotificationKind.RESULT_OUT_OF_RANGE,
-            lab_id=None,
+            lab_id=result.equipment.lab_id if result.equipment is not None else None,
             ref_type="test_result",
             ref_id=result.id,
             title=(
@@ -307,11 +336,29 @@ def record_result(db: Session, user: User, data: TestResultCreate) -> TestResult
     return result
 
 
-def list_results(db: Session, user: User, *, parameter_id: int | None = None) -> list[TestResult]:
+def _result_scope(user: User):
+    allowed = visible_lab_ids(user)
+    if allowed is None:
+        return TestResult.id.is_not(None)
+    return or_(
+        TestResult.equipment_id.is_(None),
+        TestResult.equipment_id.in_(select(Equipment.id).where(Equipment.lab_id.in_(allowed))),
+    )
+
+
+def list_results(
+    db: Session, user: User, *, parameter_id: int | None = None, equipment_id: int | None = None
+) -> list[TestResult]:
     require(user, Permission.RESULT_READ)
-    stmt = select(TestResult).order_by(TestResult.created_at.desc(), TestResult.id.desc())
+    stmt = (
+        select(TestResult)
+        .where(_result_scope(user))
+        .order_by(TestResult.created_at.desc(), TestResult.id.desc())
+    )
     if parameter_id is not None:
         stmt = stmt.where(TestResult.parameter_id == parameter_id)
+    if equipment_id is not None:
+        stmt = stmt.where(TestResult.equipment_id == equipment_id)
     return list(db.scalars(stmt).all())
 
 
@@ -319,7 +366,9 @@ def _local_midnight(day: date) -> datetime:
     return datetime.combine(day, time.min, tzinfo=ZoneInfo(get_settings().timezone))
 
 
-def result_series(db: Session, *, parameter_id: int, date_from: date, date_to: date) -> Series:
+def result_series(
+    db: Session, *, parameter_id: int, date_from: date, date_to: date, user: User | None = None
+) -> Series:
     """Results of one parameter entered between the two days (inclusive, lab time zone)."""
     if date_from > date_to:
         raise AppError(
@@ -332,7 +381,7 @@ def result_series(db: Session, *, parameter_id: int, date_from: date, date_to: d
     threshold_min = param.verify_min if param.verify_min is not None else param.min_value
     threshold_max = param.verify_max if param.verify_max is not None else param.max_value
 
-    rows = db.scalars(
+    stmt = (
         select(TestResult)
         .where(
             TestResult.parameter_id == param.id,
@@ -340,7 +389,10 @@ def result_series(db: Session, *, parameter_id: int, date_from: date, date_to: d
             TestResult.created_at < _local_midnight(date_to + timedelta(days=1)),
         )
         .order_by(TestResult.created_at, TestResult.id)
-    ).all()
+    )
+    if user is not None:
+        stmt = stmt.where(_result_scope(user))
+    rows = db.scalars(stmt).all()
     points = [
         SeriesPoint(
             at=row.created_at,

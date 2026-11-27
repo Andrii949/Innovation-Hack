@@ -9,8 +9,10 @@ from app.auth.models import User
 from app.auth.permissions import Permission, require
 from app.db import get_db
 from app.errors import AppError
+from app.results.reviews import review_result
 from app.results.schemas import (
     ImportResult,
+    ResultReviewCreate,
     Series,
     TestParameterCreate,
     TestParameterOut,
@@ -88,8 +90,12 @@ def get_results(
     user: Annotated[User, Depends(current_user)],
     db: Annotated[Session, Depends(get_db)],
     parameter_id: int | None = None,
+    equipment_id: int | None = None,
 ) -> list[TestResultOut]:
-    return [serialize_result(r) for r in list_results(db, user, parameter_id=parameter_id)]
+    return [
+        serialize_result(r)
+        for r in list_results(db, user, parameter_id=parameter_id, equipment_id=equipment_id)
+    ]
 
 
 @results_router.get("/series")
@@ -101,7 +107,9 @@ def get_result_series(
     db: Annotated[Session, Depends(get_db)],
 ) -> Series:
     require(user, Permission.RESULT_READ)
-    return result_series(db, parameter_id=parameter_id, date_from=date_from, date_to=date_to)
+    return result_series(
+        db, parameter_id=parameter_id, date_from=date_from, date_to=date_to, user=user
+    )
 
 
 @results_router.post("", status_code=status.HTTP_201_CREATED)
@@ -114,3 +122,15 @@ def post_result(
     out = serialize_result(result)
     db.commit()
     return out
+
+
+@results_router.post("/{result_id}/review")
+def post_result_review(
+    result_id: int,
+    data: ResultReviewCreate,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> TestResultOut:
+    result = serialize_result(review_result(db, user, result_id, data))
+    db.commit()
+    return result
