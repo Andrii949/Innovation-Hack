@@ -1,7 +1,13 @@
 from pathlib import Path
 
 import pytest
-from app.validation_report import build_report, main, parse_junit_xml, render_markdown
+from app.validation_report import (
+    BASELINE_REQUIREMENTS,
+    build_report,
+    main,
+    parse_junit_xml,
+    render_markdown,
+)
 
 SAMPLE_JUNIT = """<?xml version="1.0" encoding="utf-8"?>
 <testsuites>
@@ -112,3 +118,33 @@ def test_render_empty_requirements_note() -> None:
 def test_req_marker_populates_record_property(request: pytest.FixtureRequest) -> None:
     recorded = [value for name, value in request.node.user_properties if name == "req"]
     assert set(recorded) == {"F1", "17025-7.11.2"}
+
+
+@pytest.mark.req("17025-7.11.2")
+def test_baseline_flag_enforces_all_functions_and_iso_clauses(tmp_path: Path) -> None:
+    xml_incomplete = tmp_path / "incomplete.xml"
+    xml_incomplete.write_text(SAMPLE_JUNIT, encoding="utf-8")
+    assert main([str(xml_incomplete), "--baseline", "--strict"]) == 1
+
+    props = "\n".join(
+        f'      <property name="req" value="{req_id}"/>' for req_id in BASELINE_REQUIREMENTS
+    )
+    xml_complete = tmp_path / "complete.xml"
+    xml_complete.write_text(
+        f"""<?xml version="1.0" encoding="utf-8"?>
+<testsuite name="pytest">
+  <testcase classname="t" name="test_all_baseline">
+    <properties>
+{props}
+    </properties>
+  </testcase>
+</testsuite>
+""",
+        encoding="utf-8",
+    )
+    out_md = tmp_path / "baseline-report.md"
+    assert main([str(xml_complete), "--output", str(out_md), "--baseline", "--strict"]) == 0
+    rendered = out_md.read_text(encoding="utf-8")
+    for req_id in BASELINE_REQUIREMENTS:
+        assert f"| `{req_id}` |" in rendered
+        assert f"| `{req_id}` | `test_all_baseline` (1/1 PASS) | PASS |" in rendered

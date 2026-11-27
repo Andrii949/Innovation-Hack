@@ -16,6 +16,27 @@ if TYPE_CHECKING:
 CaseOutcome = Literal["passed", "failed", "error", "skipped"]
 RequirementStatus = Literal["PASS", "FAIL", "MISSING"]
 
+BASELINE_REQUIREMENTS: tuple[str, ...] = (
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F6",
+    "F7",
+    "F8",
+    "F9",
+    "F10",
+    "F11",
+    "17025-6.4.8",
+    "17025-6.4.9",
+    "17025-6.4.10",
+    "17025-6.4.13",
+    "17025-7.5.2",
+    "17025-7.11.2",
+    "17025-7.11.3",
+)
+
 
 @dataclass(frozen=True)
 class TestCaseRecord:
@@ -233,15 +254,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Comma-separated requirement IDs that must be present and passing.",
     )
     parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Include full F1-F11 and ISO/IEC 17025 clause baseline in required IDs.",
+    )
+    parser.add_argument(
         "--strict",
         action="store_true",
         help="Exit with code 1 if any test failed or any requirement is FAIL/MISSING.",
     )
     args = parser.parse_args(argv)
 
-    required_ids = [
+    raw_required: list[str] = []
+    if args.baseline:
+        raw_required.extend(BASELINE_REQUIREMENTS)
+    raw_required.extend(
         item.strip() for chunk in args.require for item in chunk.split(",") if item.strip()
-    ]
+    )
+    required_ids = list(dict.fromkeys(raw_required))
     xml_text = args.junit_xml.read_text(encoding="utf-8")
     cases = parse_junit_xml(xml_text)
     report = build_report(cases, required_ids=required_ids)

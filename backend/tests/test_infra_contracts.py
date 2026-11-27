@@ -129,3 +129,23 @@ def test_native_manifests_declare_camera_and_nfc_permissions() -> None:
     )
     assert "NSCameraUsageDescription" in plist
     assert "NFCReaderUsageDescription" in plist
+
+
+@pytest.mark.req("F6", "17025-7.11.3")
+def test_native_debug_cleartext_and_ios_entitlements() -> None:
+    debug_manifest = (
+        REPO_ROOT / "frontend" / "android" / "app" / "src" / "debug" / "AndroidManifest.xml"
+    ).read_text(encoding="utf-8")
+    assert 'android:usesCleartextTraffic="true"' in debug_manifest
+
+    main_manifest = (
+        REPO_ROOT / "frontend" / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
+    ).read_text(encoding="utf-8")
+    assert 'usesCleartextTraffic="true"' not in main_manifest
+
+    entitlements = (REPO_ROOT / "frontend" / "ios" / "App" / "App" / "App.entitlements").read_text(
+        encoding="utf-8"
+    )
+    assert "com.apple.developer.nfc.readersession.formats" in entitlements
+    assert "<string>NDEF</string>" in entitlements
+    assert "aps-environment" in entitlements
