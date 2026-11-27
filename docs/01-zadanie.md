@@ -154,8 +154,9 @@ dla Warty.
 
 | Rola | Kto | Co robi |
 |---|---|---|
-| **Admin** | specjalista z biura | prowadzi rejestr urządzeń i odczynników, ustawia terminy i wyprzedzenia, wpisuje wyniki wzorcowań, dostaje powiadomienia, widzi harmonogram pracowni (zakres widoczności konfigurowalny) |
-| **Pracownik pracowni** | laborant | wpisuje sprawdzenia, stany odczynników i wyniki badań — tylko dla urządzeń, do których jest upoważniony |
+| **Kierownik** | kierownik laboratorium | otrzymuje wygenerowane dokumenty/raporty, przegląda wykresy, wyniki weryfikacji danych i ogólny stan nadzoru (zakres dostępu konfigurowalny) |
+| **Admin** | specjalista z biura | prowadzi rejestr urządzeń i odczynników, ustawia terminy, progi i wyprzedzenia, wpisuje wyniki wzorcowań, dostaje powiadomienia, generuje i wysyła dokumenty do kierownika, widzi harmonogram pracowni (zakres widoczności konfigurowalny) |
+| **Pracownik pracowni** | laborant | wpisuje sprawdzenia, próbki, stany odczynników i wyniki badań — tylko dla urządzeń, do których jest upoważniony |
 
 ### 3.3 Funkcje
 
@@ -170,6 +171,8 @@ dla Warty.
 | 7 | Uprawnienia do urządzeń | Lista osób upoważnionych do urządzenia (jak w karcie ewidencji). Nieupoważniony po skanie widzi „brak uprawnień” i nic nie wpisze. | [T] [M] | — |
 | 8 | Odczynniki i CRM | Pracownik okresowo (raz w tygodniu / miesiącu) wpisuje, ile zostało. Poniżej progu minimalnego → powiadomienie „mało”. Data ważności → powiadomienie z wyprzedzeniem. Bez codziennego wpisywania zużycia. Częstotliwość, kto wpisuje i próg — konfigurowalne. | [T] [M] | — |
 | 9 | Kontrola zakresu wyników (cement) | Przy wpisie wyniku system sprawdza **tylko**, czy wartość mieści się w zakresie z formularza (sekcja 4). Poza zakresem → błąd na czerwono. Nie oceniamy, czy wynik jest „dobry” — tylko zakres. Reakcja na błąd (blokada / oznaczenie) — konfigurowalna. Dane przykładowe. | [T] [M] [Z] | — |
+| 10 | Wykresy z próbek i weryfikacja danych | Na podstawie pomiarów z próbek wykonywanych przez pracowników system generuje wykres oraz sprawdza dane względem ustalonego progu (np. wynikającego ze wzorcowania — próg i kryteria weryfikacji są konfigurowalne). | [T] | — |
+| 11 | Generator dokumentu i wysyłka do kierownika | System generuje gotowy dokument/raport (m.in. dane z próbek, wykresy i wynik weryfikacji) oraz umożliwia jego bezpośrednią wysyłkę do kierownika (zakres raportu i kanał wysyłki konfigurowalne). | [T] | — |
 
 ### 3.4 Czego nie robimy (na razie)
 
