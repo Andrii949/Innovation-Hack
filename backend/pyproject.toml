@@ -34,6 +34,10 @@ module-root = ""
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+junit_family = "xunit1"
+markers = [
+    "req(*ids): link a test to functional (F1-F11) or ISO/IEC 17025 requirement IDs",
+]
 
 [tool.ruff]
 line-length = 100

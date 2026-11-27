@@ -13,8 +13,8 @@ from app.auth.security import hash_password, new_token
 from app.auth.service import ensure_default_roles
 from app.config import get_settings
 from app.core.clock import get_today
+from app.core.dates import next_due_month
 from app.db import get_db
-from app.equipment._core import next_due_month
 from app.equipment.models import Calibration, CalibrationPoint, CheckPlan, Equipment
 from app.equipment.service import new_public_id, parse_month_str
 from app.forms.models import FormTemplate
@@ -37,6 +37,17 @@ def _cached_hash(password: str) -> str:
     if password not in _PASSWORD_HASH_CACHE:
         _PASSWORD_HASH_CACHE[password] = hash_password(password)
     return _PASSWORD_HASH_CACHE[password]
+
+
+@pytest.fixture(autouse=True)
+def _record_requirement_markers(
+    request: pytest.FixtureRequest,
+    record_property: Callable[[str, object], None],
+) -> None:
+    for marker in request.node.iter_markers("req"):
+        for req_id in marker.args:
+            if isinstance(req_id, str) and req_id:
+                record_property("req", req_id)
 
 
 @pytest.fixture(scope="session")

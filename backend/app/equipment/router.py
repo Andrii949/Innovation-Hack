@@ -7,12 +7,13 @@ from sqlalchemy.orm import Session
 from app.auth.deps import current_user
 from app.auth.models import User
 from app.core.clock import get_today
+from app.core.status import Status
 from app.db import get_db
-from app.equipment._core import Status
 from app.equipment.schemas import (
     AuthorizedUserOut,
     AuthorizedUsersUpdate,
     CalibrationCreate,
+    CalibrationExtractRequest,
     CalibrationOut,
     CheckPlanCreate,
     CheckPlanSummaryOut,
@@ -28,6 +29,7 @@ from app.equipment.schemas import (
 from app.equipment.service import (
     create_check_plan,
     create_equipment,
+    extract_calibration,
     get_equipment_by_qr,
     get_equipment_for_user,
     list_authorized_users,
@@ -49,6 +51,7 @@ from app.equipment.service import (
     update_equipment,
     withdraw,
 )
+from app.integrations.ocr import CalibrationDraft
 
 router = APIRouter(prefix="/equipment", tags=["equipment"])
 check_plans_router = APIRouter(prefix="/check-plans", tags=["checks"])
@@ -193,6 +196,18 @@ def post_equipment_calibration(
     out = serialize_calibration(db, cal)
     db.commit()
     return out
+
+
+@router.post("/{equipment_id}/calibrations/extract")
+def post_extract_calibration(
+    equipment_id: int,
+    payload: CalibrationExtractRequest,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CalibrationDraft:
+    draft = extract_calibration(db, user, equipment_id, payload.attachment_id)
+    db.commit()
+    return draft
 
 
 @router.get("/{equipment_id}/check-plans")

@@ -8,15 +8,97 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-lab}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lab}
       POSTGRES_DB: ${POSTGRES_DB:-lab}
+      APP_DB_USER: ${APP_DB_USER:-lab_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-lab_app}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
+      - ./postgres/10-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lab} -d ${POSTGRES_DB:-lab}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    init: true
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-lab}:${POSTGRES_PASSWORD:-lab}@db:5432/${POSTGRES_DB:-lab}
+      DATABASE_URL: postgresql+psycopg://${APP_DB_USER:-lab_app}:${APP_DB_PASSWORD:-lab_app}@db:5432/${POSTGRES_DB:-lab}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost,capacitor://localhost,http://localhost:5173}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://localhost}
+      FILES_DIR: /workspace/files
+      TIMEZONE: ${TIMEZONE:-Europe/Warsaw}
+      FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE:-}
+      OCR_API_URL: ${OCR_API_URL:-}
+      OCR_API_KEY: ${OCR_API_KEY:-}
+      OCR_MODEL: ${OCR_MODEL:-}
+      OCR_TIMEOUT_S: ${OCR_TIMEOUT_S:-60}
+      AUTO_SEED: ${AUTO_SEED:-false}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      SEED_MANAGER_PASSWORD: ${SEED_MANAGER_PASSWORD:-}
+      SEED_WORKER_PASSWORD: ${SEED_WORKER_PASSWORD:-}
+    volumes:
+      - api-files:/workspace/files
+      - ../data:/workspace/data:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/api/health >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    command: ["worker"]
+    init: true
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://${APP_DB_USER:-lab_app}:${APP_DB_PASSWORD:-lab_app}@db:5432/${POSTGRES_DB:-lab}
+      FILES_DIR: /workspace/files
+      TIMEZONE: ${TIMEZONE:-Europe/Warsaw}
+      FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE:-}
+    volumes:
+      - api-files:/workspace/files
+
+  web:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    ports:
+      - "${WEB_HTTP_PORT:-80}:80"
+      - "${WEB_HTTPS_PORT:-443}:443"
+      - "${WEB_HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:2020/healthz >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   db-data:
+  api-files:
+  caddy-data:
+  caddy-config:

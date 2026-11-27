@@ -1,5 +1,8 @@
 import hashlib
 import re
+import shutil
+import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -136,3 +139,36 @@ def load_attachment_for_user(
     if not path.is_file():
         raise AppError(404, "NOT_FOUND", "Plik nie istnieje na dysku")
     return att, path.read_bytes()
+
+
+def page_images(db: Session, attachment: Attachment, limit: int = 5) -> list[bytes]:
+    _ = db
+    path = get_settings().files_dir / attachment.storage_key
+    if not path.is_file():
+        raise AppError(404, "NOT_FOUND", "Plik nie istnieje na dysku")
+    if attachment.content_type in ("image/jpeg", "image/png"):
+        return [path.read_bytes()]
+    if attachment.content_type != "application/pdf":
+        raise AppError(415, "UNSUPPORTED_FILE_TYPE", "Nieobsługiwany format załącznika")
+
+    pdftoppm = shutil.which("pdftoppm")
+    if pdftoppm is None:
+        raise AppError(502, "OCR_FAILED", "Brak narzędzia pdftoppm do konwersji stron PDF")
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        prefix = Path(tmp_dir) / "page"
+        try:
+            proc = subprocess.run(  # noqa: S603  # fixed argv, no shell; paths inside server storage
+                [pdftoppm, "-png", "-r", "200", "-l", str(limit), str(path), str(prefix)],
+                capture_output=True,
+                timeout=15,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise AppError(504, "OCR_TIMEOUT", "Przekroczono czas konwersji stron PDF") from exc
+        if proc.returncode != 0:
+            raise AppError(502, "OCR_FAILED", "Nie udało się odczytać stron dokumentu PDF")
+        rendered = sorted(Path(tmp_dir).glob("page-*.png"))[:limit]
+        if not rendered:
+            raise AppError(502, "OCR_FAILED", "Dokument PDF nie zawiera stron do odczytu")
+        return [img_path.read_bytes() for img_path in rendered]

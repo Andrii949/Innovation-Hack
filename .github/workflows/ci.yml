@@ -38,6 +38,7 @@ jobs:
           enable-cache: true
       - name: Install typst 0.15.1 and pdftotext (PDF rendering tests)
         run: |
+          command -v pdftoppm >/dev/null || (sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils)
           curl -sSfL https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-unknown-linux-musl.tar.xz \
             | tar -xJ -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/typst-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"

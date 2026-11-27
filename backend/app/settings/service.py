@@ -16,6 +16,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "default_stock_count_interval_days": 30,
     "out_of_range_action": "FLAG",
     "withdraw_on_calibration_nok": True,
+    "ocr_enabled": False,
     "session_ttl_hours": 12,
     "max_upload_mb": 10,
     "worker_interval_minutes": 60,
@@ -67,8 +68,8 @@ def _validate_setting(key: str, value: Any) -> list[str]:
         if value not in ("FLAG", "BLOCK"):
             return ["Pole out_of_range_action musi mieć wartość FLAG lub BLOCK"]
         return []
-    if key == "withdraw_on_calibration_nok" and not isinstance(value, bool):
-        return ["Pole withdraw_on_calibration_nok musi być wartością logiczną"]
+    if key in ("withdraw_on_calibration_nok", "ocr_enabled") and not isinstance(value, bool):
+        return [f"Pole {key} musi być wartością logiczną"]
     return []
 
 
