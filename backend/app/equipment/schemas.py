@@ -165,6 +165,10 @@ class CalibrationCreate(BaseModel):
     attachment_ids: list[int] = []
 
 
+class CalibrationExtractRequest(BaseModel):
+    attachment_id: int
+
+
 class CalibrationOut(BaseModel):
     id: int
     equipment_id: int
