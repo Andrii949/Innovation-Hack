@@ -14,6 +14,14 @@ from app.equipment.router import router as equipment_router
 from app.errors import register_error_handlers
 from app.files.router import router as files_router
 from app.forms.router import router as forms_router
+from app.notifications.router import devices_router
+from app.notifications.router import router as notifications_router
+from app.notifications.router import rules_router as notification_rules_router
+from app.print.router import router as print_router
+from app.reagents.router import lots_router
+from app.reagents.router import router as reagents_router
+from app.reports.router import router as reports_router
+from app.results.router import parameters_router, results_router
 from app.schedule.router import router as schedule_router
 from app.settings.router import router as settings_router
 
@@ -26,6 +34,15 @@ api.include_router(forms_router)
 api.include_router(equipment_router)
 api.include_router(check_plans_router)
 api.include_router(schedule_router)
+api.include_router(parameters_router)
+api.include_router(results_router)
+api.include_router(reagents_router)
+api.include_router(lots_router)
+api.include_router(notifications_router)
+api.include_router(notification_rules_router)
+api.include_router(devices_router)
+api.include_router(print_router)
+api.include_router(reports_router)
 
 
 @api.get("/health")

@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:8000"
     files_dir: Path = Path("files")
     timezone: str = "Europe/Warsaw"
+    fcm_credentials_file: Path | None = None
 
     @property
     def cors_origin_list(self) -> list[str]:

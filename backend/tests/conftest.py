@@ -20,6 +20,8 @@ from app.equipment.service import new_public_id, parse_month_str
 from app.forms.models import FormTemplate
 from app.forms.validation import FieldSpec, validate_field_specs
 from app.main import app
+from app.reagents.models import Reagent, ReagentLot, StockCount
+from app.results.models import TestParameter
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session
@@ -258,3 +260,100 @@ def make_check_plan(db: Session) -> Callable[..., CheckPlan]:
         return plan
 
     return _make_check_plan
+
+
+@pytest.fixture
+def make_parameter(db: Session) -> Callable[..., TestParameter]:
+    def _make_parameter(
+        name: str = "SO₃",
+        unit: str = "%",
+        min_value: str | None = "0.10",
+        max_value: str | None = "3.20",
+        action: str | None = None,
+        *,
+        material: str = "Cement",
+    ) -> TestParameter:
+        param = TestParameter(
+            material=material,
+            name=name,
+            unit=unit,
+            min_value=Decimal(min_value) if min_value is not None else None,
+            max_value=Decimal(max_value) if max_value is not None else None,
+            accredited=False,
+            out_of_range_action=action,
+            active=True,
+        )
+        db.add(param)
+        db.flush()
+        db.refresh(param)
+        return param
+
+    return _make_parameter
+
+
+@pytest.fixture
+def make_reagent(db: Session) -> Callable[..., Reagent]:
+    def _make_reagent(
+        lab: Lab,
+        name: str = "Kwas solny",
+        unit: str = "ml",
+        min_stock: str | None = "600",
+        kind: str = "REAGENT",
+        interval_days: int = 30,
+        expiry_lead: int = 1,
+    ) -> Reagent:
+        reagent = Reagent(
+            lab_id=lab.id,
+            name=name,
+            kind=kind,
+            unit=unit,
+            min_stock=Decimal(min_stock) if min_stock is not None else None,
+            stock_count_interval_days=interval_days,
+            expiry_lead_months=expiry_lead,
+            active=True,
+        )
+        db.add(reagent)
+        db.flush()
+        db.refresh(reagent)
+        return reagent
+
+    return _make_reagent
+
+
+@pytest.fixture
+def make_lot(db: Session) -> Callable[..., ReagentLot]:
+    def _make_lot(
+        reagent: Reagent,
+        quantity: str,
+        received_on: date,
+        expiry: date,
+        lot_no: str = "L1",
+    ) -> ReagentLot:
+        lot = ReagentLot(
+            reagent_id=reagent.id,
+            lot_no=lot_no,
+            expiry_date=expiry,
+            quantity=Decimal(quantity),
+            received_on=received_on,
+        )
+        db.add(lot)
+        db.flush()
+        return lot
+
+    return _make_lot
+
+
+@pytest.fixture
+def make_count(db: Session, make_user: Callable[..., User]) -> Callable[..., StockCount]:
+    def _make_count(reagent: Reagent, quantity: str, counted_on: date) -> StockCount:
+        count = StockCount(
+            reagent_id=reagent.id,
+            quantity=Decimal(quantity),
+            counted_on=counted_on,
+            counted_by=make_user("worker", labs=[reagent.lab]).id,
+        )
+        db.add(count)
+        db.flush()
+        return count
+
+    return _make_count

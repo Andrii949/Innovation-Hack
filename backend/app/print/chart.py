@@ -6,7 +6,9 @@ Built by hand so typst needs no packages from the internet; colours follow the f
 from datetime import datetime
 from decimal import Decimal
 from xml.sax.saxutils import escape
+from zoneinfo import ZoneInfo
 
+from app.config import get_settings
 from app.core.ranges import RangeResult
 from app.results.schemas import Series
 
@@ -74,7 +76,7 @@ def chart_svg(series: Series, *, width: int = 640, height: int = 240) -> str:
         )
         parts.append(
             f'<text x="{MARGIN_LEFT - 4}" y="{line_y + 4:.1f}" text-anchor="end" {FONT}>'
-            f"{escape(threshold)}</text>"
+            f"{escape(threshold.replace('.', ','))}</text>"
         )
 
     coords = [(x(p.at), y(v)) for p, v in zip(series.points, values, strict=True)]
@@ -84,12 +86,13 @@ def chart_svg(series: Series, *, width: int = 640, height: int = 240) -> str:
         color = POINT_COLOR if p.status is RangeResult.IN_RANGE else OUT_OF_THRESHOLD_COLOR
         parts.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="3" fill="{color}"/>')
 
+    tz = ZoneInfo(get_settings().timezone)
     parts.append(
-        f'<text x="{MARGIN_LEFT}" y="{height - 6}" {FONT}>{first.date().isoformat()}</text>'
+        f'<text x="{MARGIN_LEFT}" y="{height - 6}" {FONT}>{first.astimezone(tz):%d.%m.%Y}</text>'
     )
     parts.append(
         f'<text x="{width - MARGIN_RIGHT}" y="{height - 6}" text-anchor="end" {FONT}>'
-        f"{last.date().isoformat()}</text>"
+        f"{last.astimezone(tz):%d.%m.%Y}</text>"
     )
     parts.append("</svg>")
     return "".join(parts)
