@@ -23,6 +23,7 @@ może zmienić. F1–F9 to funkcje z tabeli w 01 §3.3.
 | D9 | Powiadomienia o terminach liczy osobny proces (worker), bez duplikatów | powiadomienie ma historię (przeczytane, rozwiązane); ponowne uruchomienie niczego nie dubluje | propozycja |
 | D10 | QR zawiera link `https://<serwer>/e/<public_id>` | aparat systemowy otworzy link w przeglądarce, skaner w aplikacji wyciągnie ID; kod `121/A` się nie nadaje (ma „/”, numery powtarzają się między pracowniami) | propozycja |
 | D11 | Adres serwera ustawiany w aplikacji mobilnej przy pierwszym uruchomieniu | jedna aplikacja w sklepie, wiele firm, każda z własnym serwerem (D4) | propozycja |
+| D12 | Druki formalne (karta urządzenia z historią, raport walidacji) generuje backend przez binarkę `typst`; etykiety QR zostają w przeglądarce | PDF jest zapisem (17025 7.5.2) — musi powstać po stronie serwera, niezależnie od przeglądarki użytkownika; jedna binarka zamiast przeglądarki w obrazie, szablony `.typ` podglądane tym samym narzędziem co produkcja | propozycja |
 
 ---
 
@@ -277,6 +278,7 @@ Błędy zawsze w formacie `{"error": "<KOD>", "message": "<tekst po polsku>"}`.
 | Powiadomienia | `GET /notifications?unread=`, `POST /notifications/{id}/read`, `POST /notifications/read-all`, `POST /devices` | zalogowani |
 | Pliki | `POST /attachments`, `GET /attachments/{id}` | wg właściciela pliku |
 | Historia | `GET /audit?entity=&entity_id=&from=&to=` | admin |
+| Druki | `GET /equipment/{id}/history.pdf` | odczyt: wszyscy w zakresie |
 | Zdrowie | `GET /health` | publiczne |
 
 Kody błędów:
@@ -299,6 +301,7 @@ Kody błędów:
 | `VALIDATION_ERROR` | 422 | inne błędy danych (lista pól w `details`) |
 | `FILE_TOO_LARGE` | 413 | — |
 | `UNSUPPORTED_FILE_TYPE` | 415 | dozwolone: JPEG, PNG, PDF (rozpoznawane po zawartości, nie po nazwie) |
+| `RENDER_FAILED` | 500 | `typst` nie złożył dokumentu; szczegóły (stderr) tylko w logu serwera |
 
 ---
 
@@ -453,6 +456,8 @@ backend/app/
   results/           # parametry i wyniki badań
   schedule/          # DueItem, /schedule
   notifications/     # reguły, powiadomienia, kanały (push, e-mail)
+  print/             # druki PDF: render.py (binarka typst), service.py, router.py,
+                     # templates/*.typ, fonts/ (DejaVu), testy w tests/print/
   worker.py          # pętla workera, --once, --today
   seed.py            # dane startowe i demo
 ```
@@ -463,7 +468,8 @@ backend/app/
 | Baza | SQLAlchemy 2 (synchronicznie) + psycopg 3, Alembic |
 | Hasła | `pwdlib[argon2]` (to obecnie pokazuje dokumentacja FastAPI zamiast passlib) |
 | Push | `firebase-admin` (FCM HTTP v1) |
-| Testy, lint | pytest + httpx (TestClient), ruff |
+| Druki PDF | `typst` 0.15.x — binarka wywoływana przez `subprocess`, nie `typst-py` |
+| Testy, lint | pytest + httpx (TestClient), ruff, `pdftotext` (poppler) do sprawdzania PDF |
 
 - **Synchronicznie, nie async:** jedno laboratorium, kilkadziesiąt osób — prostota wygrywa.
 - **„Dziś” jako zależność:** `get_today()` w API, parametr `today` w serwisach — testy i demo
@@ -477,6 +483,29 @@ backend/app/
   `--today 2026-12-15` symuluje datę (do demo). Bez Celery i Redisa.
 - **Dane startowe:** `python -m app.seed` — pracownie, użytkownicy, urządzenia demo ze
   statusami liczonymi od dzisiaj, parametry cementu z `data/seed/cement_parameters.csv`.
+
+### Druki PDF (D12)
+
+Dokumenty, które są zapisem, a nie widokiem (karta urządzenia z historią, raport walidacji
+z T29), renderuje backend przez binarkę `typst`; przeglądarka tylko otwiera gotowy PDF.
+
+- **Wywołanie:** `subprocess.run([...])` bez powłoki — `typst compile <szablon> <out.pdf>
+  --root app/print --input data=<json> --ignore-system-fonts --font-path app/print/fonts`,
+  `timeout` 10 s, `check=False`; kod wyjścia ≠ 0 → 500 `RENDER_FAILED`, a ostatnia linia
+  stderr trafia tylko do logu. Endpoint jest synchroniczny (`def`), więc proces potomny idzie
+  do puli wątków FastAPI; przy większym ruchu semafor ogranicza liczbę równoległych renderów.
+- **Dane:** Python składa jeden JSON (miesiące `YYYY-MM`, liczby jako tekst, gotowe etykiety
+  statusów z §4.2) i przekazuje go przez `sys.inputs.data`; szablon wyłącznie składa dokument —
+  bez logiki, bez dostępu do bazy, bez `datetime.today()`. Kształt danych pilnuje model
+  Pydantic po stronie Pythona, żeby szablon i dane nie rozjechały się po cichu.
+- **Powtarzalność:** wersja `typst` przypięta w obrazie (T27) i sprawdzana przy starcie; fonty
+  DejaVu leżą w `app/print/fonts/` (`--ignore-system-fonts`), więc obraz nie zależy od fontów
+  systemowych; gdy szablon stempluje datę, `SOURCE_DATE_EPOCH` daje identyczne bajty dla tego
+  samego wsadu (sprawdzone: ten sam PDF bajt w bajt).
+- **Testy:** złożenie z danych fixture → `%PDF` na początku i `pdftotext` zawierający kod,
+  terminy i statusy; bez porównywania bajt po bajcie.
+- **Etykiety QR (T21):** zostają w przeglądarce (`window.print()`), bo liczy się precyzja
+  arkusza naklejek; PDF tylko tam, gdzie wydruk jest dowodem (17025 7.5.2).
 
 ---
 

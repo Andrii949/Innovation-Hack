@@ -49,7 +49,7 @@ Pięć sytuacji, których spec nie opisuje wprost, a które najłatwiej zepsują
 | Ścieżka | Zakres | Zadania |
 |---|---|---|
 | A — Platforma (backend) | szkielet, historia zmian, logowanie, uprawnienia, ustawienia, pliki | T01, T04–T07, T16 |
-| B — Urządzenia (backend) | terminy, rejestr, upoważnienia, wzorcowania, sprawdzenia, harmonogram | T02, T08–T12 |
+| B — Urządzenia (backend) | terminy, rejestr, upoważnienia, wzorcowania, sprawdzenia, harmonogram, wydruk karty (PDF) | T02, T08–T12, T31 |
 | C — Odczynniki, wyniki, powiadomienia (backend) | liczby i zakresy, odczynniki, wyniki, powiadomienia, worker, kanały | T03, T13–T15, T17 |
 | D — Biuro (web) | szkielet frontu, harmonogram, urządzenia, ustawienia | T19–T22 |
 | E — Pracownia (mobile) | Capacitor, skan, sprawdzenia, spis, push | T23–T26 |
@@ -96,6 +96,7 @@ backend/
     results/       models.py  schemas.py  service.py  router.py
     schedule/      service.py  router.py
     notifications/ models.py  service.py  push.py  email.py  router.py
+    print/         render.py  service.py  router.py  templates/  fonts/
   scripts/validation_report.py
   tests/           (te same podfoldery co app/) conftest.py
 frontend/
@@ -811,3 +812,17 @@ describe("lib", () => {
 - [ ] **Zapas:** nagranie wideo całego scenariusza (dzień 6) i zrzuty ekranu.
 - [ ] **Sprawdź:** dzień 7 — 2 pełne przebiegi bez błędu.
 - [ ] **Commit:** `docs(demo): demo script`
+
+### T31 · Karta urządzenia jako PDF (Typst) — B · P1 · zależy od: T08–T11, T16, T27
+
+**Pliki:** `backend/app/print/{render,service,router}.py`,
+`backend/app/print/templates/equipment-history.typ`, `backend/app/print/fonts/`,
+`backend/tests/print/test_history_pdf.py`, `backend/Dockerfile` (pin `typst` + poppler do testów),
+`frontend/src/features/equipment/EquipmentCardPage.tsx` (przycisk „Drukuj kartę”).
+
+- [ ] **Render:** `render(template: str, data: str) -> bytes` — `subprocess.run(["typst", "compile", ...])` bez powłoki, `--root` = katalog szablonów, `--input data=<json>`, `--ignore-system-fonts --font-path fonts`, `timeout=10`, `check=False`; kod wyjścia ≠ 0 → `AppError(500, "RENDER_FAILED", "Nie udało się złożyć dokumentu")`, stderr tylko do logu.
+- [ ] **Endpoint:** `GET /api/equipment/{id}/history.pdf` — dane z rejestru i historii zmian (miesiące `YYYY-MM`, liczby jako tekst, statusy z 02 §4.2); `Content-Type: application/pdf`, `Content-Disposition: inline; filename="<kod>.pdf"`; zakres pracowni jak przy odczycie karty; urządzenie wycofane drukuje się z adnotacją.
+- [ ] **Szablon:** nagłówek (kod, nazwa, producent, model, nr seryjny, pracownia, lokalizacja), tabela wzorcowań i sprawdzeń z nagłówkiem powtarzanym na kolejnych stronach, stopka „wygenerowano” + numer strony; `#set text(lang: "pl", font: ("DejaVu Sans",))`.
+- [ ] **Testy (czerwone):** 200 + `%PDF` na początku + `pdftotext` zawiera kod i ostatni termin; 403 dla pracowni spoza zakresu; 404 dla nieistniejącego ID; zepsuty szablon → 500 `RENDER_FAILED` (monkeypatch `render`).
+- [ ] **Sprawdź:** `curl -s localhost:8000/api/equipment/1/history.pdf -H "Authorization: Bearer $TOKEN" | pdftotext - - | head`; wydruk historii na 3 strony — nagłówek tabeli powtarza się na każdej stronie.
+- [ ] **Commit:** `feat(print): equipment history PDF via typst`
