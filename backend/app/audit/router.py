@@ -36,6 +36,8 @@ def get_audit(
     entity_id: str | None = None,
     date_from: Annotated[date | None, Query(alias="from")] = None,
     date_to: Annotated[date | None, Query(alias="to")] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[AuditLogOut]:
     require(user, Permission.AUDIT_READ)
     rows = list_audit_logs(
@@ -44,6 +46,8 @@ def get_audit(
         entity_id=entity_id,
         date_from=date_from,
         date_to=date_to,
+        limit=limit,
+        offset=offset,
     )
     return [
         AuditLogOut(

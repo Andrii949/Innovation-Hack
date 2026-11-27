@@ -167,7 +167,7 @@ export function CalibrationEntry({
                   id="cert-file"
                   className="max-w-72"
                   type="file"
-                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  accept=".pdf,.jpg,.jpeg,.png"
                   onChange={(event) => {
                     setFile(event.currentTarget.files?.[0]);
                     setAttachment(undefined);

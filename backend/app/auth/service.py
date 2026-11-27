@@ -11,6 +11,8 @@ from app.auth.security import hash_password, hash_token, new_token, verify_passw
 from app.errors import AppError
 from app.settings.service import get_setting
 
+_DUMMY_PASSWORD_HASH = hash_password("dummy-timing-guard")
+
 
 def ensure_default_roles(db: Session) -> dict[str, Role]:
     existing = {role.name: role for role in db.scalars(select(Role)).all()}
@@ -60,7 +62,10 @@ def login(
         )
 
     user = db.scalars(select(User).where(User.login == login)).first()
-    if user is None or not user.active or not verify_password(password, user.password_hash):
+    password_ok = verify_password(
+        password, user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
+    )
+    if user is None or not user.active or not password_ok:
         log_event(
             db,
             action="login",
