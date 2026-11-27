@@ -1,3 +1,5 @@
+import importlib
+import importlib.util
 import re
 import secrets
 from datetime import UTC, date, datetime
@@ -10,12 +12,24 @@ from app.auth.models import Lab, User
 from app.auth.permissions import Permission, require, visible_lab_ids
 from app.config import get_settings
 from app.equipment._core import Status, due_status, month_window, next_due_month, parse_decimal
-from app.equipment.models import Calibration, CalibrationPoint, Equipment, EquipmentAuthorization
+from app.equipment.models import (
+    Calibration,
+    CalibrationPoint,
+    CheckPlan,
+    CheckRecord,
+    Equipment,
+    EquipmentAuthorization,
+)
 from app.equipment.schemas import (
     AuthorizedUserOut,
     CalibrationCreate,
     CalibrationOut,
     CalibrationPointOut,
+    CheckPlanCreate,
+    CheckPlanSummaryOut,
+    CheckPlanUpdate,
+    CheckRecordCreate,
+    CheckRecordOut,
     EquipmentCard,
     EquipmentCreate,
     EquipmentOut,
@@ -23,6 +37,8 @@ from app.equipment.schemas import (
 )
 from app.errors import AppError
 from app.files.service import attach, list_attachment_ids
+from app.forms.models import FormTemplate
+from app.forms.validation import FieldSpec, validate_form_values
 from app.settings.service import get_setting
 
 PUBLIC_ID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
@@ -183,9 +199,14 @@ def serialize_equipment_card(
 ) -> EquipmentCard:
     base = serialize_equipment_out(db, eq, today=today)
     base_url = get_settings().public_base_url.rstrip("/")
+    plans = [
+        serialize_check_plan(db, plan, eq=eq, today=today)
+        for plan in sorted(eq.check_plans, key=lambda p: p.id)
+        if plan.active
+    ]
     return EquipmentCard(
         **base.model_dump(),
-        check_plans=[],
+        check_plans=plans,
         can_write=can_user_write_checks(user, eq),
         qr_url=f"{base_url}/e/{eq.public_id}",
     )
@@ -634,3 +655,276 @@ def record_calibration(
 
     db.refresh(cal)
     return cal
+
+
+def _validate_check_lead(db: Session, lead_months: int) -> None:
+    bounds = get_setting(db, "check_lead_months_range")
+    lo, hi = int(bounds[0]), int(bounds[1])
+    if lead_months < lo or lead_months > hi:
+        raise AppError(
+            422,
+            "VALIDATION_ERROR",
+            f"Wyprzedzenie planu sprawdzeń musi mieścić się w zakresie {lo}-{hi} miesięcy",
+            details=[{"field": "lead_months", "message": f"Dozwolony zakres: {lo}..{hi}"}],
+        )
+
+
+def last_check_record(db: Session, check_plan_id: int) -> CheckRecord | None:
+    stmt = (
+        select(CheckRecord)
+        .where(CheckRecord.check_plan_id == check_plan_id)
+        .order_by(CheckRecord.performed_on.desc(), CheckRecord.id.desc())
+        .limit(1)
+    )
+    return db.scalars(stmt).first()
+
+
+def check_plan_status_and_due(
+    db: Session,
+    plan: CheckPlan,
+    *,
+    eq: Equipment,
+    today: date,
+) -> tuple[Status, date | None, CheckRecord | None]:
+    last_rec = last_check_record(db, plan.id)
+    if eq.withdrawn_at is not None:
+        return Status.WITHDRAWN, None, last_rec
+    if not plan.active:
+        return Status.NOT_REQUIRED, None, last_rec
+    if last_rec is None:
+        return Status.NO_DATA, None, None
+    due = next_due_month(last_rec.performed_on, plan.interval_months)
+    alert_from, valid_until = month_window(due, plan.lead_months)
+    return due_status(alert_from, valid_until, today), due, last_rec
+
+
+def serialize_check_plan(
+    db: Session,
+    plan: CheckPlan,
+    *,
+    eq: Equipment | None = None,
+    today: date,
+) -> CheckPlanSummaryOut:
+    owner_eq = eq if eq is not None else plan.equipment
+    st, due, last_rec = check_plan_status_and_due(db, plan, eq=owner_eq, today=today)
+    return CheckPlanSummaryOut(
+        id=plan.id,
+        equipment_id=plan.equipment_id,
+        name=plan.name,
+        interval_months=plan.interval_months,
+        lead_months=plan.lead_months,
+        form_template_id=plan.form_template_id,
+        fields=list(plan.form_template.fields),
+        active=plan.active,
+        status=st,
+        last_performed_on=last_rec.performed_on.isoformat() if last_rec is not None else None,
+        next_due_month=format_month_date(due),
+    )
+
+
+def list_check_plans(
+    db: Session,
+    user: User,
+    equipment_id: int,
+    *,
+    today: date,
+) -> list[CheckPlanSummaryOut]:
+    eq = get_equipment_for_user(db, user, equipment_id)
+    rows = db.scalars(
+        select(CheckPlan).where(CheckPlan.equipment_id == eq.id).order_by(CheckPlan.id)
+    ).all()
+    return [serialize_check_plan(db, row, eq=eq, today=today) for row in rows]
+
+
+def create_check_plan(
+    db: Session,
+    user: User,
+    equipment_id: int,
+    data: CheckPlanCreate,
+) -> CheckPlan:
+    eq = get_equipment_or_404(db, equipment_id)
+    require(user, Permission.EQUIPMENT_WRITE, lab_id=eq.lab_id)
+
+    clean_name = data.name.strip()
+    if not clean_name:
+        raise AppError(422, "VALIDATION_ERROR", "Nazwa planu sprawdzeń jest wymagana")
+    if data.interval_months < 1:
+        raise AppError(
+            422,
+            "VALIDATION_ERROR",
+            "Interwał planu sprawdzeń musi być dodatni",
+            details=[{"field": "interval_months", "message": "Wymagana liczba >= 1"}],
+        )
+    lead = (
+        data.lead_months
+        if data.lead_months is not None
+        else int(get_setting(db, "default_check_lead_months"))
+    )
+    _validate_check_lead(db, lead)
+
+    tpl = db.get(FormTemplate, data.form_template_id)
+    if tpl is None:
+        raise AppError(404, "NOT_FOUND", "Nie znaleziono szablonu formularza")
+
+    plan = CheckPlan(
+        equipment_id=eq.id,
+        name=clean_name,
+        interval_months=data.interval_months,
+        lead_months=lead,
+        form_template_id=tpl.id,
+        active=data.active,
+    )
+    db.add(plan)
+    db.flush()
+    db.refresh(plan)
+    return plan
+
+
+def update_check_plan(
+    db: Session,
+    user: User,
+    check_plan_id: int,
+    data: CheckPlanUpdate,
+) -> CheckPlan:
+    plan = db.get(CheckPlan, check_plan_id)
+    if plan is None:
+        raise AppError(404, "NOT_FOUND", "Nie znaleziono planu sprawdzeń")
+    require(user, Permission.EQUIPMENT_WRITE, lab_id=plan.equipment.lab_id)
+
+    fields_set = data.model_fields_set
+    if "name" in fields_set and data.name is not None:
+        clean_name = data.name.strip()
+        if not clean_name:
+            raise AppError(422, "VALIDATION_ERROR", "Nazwa planu sprawdzeń nie może być pusta")
+        plan.name = clean_name
+    if "interval_months" in fields_set and data.interval_months is not None:
+        if data.interval_months < 1:
+            raise AppError(422, "VALIDATION_ERROR", "Interwał planu sprawdzeń musi być dodatni")
+        plan.interval_months = data.interval_months
+    if "lead_months" in fields_set and data.lead_months is not None:
+        _validate_check_lead(db, data.lead_months)
+        plan.lead_months = data.lead_months
+    if "form_template_id" in fields_set and data.form_template_id is not None:
+        if db.get(FormTemplate, data.form_template_id) is None:
+            raise AppError(404, "NOT_FOUND", "Nie znaleziono szablonu formularza")
+        plan.form_template_id = data.form_template_id
+    if "active" in fields_set and data.active is not None:
+        plan.active = data.active
+
+    db.flush()
+    db.refresh(plan)
+    return plan
+
+
+def serialize_check_record(db: Session, rec: CheckRecord) -> CheckRecordOut:
+    att_ids = list_attachment_ids(db, owner_type="check_record", owner_id=rec.id)
+    return CheckRecordOut(
+        id=rec.id,
+        check_plan_id=rec.check_plan_id,
+        performed_on=rec.performed_on.isoformat(),
+        values=rec.values,
+        out_of_range=rec.out_of_range,
+        note=rec.note,
+        performed_by=rec.performed_by,
+        created_at=rec.created_at.isoformat(),
+        attachment_ids=att_ids,
+    )
+
+
+def list_check_records(db: Session, user: User, check_plan_id: int) -> list[CheckRecordOut]:
+    plan = db.get(CheckPlan, check_plan_id)
+    if plan is None:
+        raise AppError(404, "NOT_FOUND", "Nie znaleziono planu sprawdzeń")
+    require(user, Permission.EQUIPMENT_READ, lab_id=plan.equipment.lab_id)
+    rows = db.scalars(
+        select(CheckRecord)
+        .where(CheckRecord.check_plan_id == plan.id)
+        .order_by(CheckRecord.performed_on.desc(), CheckRecord.id.desc())
+    ).all()
+    return [serialize_check_record(db, row) for row in rows]
+
+
+def _maybe_notify_check_out_of_range(
+    db: Session,
+    *,
+    eq: Equipment,
+    plan: CheckPlan,
+    record_id: int,
+) -> None:
+    if (
+        importlib.util.find_spec("app.notifications") is None
+        or importlib.util.find_spec("app.notifications.service") is None
+    ):
+        return
+    notif_mod = importlib.import_module("app.notifications.service")
+    models_mod = importlib.import_module("app.notifications.models")
+    kind = models_mod.NotificationKind("CHECK_OUT_OF_RANGE")
+    code = format_code(eq.number, eq.lab.code)
+    notif_mod.notify_now(
+        db,
+        kind=kind,
+        lab_id=eq.lab_id,
+        ref_type="check_record",
+        ref_id=record_id,
+        title=f"Sprawdzenie poza zakresem: {code} {eq.name} ({plan.name})",
+    )
+
+
+def record_check(
+    db: Session,
+    user: User,
+    check_plan_id: int,
+    data: CheckRecordCreate,
+) -> CheckRecord:
+    plan = db.get(CheckPlan, check_plan_id)
+    if plan is None:
+        raise AppError(404, "NOT_FOUND", "Nie znaleziono planu sprawdzeń")
+    eq = plan.equipment
+
+    require(user, Permission.CHECK_WRITE, equipment=eq)
+    if eq.withdrawn_at is not None:
+        raise AppError(409, "EQUIPMENT_WITHDRAWN", "Urządzenie wycofane - wpisy zablokowane")
+
+    specs = [FieldSpec.model_validate(f) for f in plan.form_template.fields]
+    validation = validate_form_values(specs, data.values)
+    if any(msg == "INVALID_NUMBER" for msg in validation.errors.values()):
+        raise AppError(
+            422,
+            "INVALID_NUMBER",
+            "Nieprawidłowy format liczby pomiarowej w formularzu sprawdzenia",
+        )
+    if validation.errors:
+        raise AppError(
+            422,
+            "VALIDATION_ERROR",
+            "Błędy walidacji formularza sprawdzenia",
+            details=[{"field": k, "message": v} for k, v in validation.errors.items()],
+        )
+
+    is_out = bool(validation.out_of_range)
+    rec = CheckRecord(
+        check_plan_id=plan.id,
+        performed_on=data.performed_on,
+        values=validation.values,
+        out_of_range=is_out,
+        note=data.note,
+        performed_by=user.id,
+    )
+    db.add(rec)
+    db.flush()
+
+    if data.attachment_ids:
+        attach(
+            db,
+            user,
+            data.attachment_ids,
+            owner_type="check_record",
+            owner_id=rec.id,
+            lab_id=eq.lab_id,
+        )
+
+    if is_out:
+        _maybe_notify_check_out_of_range(db, eq=eq, plan=plan, record_id=rec.id)
+
+    db.refresh(rec)
+    return rec

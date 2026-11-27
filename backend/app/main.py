@@ -9,9 +9,11 @@ from app.audit.router import router as audit_router
 from app.auth.router import router as auth_router
 from app.config import get_settings
 from app.db import SessionLocal
+from app.equipment.router import check_plans_router
 from app.equipment.router import router as equipment_router
 from app.errors import register_error_handlers
 from app.files.router import router as files_router
+from app.forms.router import router as forms_router
 from app.settings.router import router as settings_router
 
 api = APIRouter(prefix="/api")
@@ -19,7 +21,9 @@ api.include_router(audit_router)
 api.include_router(auth_router)
 api.include_router(settings_router)
 api.include_router(files_router)
+api.include_router(forms_router)
 api.include_router(equipment_router)
+api.include_router(check_plans_router)
 
 
 @api.get("/health")

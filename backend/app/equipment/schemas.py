@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -59,13 +60,51 @@ class AuthorizedUserOut(BaseModel):
 
 class CheckPlanSummaryOut(BaseModel):
     id: int
+    equipment_id: int
     name: str
     interval_months: int
     lead_months: int
     form_template_id: int
+    fields: list[dict[str, Any]]
     active: bool
     status: Status
+    last_performed_on: str | None
     next_due_month: str | None
+
+
+class CheckPlanCreate(BaseModel):
+    name: str
+    interval_months: int
+    lead_months: int | None = None
+    form_template_id: int
+    active: bool = True
+
+
+class CheckPlanUpdate(BaseModel):
+    name: str | None = None
+    interval_months: int | None = None
+    lead_months: int | None = None
+    form_template_id: int | None = None
+    active: bool | None = None
+
+
+class CheckRecordCreate(BaseModel):
+    performed_on: date
+    values: dict[str, Any]
+    note: str | None = None
+    attachment_ids: list[int] = []
+
+
+class CheckRecordOut(BaseModel):
+    id: int
+    check_plan_id: int
+    performed_on: str
+    values: dict[str, Any]
+    out_of_range: bool
+    note: str | None
+    performed_by: int
+    created_at: str
+    attachment_ids: list[int]
 
 
 class EquipmentOut(BaseModel):

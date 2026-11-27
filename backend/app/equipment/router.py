@@ -14,6 +14,11 @@ from app.equipment.schemas import (
     AuthorizedUsersUpdate,
     CalibrationCreate,
     CalibrationOut,
+    CheckPlanCreate,
+    CheckPlanSummaryOut,
+    CheckPlanUpdate,
+    CheckRecordCreate,
+    CheckRecordOut,
     EquipmentCard,
     EquipmentCreate,
     EquipmentOut,
@@ -21,24 +26,32 @@ from app.equipment.schemas import (
     ReasonRequest,
 )
 from app.equipment.service import (
+    create_check_plan,
     create_equipment,
     get_equipment_by_qr,
     get_equipment_for_user,
     list_authorized_users,
     list_calibrations,
+    list_check_plans,
+    list_check_records,
     list_equipment_for_user,
     record_calibration,
+    record_check,
     restore,
     serialize_authorized_user,
     serialize_calibration,
+    serialize_check_plan,
+    serialize_check_record,
     serialize_equipment_card,
     serialize_equipment_out,
     set_authorized_users,
+    update_check_plan,
     update_equipment,
     withdraw,
 )
 
 router = APIRouter(prefix="/equipment", tags=["equipment"])
+check_plans_router = APIRouter(prefix="/check-plans", tags=["checks"])
 
 
 @router.get("")
@@ -178,5 +191,65 @@ def post_equipment_calibration(
 ) -> CalibrationOut:
     cal = record_calibration(db, user, equipment_id, payload)
     out = serialize_calibration(db, cal)
+    db.commit()
+    return out
+
+
+@router.get("/{equipment_id}/check-plans")
+def get_equipment_check_plans(
+    equipment_id: int,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    today: Annotated[date, Depends(get_today)],
+) -> list[CheckPlanSummaryOut]:
+    return list_check_plans(db, user, equipment_id, today=today)
+
+
+@router.post("/{equipment_id}/check-plans", status_code=status.HTTP_201_CREATED)
+def post_equipment_check_plan(
+    equipment_id: int,
+    payload: CheckPlanCreate,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    today: Annotated[date, Depends(get_today)],
+) -> CheckPlanSummaryOut:
+    plan = create_check_plan(db, user, equipment_id, payload)
+    out = serialize_check_plan(db, plan, today=today)
+    db.commit()
+    return out
+
+
+@check_plans_router.patch("/{check_plan_id}")
+def patch_check_plan_endpoint(
+    check_plan_id: int,
+    payload: CheckPlanUpdate,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    today: Annotated[date, Depends(get_today)],
+) -> CheckPlanSummaryOut:
+    plan = update_check_plan(db, user, check_plan_id, payload)
+    out = serialize_check_plan(db, plan, today=today)
+    db.commit()
+    return out
+
+
+@check_plans_router.get("/{check_plan_id}/records")
+def get_check_plan_records(
+    check_plan_id: int,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[CheckRecordOut]:
+    return list_check_records(db, user, check_plan_id)
+
+
+@check_plans_router.post("/{check_plan_id}/records", status_code=status.HTTP_201_CREATED)
+def post_check_plan_record(
+    check_plan_id: int,
+    payload: CheckRecordCreate,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CheckRecordOut:
+    rec = record_check(db, user, check_plan_id, payload)
+    out = serialize_check_record(db, rec)
     db.commit()
     return out

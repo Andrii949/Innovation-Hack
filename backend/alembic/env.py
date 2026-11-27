@@ -8,10 +8,13 @@ from app.db import Base
 from app.equipment.models import (
     Calibration,
     CalibrationPoint,
+    CheckPlan,
+    CheckRecord,
     Equipment,
     EquipmentAuthorization,
 )
 from app.files.models import Attachment
+from app.forms.models import FormTemplate
 from app.settings.models import Setting
 from sqlalchemy import create_engine, pool
 
@@ -24,10 +27,13 @@ _REGISTERED_MODELS = (
     UserSession,
     user_lab,
     Attachment,
+    FormTemplate,
     Equipment,
     EquipmentAuthorization,
     Calibration,
     CalibrationPoint,
+    CheckPlan,
+    CheckRecord,
 )
 
 config = context.config

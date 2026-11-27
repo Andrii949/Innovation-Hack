@@ -18,6 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.auth.models import Lab
 from app.db import Base
+from app.forms.models import FormTemplate
 
 
 class Equipment(Base):
@@ -50,6 +51,11 @@ class Equipment(Base):
         cascade="all, delete-orphan",
     )
     authorizations: Mapped[list["EquipmentAuthorization"]] = relationship(
+        back_populates="equipment",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    check_plans: Mapped[list["CheckPlan"]] = relationship(
         back_populates="equipment",
         cascade="all, delete-orphan",
         lazy="selectin",
@@ -131,3 +137,59 @@ class CalibrationPoint(Base):
     unit: Mapped[str] = mapped_column(String(32), nullable=False)
 
     calibration: Mapped[Calibration] = relationship(back_populates="points")
+
+
+class CheckPlan(Base):
+    __tablename__ = "check_plan"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    equipment_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("equipment.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    interval_months: Mapped[int] = mapped_column(Integer, nullable=False)
+    lead_months: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    form_template_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("form_template.id"),
+        nullable=False,
+    )
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    equipment: Mapped[Equipment] = relationship(back_populates="check_plans")
+    form_template: Mapped[FormTemplate] = relationship(lazy="selectin")
+    records: Mapped[list["CheckRecord"]] = relationship(
+        back_populates="check_plan",
+        cascade="all, delete-orphan",
+    )
+
+
+class CheckRecord(Base):
+    __tablename__ = "check_record"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    check_plan_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("check_plan.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    performed_on: Mapped[date] = mapped_column(Date, nullable=False)
+    values: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    out_of_range: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    performed_by: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("app_user.id"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+    )
+
+    check_plan: Mapped[CheckPlan] = relationship(back_populates="records")

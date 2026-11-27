@@ -3,6 +3,7 @@ from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import pytest
 from alembic import command
@@ -14,8 +15,10 @@ from app.config import get_settings
 from app.core.clock import get_today
 from app.db import get_db
 from app.equipment._core import next_due_month
-from app.equipment.models import Calibration, CalibrationPoint, Equipment
+from app.equipment.models import Calibration, CalibrationPoint, CheckPlan, Equipment
 from app.equipment.service import new_public_id, parse_month_str
+from app.forms.models import FormTemplate
+from app.forms.validation import FieldSpec, validate_field_specs
 from app.main import app
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, select
@@ -226,3 +229,32 @@ def make_calibration(db: Session) -> Callable[..., Calibration]:
         return cal
 
     return _make_calibration
+
+
+@pytest.fixture
+def make_check_plan(db: Session) -> Callable[..., CheckPlan]:
+    def _make_check_plan(
+        eq: Equipment,
+        fields: list[dict[str, Any]],
+        interval: int = 1,
+        lead: int = 0,
+        name: str = "Sprawdzenie okresowe",
+    ) -> CheckPlan:
+        specs = [FieldSpec.model_validate(f) for f in fields]
+        tpl = FormTemplate(name=f"Szablon {name}", fields=validate_field_specs(specs))
+        db.add(tpl)
+        db.flush()
+        plan = CheckPlan(
+            equipment_id=eq.id,
+            name=name,
+            interval_months=interval,
+            lead_months=lead,
+            form_template_id=tpl.id,
+            active=True,
+        )
+        db.add(plan)
+        db.flush()
+        db.refresh(plan)
+        return plan
+
+    return _make_check_plan
