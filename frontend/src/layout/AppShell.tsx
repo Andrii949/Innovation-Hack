@@ -3,7 +3,7 @@ import { Bell, RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { Snapshot } from "@/api/types";
-import { BrandMark } from "@/components/BrandMark";
+import { BrandMark, PlantSkyline } from "@/components/BrandMark";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,19 +49,33 @@ export function AppShell({
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <header className="sticky top-0 z-30">
-        <div className="relative overflow-hidden bg-primary text-primary-foreground">
+        <div className="h-1 bg-brand-lime" aria-hidden />
+        <div className="relative overflow-hidden border-b border-chart-2/30 bg-primary text-primary-foreground">
           <div
-            className="lab-grid-light pointer-events-none absolute inset-0 opacity-70"
+            className="cement-grain-light pointer-events-none absolute inset-0 opacity-80"
             aria-hidden
           />
+          <div className="kiln-hatch pointer-events-none absolute inset-0 opacity-40" aria-hidden />
           <div className="relative mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-2.5">
-            <BrandMark />
+            <BrandMark className="size-9 sm:size-10" />
             <div className="min-w-0">
-              <p className="font-mono text-[9px] tracking-[0.24em] text-chart-2 uppercase">
-                <span className="sm:hidden">Lab · 17025</span>
-                <span className="hidden sm:inline">Zakładowe laboratorium · 17025</span>
+              <p className="font-mono text-[9px] tracking-[0.2em] whitespace-nowrap text-chart-2 uppercase sm:tracking-[0.26em]">
+                <span className="sm:hidden">Cementownia Warta</span>
+                <span className="hidden sm:inline">Cementownia Warta S.A.</span>
               </p>
-              <p className="truncate text-sm font-semibold tracking-tight">Nadzór laboratorium</p>
+              <p className="flex items-center gap-2 text-[13px] font-semibold tracking-tight sm:text-sm">
+                <span className="truncate">Laboratorium zakładowe</span>
+                <span className="hidden shrink-0 rounded-sm border border-chart-2/40 bg-chart-2/15 px-1.5 py-px font-mono text-[9px] tracking-[0.1em] text-chart-2 uppercase sm:inline">
+                  17025
+                </span>
+              </p>
+              <p className="hidden text-[11px] leading-tight text-white/65 md:block">
+                Nadzór wyposażenia pomiarowego i wyników badań
+              </p>
+            </div>
+
+            <div className="ml-6 hidden h-10 min-w-0 flex-1 items-end text-primary-foreground/30 md:flex [mask-image:linear-gradient(to_right,black,transparent)]">
+              <PlantSkyline className="h-10 w-full" />
             </div>
 
             <div className="ml-auto flex items-center gap-2">
@@ -159,10 +173,13 @@ export function AppShell({
           </div>
         </div>
 
-        <div className="border-b bg-background">
+        <div className="border-b bg-card">
           <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5">
-            <span className="font-mono text-[9px] tracking-[0.18em] text-muted-foreground uppercase">
-              Podgląd roli
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-0.5 bg-chart-2" aria-hidden />
+              <span className="font-mono text-[9px] tracking-[0.18em] text-muted-foreground uppercase">
+                Podgląd roli
+              </span>
             </span>
             <ToggleGroup
               type="single"
@@ -203,12 +220,12 @@ export function AppShell({
 
       <footer className="border-t bg-card/60">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-5 gap-y-1 px-4 py-3 text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <span className="size-1.5 rounded-full bg-chart-2" aria-hidden />
-            Prototyp · dane demonstracyjne
+          <span className="flex items-center gap-1.5 font-medium text-foreground/80">
+            <span className="size-1.5 bg-chart-2" aria-hidden />
+            Cementownia Warta S.A. · Laboratorium zakładowe
           </span>
           <span className="hidden sm:inline">
-            Uprawnienia i statusy wylicza API; interfejs tylko je prezentuje.
+            PN-EN ISO/IEC 17025 · uprawnienia i statusy wylicza API.
           </span>
           <span className="ml-auto font-mono text-[10px] tracking-[0.12em] uppercase">
             {snapshot.labs.map((lab) => lab.code).join(" · ")} / 17025

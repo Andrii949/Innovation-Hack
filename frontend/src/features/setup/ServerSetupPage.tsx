@@ -1,7 +1,7 @@
 import type { SyntheticEvent } from "react";
 import { useState } from "react";
 
-import { BrandMark } from "@/components/BrandMark";
+import { BrandMark, PlantSkyline } from "@/components/BrandMark";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,15 +50,23 @@ export default function ServerSetupPage({ onDone }: Props) {
 
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-primary px-4 py-10 text-primary-foreground">
-      <div className="lab-grid-light pointer-events-none absolute inset-0 opacity-60" aria-hidden />
+      <div className="kiln-hatch pointer-events-none absolute inset-0 opacity-40" aria-hidden />
+      <div
+        className="cement-grain-light pointer-events-none absolute inset-0 opacity-80"
+        aria-hidden
+      />
+      <PlantSkyline className="pointer-events-none absolute -right-8 bottom-0 h-44 w-[40rem] text-primary-foreground/15" />
       <div className="relative w-full max-w-md">
         <div className="mb-6 flex items-center gap-3">
           <BrandMark className="size-11" />
           <div>
             <p className="font-mono text-[9px] tracking-[0.24em] text-chart-2 uppercase">
-              Zakładowe laboratorium · 17025
+              Cementownia Warta S.A.
             </p>
-            <p className="text-lg font-semibold tracking-tight">Nadzór laboratorium</p>
+            <p className="text-lg font-semibold tracking-tight">Laboratorium zakładowe</p>
+            <p className="font-mono text-[10px] tracking-[0.14em] text-white/55 uppercase">
+              PN-EN ISO/IEC 17025
+            </p>
           </div>
         </div>
         <Card className="bg-card text-card-foreground shadow-2xl">

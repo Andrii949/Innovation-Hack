@@ -19,15 +19,16 @@ export function PageHeader({
   return (
     <section className="relative overflow-hidden rounded-2xl border bg-card shadow-sm">
       <span
-        className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-primary via-primary to-chart-2"
+        className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-brand-navy via-brand-navy to-brand-lime"
         aria-hidden
       />
       <div
-        className="lab-grid pointer-events-none absolute inset-y-0 right-0 w-1/3 opacity-70 [mask-image:linear-gradient(to_left,black,transparent)]"
+        className="cement-grain pointer-events-none absolute inset-y-0 right-0 w-2/5 [mask-image:linear-gradient(to_left,black,transparent)]"
         aria-hidden
       />
       <div className="relative px-5 py-5 sm:px-7 sm:py-6">
-        <p className="font-mono text-[10px] font-medium tracking-[0.22em] text-primary uppercase">
+        <p className="flex items-center gap-2 font-mono text-[10px] font-medium tracking-[0.22em] text-primary uppercase">
+          <span className="h-px w-6 bg-brand-lime" aria-hidden />
           {eyebrow}
         </p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">

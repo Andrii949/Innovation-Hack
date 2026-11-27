@@ -8,7 +8,7 @@ const TONE = {
   default: {
     value: "text-foreground",
     tile: "bg-muted text-muted-foreground",
-    bar: "bg-border",
+    bar: "bg-primary/30",
   },
   error: {
     value: "text-red-700 dark:text-red-400",
@@ -29,7 +29,11 @@ const TONE = {
 
 export function MetricStrip({ children }: { children: ReactNode }) {
   return (
-    <section className="overflow-hidden rounded-2xl border bg-border shadow-sm">
+    <section className="relative overflow-hidden rounded-2xl border bg-border shadow-sm">
+      <span
+        className="absolute inset-x-0 top-0 z-10 h-0.5 bg-linear-to-r from-brand-lime via-brand-navy to-brand-lime"
+        aria-hidden
+      />
       <div className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 xl:grid-cols-4">
         {children}
       </div>
