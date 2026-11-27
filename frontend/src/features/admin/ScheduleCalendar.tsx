@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import type { CheckPlan, DueItem, Lab, Status } from "@/api/types";
+import type { CheckPlan, DueItem, Lab } from "@/api/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,26 +26,16 @@ import {
   ItemGroup,
   ItemTitle,
 } from "@/components/ui/item";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { dayLabel, monthGrid, monthLabel, shiftMonth, WEEKDAY_LABELS } from "@/lib/calendar";
 import { dueEquipmentId, dueKey, dueLabName } from "@/lib/due";
 import { formatDate } from "@/lib/format";
-import { dueKindLabel, statusBadgeClass, statusDotClass } from "@/lib/status";
-
-const STATUS_RANK: Record<Status, number> = {
-  OVERDUE: 0,
-  NO_DATA: 1,
-  LOW: 2,
-  DUE_SOON: 3,
-  COUNT_DUE: 4,
-  OK: 5,
-  WITHDRAWN: 6,
-  NOT_REQUIRED: 7,
-};
+import { dueKindLabel, statusBadgeClass, statusDotClass, statusSeverity } from "@/lib/status";
 
 function sortItems(items: DueItem[]): DueItem[] {
   return items.toSorted(
     (left, right) =>
-      STATUS_RANK[left.status] - STATUS_RANK[right.status] ||
+      statusSeverity(left.status) - statusSeverity(right.status) ||
       (left.validUntil ?? "").localeCompare(right.validUntil ?? ""),
   );
 }
@@ -160,31 +150,41 @@ export function ScheduleCalendar({
         <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
           <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-3 py-2">
             <div className="flex items-center gap-0.5">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Poprzedni miesiąc"
-                onClick={() => {
-                  moveMonth(-1);
-                }}
-              >
-                <ChevronLeft aria-hidden />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Poprzedni miesiąc"
+                    onClick={() => {
+                      moveMonth(-1);
+                    }}
+                  >
+                    <ChevronLeft aria-hidden />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Poprzedni miesiąc</TooltipContent>
+              </Tooltip>
               <p className="w-36 text-center text-sm font-semibold capitalize sm:w-40">
                 {monthLabel(month)}
               </p>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Następny miesiąc"
-                onClick={() => {
-                  moveMonth(1);
-                }}
-              >
-                <ChevronRight aria-hidden />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Następny miesiąc"
+                    onClick={() => {
+                      moveMonth(1);
+                    }}
+                  >
+                    <ChevronRight aria-hidden />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Następny miesiąc</TooltipContent>
+              </Tooltip>
             </div>
             <Button
               type="button"

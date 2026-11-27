@@ -1,8 +1,10 @@
 import type { SyntheticEvent } from "react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { recordCheck } from "@/api/demoClient";
-import type { CheckPlanView, FormField as FormFieldModel } from "@/api/types";
+import type { CheckPlanView, EquipmentView, FormField as FormFieldModel } from "@/api/types";
+import { ComboboxField, type ComboboxOption } from "@/components/ComboboxField";
 import { FormField } from "@/components/FormField";
 import { SelectField, type SelectOption } from "@/components/SelectField";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -10,9 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { formatDate, formatRange } from "@/lib/format";
-
-type Message = { tone: "ok" | "warning" | "error"; text: string };
 
 function FieldInput({
   field,
@@ -70,23 +71,23 @@ function FieldInput({
 function CheckFields({ plan }: { plan: CheckPlanView }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [note, setNote] = useState("");
-  const [message, setMessage] = useState<Message | null>(null);
 
   const submit = (event: SyntheticEvent<HTMLFormElement>): void => {
     event.preventDefault();
     const response = recordCheck({ planId: plan.id, values, note });
     if (!response.ok) {
-      setMessage({ tone: "error", text: response.error.message });
+      toast.error("Sprawdzenie nie zostało zapisane", { description: response.error.message });
       return;
     }
-    setMessage(
-      response.data.outOfRange
-        ? {
-            tone: "warning",
-            text: "Sprawdzenie zapisane, ale wynik jest poza zakresem. Administrator dostał powiadomienie — powtórz pomiar.",
-          }
-        : { tone: "ok", text: "Sprawdzenie zapisane. Termin przeliczony z daty wpisu." },
-    );
+    if (response.data.outOfRange) {
+      toast.warning("Sprawdzenie poza zakresem", {
+        description: "Wynik zapisany, ale wymaga powtórzenia. Administrator dostał powiadomienie.",
+      });
+    } else {
+      toast.success("Sprawdzenie zapisane", {
+        description: "Termin przeliczony z daty wpisu.",
+      });
+    }
     setValues({});
     setNote("");
   };
@@ -107,8 +108,9 @@ function CheckFields({ plan }: { plan: CheckPlanView }) {
           ))}
         </div>
         <FormField id="check-note" label="Uwagi">
-          <Input
+          <Textarea
             id="check-note"
+            rows={2}
             value={note}
             placeholder="np. pomiar powtórzony po czyszczeniu"
             onChange={(event) => {
@@ -116,11 +118,6 @@ function CheckFields({ plan }: { plan: CheckPlanView }) {
             }}
           />
         </FormField>
-        {message !== null && (
-          <Alert variant={message.tone === "error" ? "destructive" : "default"}>
-            <AlertDescription>{message.text}</AlertDescription>
-          </Alert>
-        )}
         <div className="flex justify-end">
           <Button type="submit" disabled={!plan.canWrite}>
             Zapisz sprawdzenie
@@ -133,24 +130,32 @@ function CheckFields({ plan }: { plan: CheckPlanView }) {
 
 export function CheckEntryForm({
   plans,
+  equipment,
   equipmentId,
   onEquipmentChange,
 }: {
   plans: CheckPlanView[];
+  equipment: EquipmentView[];
   equipmentId: string | null;
   onEquipmentChange: (equipmentId: string) => void;
 }) {
   const writablePlans = useMemo(() => plans.filter((plan) => plan.canWrite), [plans]);
 
-  const equipmentOptions = useMemo<SelectOption[]>(() => {
-    const options: SelectOption[] = [];
+  const equipmentOptions = useMemo<ComboboxOption[]>(() => {
+    const options: ComboboxOption[] = [];
     for (const plan of writablePlans) {
-      if (!options.some((option) => option.value === plan.equipmentId)) {
-        options.push({ value: plan.equipmentId, label: plan.equipmentName });
+      if (options.some((option) => option.value === plan.equipmentId)) {
+        continue;
       }
+      const item = equipment.find((candidate) => candidate.id === plan.equipmentId);
+      options.push({
+        value: plan.equipmentId,
+        label: item === undefined ? plan.equipmentName : `${item.displayCode} · ${item.name}`,
+        ...(item === undefined ? {} : { hint: item.labName }),
+      });
     }
     return options;
-  }, [writablePlans]);
+  }, [writablePlans, equipment]);
 
   const effectiveEquipmentId = equipmentId ?? writablePlans[0]?.equipmentId ?? "";
   const plansForEquipment = useMemo(
@@ -170,8 +175,8 @@ export function CheckEntryForm({
   return (
     <div className="grid gap-4">
       <div className="grid gap-3 sm:grid-cols-2">
-        <FormField id="check-equipment" label="Urządzenie">
-          <SelectField
+        <FormField id="check-equipment" label="Urządzenie" hint="Szukaj po kodzie lub nazwie.">
+          <ComboboxField
             id="check-equipment"
             value={effectiveEquipmentId}
             options={equipmentOptions}
@@ -180,6 +185,8 @@ export function CheckEntryForm({
               onEquipmentChange(value);
             }}
             placeholder="Wybierz urządzenie"
+            searchPlaceholder="Kod, nazwa lub pracownia…"
+            emptyText="Brak urządzeń z listy upoważnionych."
             ariaLabel="Urządzenie"
             disabled={equipmentOptions.length === 0}
           />

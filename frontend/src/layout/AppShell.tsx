@@ -26,7 +26,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDateTime } from "@/lib/format";
 
 type Props = {
@@ -87,22 +89,31 @@ export function AppShell({
               </Badge>
 
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="outline"
-                    className="relative border-white/20 bg-white/5 text-primary-foreground hover:bg-white/10 hover:text-primary-foreground"
-                    aria-label={`Powiadomienia: ${unread.length} nieprzeczytanych`}
-                  >
-                    <Bell aria-hidden />
-                    {unread.length > 0 && (
-                      <Badge className="absolute -top-1.5 -right-1.5 h-4 min-w-4 rounded-full bg-chart-2 px-1 text-[10px] text-primary tabular-nums">
-                        {unread.length}
-                      </Badge>
-                    )}
-                  </Button>
-                </DropdownMenuTrigger>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="outline"
+                        className="relative border-white/20 bg-white/5 text-primary-foreground hover:bg-white/10 hover:text-primary-foreground"
+                        aria-label={`Powiadomienia: ${unread.length} nieprzeczytanych`}
+                      >
+                        <Bell aria-hidden />
+                        {unread.length > 0 && (
+                          <Badge className="absolute -top-1.5 -right-1.5 h-4 min-w-4 rounded-full bg-chart-2 px-1 text-[10px] text-primary tabular-nums">
+                            {unread.length}
+                          </Badge>
+                        )}
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {unread.length === 0
+                      ? "Powiadomienia — brak nieprzeczytanych"
+                      : `Powiadomienia — nieprzeczytane: ${unread.length}`}
+                  </TooltipContent>
+                </Tooltip>
                 <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)]">
                   <DropdownMenuLabel>Powiadomienia</DropdownMenuLabel>
                   <DropdownMenuGroup>
@@ -114,29 +125,34 @@ export function AppShell({
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    {snapshot.notifications.length === 0 && (
-                      <DropdownMenuItem disabled>Brak powiadomień dla tej roli.</DropdownMenuItem>
-                    )}
-                    {snapshot.notifications.slice(0, 8).map((notification) => (
-                      <DropdownMenuItem
-                        key={notification.id}
-                        className={cn(
-                          "flex-col items-start gap-0.5 whitespace-normal",
-                          notification.readAt === null ? "bg-accent/60" : "opacity-70",
-                        )}
-                        onSelect={(event) => {
-                          event.preventDefault();
-                        }}
-                      >
-                        <span className="font-medium">{notification.title}</span>
-                        <span className="text-xs text-muted-foreground">{notification.body}</span>
-                        <span className="font-mono text-[10px] text-muted-foreground">
-                          {formatDateTime(notification.createdAt)}
-                        </span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuGroup>
+                  {snapshot.notifications.length === 0 ? (
+                    <DropdownMenuItem disabled>Brak powiadomień dla tej roli.</DropdownMenuItem>
+                  ) : (
+                    <ScrollArea className="max-h-80">
+                      <DropdownMenuGroup className="pr-2">
+                        {snapshot.notifications.map((notification) => (
+                          <DropdownMenuItem
+                            key={notification.id}
+                            className={cn(
+                              "flex-col items-start gap-0.5 whitespace-normal",
+                              notification.readAt === null ? "bg-accent/60" : "opacity-70",
+                            )}
+                            onSelect={(event) => {
+                              event.preventDefault();
+                            }}
+                          >
+                            <span className="font-medium">{notification.title}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {notification.body}
+                            </span>
+                            <span className="font-mono text-[10px] text-muted-foreground">
+                              {formatDateTime(notification.createdAt)}
+                            </span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuGroup>
+                    </ScrollArea>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
 

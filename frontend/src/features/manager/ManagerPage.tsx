@@ -1,11 +1,12 @@
 import { CircleAlert, ClipboardCheck, FileText, TriangleAlert } from "lucide-react";
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 
 import type { Snapshot } from "@/api/types";
 import { Metric, MetricStrip } from "@/components/MetricStrip";
 import { PageHeader, PageMeta } from "@/components/PageHeader";
 import { Panel } from "@/components/Panel";
 import { SelectField, type SelectOption } from "@/components/SelectField";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -19,7 +20,19 @@ import { ResultsTable } from "@/features/results/ResultsTable";
 import { formatRange } from "@/lib/format";
 
 import { ReportsInbox } from "./ReportsInbox";
-import { TrendChart } from "./TrendChart";
+
+// Recharts is a quarter of the bundle and only the manager's second tab needs it.
+const TrendChart = lazy(async () => {
+  const module = await import("./TrendChart");
+  return { default: module.TrendChart };
+});
+
+const CHART_PLACEHOLDER = (
+  <div className="grid gap-2" aria-busy>
+    <Skeleton className="h-64 w-full sm:h-72" />
+    <Skeleton className="h-3 w-64" />
+  </div>
+);
 
 export function ManagerPage({ snapshot }: { snapshot: Snapshot }) {
   const chartParameters = useMemo(
@@ -190,7 +203,9 @@ export function ManagerPage({ snapshot }: { snapshot: Snapshot }) {
                     {parameter.accredited ? "akredytowane" : "nieakredytowane"}
                   </p>
                 </div>
-                <TrendChart parameter={parameter} results={snapshot.results} />
+                <Suspense fallback={CHART_PLACEHOLDER}>
+                  <TrendChart parameter={parameter} results={snapshot.results} />
+                </Suspense>
               </div>
             )}
           </Panel>

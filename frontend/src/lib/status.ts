@@ -51,6 +51,22 @@ const KIND_LABELS: Record<DueKind, string> = {
   STOCK_COUNT: "Spis stanu",
 };
 
+/** Sort order for status columns: what needs attention first. */
+const SEVERITY: Record<Status, number> = {
+  OVERDUE: 0,
+  NO_DATA: 1,
+  LOW: 2,
+  DUE_SOON: 3,
+  COUNT_DUE: 4,
+  OK: 5,
+  WITHDRAWN: 6,
+  NOT_REQUIRED: 7,
+};
+
+export function statusSeverity(status: Status): number {
+  return SEVERITY[status];
+}
+
 export function statusLabel(status: Status): string {
   return LABELS[status];
 }

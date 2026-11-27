@@ -1,22 +1,108 @@
+import type { ReactNode } from "react";
+import { useMemo } from "react";
+import {
+  type ActiveDotProps,
+  CartesianGrid,
+  type DotItemDotProps,
+  Line,
+  LineChart,
+  ReferenceArea,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  type TooltipContentProps,
+  XAxis,
+  YAxis,
+} from "recharts";
+
 import type { TestParameter, TestResultView } from "@/api/types";
 import { formatDate, formatDecimal } from "@/lib/format";
 
-const WIDTH = 640;
-const HEIGHT = 240;
-const MARGIN = { top: 16, right: 18, bottom: 30, left: 56 };
-const PLOT_WIDTH = WIDTH - MARGIN.left - MARGIN.right;
-const PLOT_HEIGHT = HEIGHT - MARGIN.top - MARGIN.bottom;
+type Point = {
+  date: string;
+  value: number;
+  sampleLabel: string;
+  unit: string;
+  inRange: boolean;
+};
+
+const MARGIN = { top: 12, right: 16, bottom: 4, left: 0 };
+const Y_DOMAIN: [number | "auto", number | "auto"] = ["auto", "auto"];
+const AXIS_TICK = { fill: "var(--muted-foreground)", fontSize: 10 };
+const GRID_STROKE = "var(--border)";
+const THRESHOLD_STROKE = "var(--chart-4)";
+const ACTIVE_DOT = { r: 5, strokeWidth: 1 } satisfies Partial<ActiveDotProps>;
 
 function shortDate(date: string): string {
   return `${date.slice(8, 10)}.${date.slice(5, 7)}`;
 }
 
 function tickLabel(value: number): string {
-  const magnitude = Math.abs(value);
-  if (magnitude >= 1000) {
-    return String(Math.round(value));
-  }
   return formatDecimal(String(Number(value.toFixed(2))));
+}
+
+function isPoint(value: unknown): value is Point {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "sampleLabel" in value &&
+    "inRange" in value &&
+    "unit" in value &&
+    typeof value.sampleLabel === "string" &&
+    typeof value.inRange === "boolean" &&
+    typeof value.unit === "string"
+  );
+}
+
+function renderDot(props: DotItemDotProps): ReactNode {
+  if (typeof props.cx !== "number" || typeof props.cy !== "number") {
+    return null;
+  }
+  const point = isPoint(props.payload) ? props.payload : null;
+  return (
+    <circle
+      cx={props.cx}
+      cy={props.cy}
+      r={3.5}
+      fill={point !== null && !point.inRange ? "var(--destructive)" : "var(--primary)"}
+      stroke="var(--background)"
+      strokeWidth={1}
+    />
+  );
+}
+
+function renderTooltip({ active, payload, label }: TooltipContentProps): ReactNode {
+  if (!active || payload.length === 0) {
+    return null;
+  }
+  const entry = payload[0];
+  if (entry === undefined) {
+    return null;
+  }
+  const point = isPoint(entry.payload) ? entry.payload : null;
+
+  return (
+    <div className="grid gap-1 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl">
+      <span className="font-medium">{label === undefined ? "" : formatDate(String(label))}</span>
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <span
+            className={
+              point !== null && !point.inRange
+                ? "size-2 shrink-0 rounded-full bg-destructive"
+                : "size-2 shrink-0 rounded-full bg-primary"
+            }
+            aria-hidden
+          />
+          {point?.sampleLabel ?? "Wynik"}
+          {point !== null && !point.inRange && " · poza zakresem"}
+        </span>
+        <span className="font-mono font-medium tabular-nums">
+          {formatDecimal(String(entry.value))} {point?.unit ?? ""}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export function TrendChart({
@@ -26,11 +112,21 @@ export function TrendChart({
   parameter: TestParameter;
   results: TestResultView[];
 }) {
-  const points = results
-    .filter((result) => result.parameterId === parameter.id)
-    .map((result) => ({ result, numeric: Number(result.value) }))
-    .filter((point) => Number.isFinite(point.numeric))
-    .toSorted((left, right) => left.result.sampledAt.localeCompare(right.result.sampledAt));
+  const points = useMemo<Point[]>(
+    () =>
+      results
+        .filter((result) => result.parameterId === parameter.id)
+        .map((result) => ({
+          date: result.sampledAt,
+          value: Number(result.value),
+          sampleLabel: result.sampleLabel,
+          unit: result.unit,
+          inRange: result.inRange,
+        }))
+        .filter((point) => Number.isFinite(point.value))
+        .toSorted((left, right) => left.date.localeCompare(right.date)),
+    [results, parameter.id],
+  );
 
   if (points.length === 0) {
     return (
@@ -40,154 +136,67 @@ export function TrendChart({
     );
   }
 
-  const limitValues = [parameter.minValue, parameter.maxValue]
-    .filter((value): value is string => value !== null)
-    .map((value) => Number(value))
-    .filter((value) => Number.isFinite(value));
-  const values = [...points.map((point) => point.numeric), ...limitValues];
-  const dataMin = Math.min(...values);
-  const dataMax = Math.max(...values);
-  const padding = (dataMax - dataMin) * 0.12 || Math.max(Math.abs(dataMax) * 0.05, 0.1);
-  const yMin = dataMin >= 0 ? Math.max(0, dataMin - padding) : dataMin - padding;
-  const yMax = dataMax + padding;
-
-  const x = (index: number): number =>
-    points.length === 1
-      ? MARGIN.left + PLOT_WIDTH / 2
-      : MARGIN.left + (index / (points.length - 1)) * PLOT_WIDTH;
-  const y = (value: number): number => MARGIN.top + ((yMax - value) / (yMax - yMin)) * PLOT_HEIGHT;
-
-  const polyline = points
-    .map((point, index) => `${x(index).toFixed(1)},${y(point.numeric).toFixed(1)}`)
-    .join(" ");
-
-  const gridValues = [0, 1, 2, 3, 4].map((step) => yMin + ((yMax - yMin) * step) / 4);
-  const firstPoint = points[0];
-  const lastPoint = points[points.length - 1];
-  const middlePoint = points[Math.floor(points.length / 2)];
   const minLimit = parameter.minValue === null ? null : Number(parameter.minValue);
   const maxLimit = parameter.maxValue === null ? null : Number(parameter.maxValue);
+  const outOfRange = points.filter((point) => !point.inRange).length;
+  const lastPoint = points[points.length - 1];
 
   return (
     <figure className="grid gap-2">
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="h-auto w-full">
-        <title>{`${parameter.name}: wyniki w czasie z zakresem ${parameter.minValue ?? "—"}–${parameter.maxValue ?? "—"} ${parameter.unit}`}</title>
-        <g className="text-muted-foreground" fill="currentColor">
-          {gridValues.map((value) => (
-            <g key={value}>
-              <line
-                x1={MARGIN.left}
-                x2={WIDTH - MARGIN.right}
-                y1={y(value)}
-                y2={y(value)}
-                stroke="currentColor"
-                strokeOpacity={0.15}
+      <div className="h-64 w-full sm:h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={points} margin={MARGIN} accessibilityLayer>
+            <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeOpacity={0.6} />
+            {minLimit !== null && maxLimit !== null && (
+              <ReferenceArea y1={minLimit} y2={maxLimit} fill="var(--primary)" fillOpacity={0.08} />
+            )}
+            <XAxis
+              dataKey="date"
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              minTickGap={28}
+              tick={AXIS_TICK}
+              tickFormatter={(value: string) => shortDate(value)}
+            />
+            <YAxis
+              width={52}
+              tickLine={false}
+              axisLine={false}
+              tickMargin={6}
+              domain={Y_DOMAIN}
+              tick={AXIS_TICK}
+              tickFormatter={(value: number) => tickLabel(value)}
+            />
+            <Tooltip content={renderTooltip} />
+            {maxLimit !== null && Number.isFinite(maxLimit) && (
+              <ReferenceLine
+                y={maxLimit}
+                stroke={THRESHOLD_STROKE}
+                strokeDasharray="4 3"
+                ifOverflow="extendDomain"
               />
-              <text
-                x={MARGIN.left - 8}
-                y={y(value) + 3}
-                textAnchor="end"
-                fontSize={10}
-                fill="currentColor"
-              >
-                {tickLabel(value)}
-              </text>
-            </g>
-          ))}
-          {firstPoint !== undefined && (
-            <text x={x(0)} y={HEIGHT - 8} textAnchor="start" fontSize={10} fill="currentColor">
-              {shortDate(firstPoint.result.sampledAt)}
-            </text>
-          )}
-          {middlePoint !== undefined && middlePoint !== firstPoint && (
-            <text
-              x={x(Math.floor(points.length / 2))}
-              y={HEIGHT - 8}
-              textAnchor="middle"
-              fontSize={10}
-              fill="currentColor"
-            >
-              {shortDate(middlePoint.result.sampledAt)}
-            </text>
-          )}
-          {lastPoint !== undefined && lastPoint !== firstPoint && (
-            <text
-              x={x(points.length - 1)}
-              y={HEIGHT - 8}
-              textAnchor="end"
-              fontSize={10}
-              fill="currentColor"
-            >
-              {shortDate(lastPoint.result.sampledAt)}
-            </text>
-          )}
-        </g>
-
-        {minLimit !== null &&
-          maxLimit !== null &&
-          Number.isFinite(minLimit) &&
-          Number.isFinite(maxLimit) && (
-            <rect
-              x={MARGIN.left}
-              y={y(maxLimit)}
-              width={PLOT_WIDTH}
-              height={Math.max(0, y(minLimit) - y(maxLimit))}
-              fill="currentColor"
-              opacity={0.14}
-              className="text-chart-2"
+            )}
+            {minLimit !== null && Number.isFinite(minLimit) && (
+              <ReferenceLine
+                y={minLimit}
+                stroke={THRESHOLD_STROKE}
+                strokeDasharray="4 3"
+                ifOverflow="extendDomain"
+              />
+            )}
+            <Line
+              dataKey="value"
+              type="monotone"
+              stroke="var(--primary)"
+              strokeWidth={2}
+              dot={renderDot}
+              activeDot={ACTIVE_DOT}
+              isAnimationActive={false}
             />
-          )}
-
-        <g className="text-primary" fill="currentColor">
-          {maxLimit !== null && Number.isFinite(maxLimit) && (
-            <line
-              x1={MARGIN.left}
-              x2={WIDTH - MARGIN.right}
-              y1={y(maxLimit)}
-              y2={y(maxLimit)}
-              stroke="currentColor"
-              strokeDasharray="4 3"
-              strokeOpacity={0.8}
-              className="text-chart-4"
-            />
-          )}
-          {minLimit !== null && Number.isFinite(minLimit) && (
-            <line
-              x1={MARGIN.left}
-              x2={WIDTH - MARGIN.right}
-              y1={y(minLimit)}
-              y2={y(minLimit)}
-              stroke="currentColor"
-              strokeDasharray="4 3"
-              strokeOpacity={0.8}
-              className="text-chart-4"
-            />
-          )}
-          <polyline
-            points={polyline}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2.25}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-          {points.map((point, index) => (
-            <circle
-              key={point.result.id}
-              cx={x(index)}
-              cy={y(point.numeric)}
-              r={4}
-              fill="currentColor"
-              className={point.result.inRange ? "text-primary" : "text-red-600"}
-            >
-              <title>
-                {point.result.sampleLabel}: {formatDecimal(point.result.value)} {parameter.unit} ·{" "}
-                {point.result.sampledAt}
-              </title>
-            </circle>
-          ))}
-        </g>
-      </svg>
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
 
       <figcaption className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
@@ -195,8 +204,8 @@ export function TrendChart({
           zakresie
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block size-2 rounded-full bg-red-600" aria-hidden /> wynik poza
-          zakresem
+          <span className="inline-block size-2 rounded-full bg-destructive" aria-hidden /> wynik
+          poza zakresem ({outOfRange})
         </span>
         <span>
           Zakres: {formatDecimal(parameter.minValue ?? "—")}–
@@ -205,8 +214,8 @@ export function TrendChart({
         <span>{points.length} próbek</span>
         {lastPoint !== undefined && (
           <span className="ml-auto font-mono text-[10px] tracking-[0.06em] uppercase">
-            Ostatni {formatDecimal(lastPoint.result.value)} {parameter.unit} ·{" "}
-            {formatDate(lastPoint.result.sampledAt)}
+            Ostatni {formatDecimal(String(lastPoint.value))} {parameter.unit} ·{" "}
+            {formatDate(lastPoint.date)}
           </span>
         )}
       </figcaption>
