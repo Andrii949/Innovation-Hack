@@ -1,17 +1,16 @@
 import type { SyntheticEvent } from "react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { recordCalibration } from "@/api/demoClient";
 import type { CalibrationResult, EquipmentView } from "@/api/types";
 import { FormField } from "@/components/FormField";
 import { SelectField, type SelectOption } from "@/components/SelectField";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { parseMonthInput } from "@/lib/months";
-
-type Message = { tone: "ok" | "error"; text: string };
+import { Textarea } from "@/components/ui/textarea";
+import { formatMonth, parseMonthInput } from "@/lib/months";
 
 const RESULT_OPTIONS: SelectOption[] = [
   { value: "OK", label: "OK — zgodne" },
@@ -29,16 +28,17 @@ export function CalibrationForm({ equipment }: { equipment: EquipmentView }) {
   const [error, setError] = useState("");
   const [uncertainty, setUncertainty] = useState("");
   const [unit, setUnit] = useState("");
-  const [message, setMessage] = useState<Message | null>(null);
 
   const submit = (event: SyntheticEvent<HTMLFormElement>): void => {
     event.preventDefault();
     const parsedMonth = parseMonthInput(month);
     if (parsedMonth === null) {
-      setMessage({ tone: "error", text: "Miesiąc wzorcowania podaj jako MM/RRRR, np. 11/2026." });
+      toast.error("Nieprawidłowy miesiąc wzorcowania", {
+        description: "Podaj miesiąc jako MM/RRRR, np. 11/2026.",
+      });
       return;
     }
-    const hasPoint = [point, error, uncertainty, unit].some((value) => value.trim() !== "");
+    const hasPoint = [point, error, uncertainty, unit].some((item) => item.trim() !== "");
     const response = recordCalibration({
       equipmentId: equipment.id,
       calibratedMonth: parsedMonth,
@@ -50,12 +50,11 @@ export function CalibrationForm({ equipment }: { equipment: EquipmentView }) {
       points: hasPoint ? [{ point, error, uncertainty, unit }] : [],
     });
     if (!response.ok) {
-      setMessage({ tone: "error", text: response.error.message });
+      toast.error("Wzorcowanie nie zostało zapisane", { description: response.error.message });
       return;
     }
-    setMessage({
-      tone: "ok",
-      text: `Zapisano wzorcowanie ${parsedMonth}. Termin i status przeliczone.`,
+    toast.success(`Zapisano wzorcowanie ${formatMonth(parsedMonth)}`, {
+      description: `${equipment.displayCode}: termin i status przeliczone.`,
     });
     setCertificateNo("");
     setNote("");
@@ -179,21 +178,17 @@ export function CalibrationForm({ equipment }: { equipment: EquipmentView }) {
               />
             </FormField>
             <FormField id={`cal-note-${equipment.id}`} label="Uwagi">
-              <Input
+              <Textarea
                 id={`cal-note-${equipment.id}`}
+                rows={2}
                 value={note}
+                placeholder="np. świadectwo wpisane z oryginału, bez OCR"
                 onChange={(event) => {
                   setNote(event.target.value);
                 }}
               />
             </FormField>
           </div>
-
-          {message !== null && (
-            <Alert variant={message.tone === "error" ? "destructive" : "default"}>
-              <AlertDescription>{message.text}</AlertDescription>
-            </Alert>
-          )}
 
           <div className="flex justify-end">
             <Button type="submit">Zapisz wzorcowanie</Button>

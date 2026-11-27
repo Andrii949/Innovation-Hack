@@ -1,11 +1,12 @@
 import type { SyntheticEvent } from "react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { addTestResult } from "@/api/demoClient";
 import type { Snapshot } from "@/api/types";
+import { ComboboxField, type ComboboxOption } from "@/components/ComboboxField";
 import { FormField } from "@/components/FormField";
 import { SelectField, type SelectOption } from "@/components/SelectField";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FieldGroup } from "@/components/ui/field";
@@ -17,21 +18,18 @@ export function ResultEntryForm({ snapshot }: { snapshot: Snapshot }) {
   const [sampleLabel, setSampleLabel] = useState("");
   const [value, setValue] = useState("");
   const [repeatOfId, setRepeatOfId] = useState("none");
-  const [message, setMessage] = useState<{
-    tone: "ok" | "warning" | "error";
-    text: string;
-  } | null>(null);
 
   const parameter =
     snapshot.parameters.find((candidate) => candidate.id === parameterId) ??
     snapshot.parameters[0] ??
     null;
 
-  const parameterOptions = useMemo<SelectOption[]>(
+  const parameterOptions = useMemo<ComboboxOption[]>(
     () =>
       snapshot.parameters.map((candidate) => ({
         value: candidate.id,
         label: `${candidate.name}${candidate.unit === "" ? "" : ` [${candidate.unit}]`}`,
+        hint: candidate.material,
       })),
     [snapshot.parameters],
   );
@@ -68,17 +66,16 @@ export function ResultEntryForm({ snapshot }: { snapshot: Snapshot }) {
       repeatOfId: repeatOfId === "none" ? null : repeatOfId,
     });
     if (!response.ok) {
-      setMessage({ tone: "error", text: response.error.message });
+      toast.error("Wynik nie został zapisany", { description: response.error.message });
       return;
     }
-    setMessage(
-      response.data.inRange
-        ? { tone: "ok", text: "Wynik zapisany w zakresie." }
-        : {
-            tone: "warning",
-            text: "Wynik zapisany poza zakresem — wymagane powtórzenie badania.",
-          },
-    );
+    if (response.data.inRange) {
+      toast.success("Wynik zapisany w zakresie", { description: sampleLabel });
+    } else {
+      toast.warning("Wynik poza zakresem", {
+        description: "Wymagane powtórzenie badania — wynik trafił do kolejki kierownika.",
+      });
+    }
     setSampleLabel("");
     setValue("");
     setRepeatOfId("none");
@@ -88,8 +85,8 @@ export function ResultEntryForm({ snapshot }: { snapshot: Snapshot }) {
     <form onSubmit={submit}>
       <FieldGroup className="gap-3">
         <div className="grid gap-3 sm:grid-cols-2">
-          <FormField id="result-parameter" label="Parametr">
-            <SelectField
+          <FormField id="result-parameter" label="Parametr" hint="Szukaj po nazwie lub materiale.">
+            <ComboboxField
               id="result-parameter"
               value={parameter?.id ?? ""}
               options={parameterOptions}
@@ -98,6 +95,8 @@ export function ResultEntryForm({ snapshot }: { snapshot: Snapshot }) {
                 setRepeatOfId("none");
               }}
               placeholder="Wybierz parametr"
+              searchPlaceholder="Nazwa parametru lub materiał…"
+              emptyText="Brak parametrów."
               ariaLabel="Parametr"
             />
           </FormField>
@@ -157,12 +156,6 @@ export function ResultEntryForm({ snapshot }: { snapshot: Snapshot }) {
               {parameter.method}
             </span>
           </div>
-        )}
-
-        {message !== null && (
-          <Alert variant={message.tone === "error" ? "destructive" : "default"}>
-            <AlertDescription>{message.text}</AlertDescription>
-          </Alert>
         )}
 
         <div className="flex justify-end">

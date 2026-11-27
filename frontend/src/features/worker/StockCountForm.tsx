@@ -1,13 +1,13 @@
 import { Beaker } from "lucide-react";
 import type { SyntheticEvent } from "react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { recordStockCount } from "@/api/demoClient";
 import type { ReagentView } from "@/api/types";
+import { ComboboxField, type ComboboxOption } from "@/components/ComboboxField";
 import { FormField } from "@/components/FormField";
-import { SelectField, type SelectOption } from "@/components/SelectField";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -22,7 +22,6 @@ import { formatDate, formatDecimal } from "@/lib/format";
 
 function StockFields({ reagent }: { reagent: ReagentView }) {
   const [quantity, setQuantity] = useState("");
-  const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
 
   const stock = Number(reagent.stock);
   const minimum = Number(reagent.minStock);
@@ -35,10 +34,10 @@ function StockFields({ reagent }: { reagent: ReagentView }) {
     event.preventDefault();
     const response = recordStockCount({ reagentId: reagent.id, quantity });
     if (!response.ok) {
-      setMessage({ tone: "error", text: response.error.message });
+      toast.error("Spis nie został zapisany", { description: response.error.message });
       return;
     }
-    setMessage({ tone: "ok", text: "Spis zapisany. Stan i status przeliczone." });
+    toast.success("Spis zapisany", { description: `${reagent.name}: stan i status przeliczone.` });
     setQuantity("");
   };
 
@@ -90,11 +89,6 @@ function StockFields({ reagent }: { reagent: ReagentView }) {
         <Button type="submit">Zapisz spis</Button>
         <StatusBadge status={reagent.status} className="mb-1" />
       </div>
-      {message !== null && (
-        <Alert variant={message.tone === "error" ? "destructive" : "default"}>
-          <AlertDescription>{message.text}</AlertDescription>
-        </Alert>
-      )}
     </form>
   );
 }
@@ -109,11 +103,12 @@ export function StockCountForm({
   onReagentChange: (reagentId: string) => void;
 }) {
   const writable = useMemo(() => reagents.filter((reagent) => reagent.canWriteStock), [reagents]);
-  const reagentOptions = useMemo<SelectOption[]>(
+  const reagentOptions = useMemo<ComboboxOption[]>(
     () =>
       writable.map((candidate) => ({
         value: candidate.id,
-        label: `${candidate.name} · ${candidate.labName}`,
+        label: candidate.name,
+        hint: `${candidate.labName} · ${candidate.unit}`,
       })),
     [writable],
   );
@@ -122,13 +117,15 @@ export function StockCountForm({
 
   return (
     <div className="grid gap-3">
-      <FormField id="stock-reagent" label="Odczynnik">
-        <SelectField
+      <FormField id="stock-reagent" label="Odczynnik" hint="Szukaj po nazwie lub pracowni.">
+        <ComboboxField
           id="stock-reagent"
           value={reagent?.id ?? ""}
           options={reagentOptions}
           onValueChange={onReagentChange}
           placeholder="Wybierz odczynnik"
+          searchPlaceholder="Nazwa, pracownia lub jednostka…"
+          emptyText="Brak odczynników do spisu."
           ariaLabel="Odczynnik"
           disabled={reagentOptions.length === 0}
         />

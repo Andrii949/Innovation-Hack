@@ -11,11 +11,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ResultsTable } from "@/features/results/ResultsTable";
 import { dueKindLabel, isDueKind } from "@/lib/status";
 
 import { AuditList } from "./AuditList";
 import { DueHorizon } from "./DueHorizon";
+import { EquipmentDetail } from "./EquipmentDetail";
 import { EquipmentSection } from "./EquipmentSection";
 import { ReagentPanel } from "./ReagentPanel";
 import { ReportComposer } from "./ReportComposer";
@@ -33,9 +35,7 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
   const [labFilter, setLabFilter] = useState("ALL");
   const [kindFilter, setKindFilter] = useState<"ALL" | DueKind>("ALL");
   const [showAll, setShowAll] = useState(false);
-  const [selectedEquipmentId, setSelectedEquipmentId] = useState<string | null>(
-    snapshot.equipment[0]?.id ?? null,
-  );
+  const [selectedEquipmentId, setSelectedEquipmentId] = useState<string | null>(null);
 
   const labOptions = useMemo<SelectOption[]>(
     () => [
@@ -73,7 +73,6 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
 
   const selectEquipment = (equipmentId: string): void => {
     setSelectedEquipmentId(equipmentId);
-    setTab("urzadzenia");
   };
 
   return (
@@ -238,22 +237,32 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
                   size="sm"
                   spacing={0}
                 >
-                  <ToggleGroupItem
-                    value="calendar"
-                    aria-label="Widok kalendarza"
-                    className="gap-1.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
-                  >
-                    <CalendarDays aria-hidden />
-                    <span className="hidden sm:inline">Kalendarz</span>
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="table"
-                    aria-label="Widok listy"
-                    className="gap-1.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
-                  >
-                    <List aria-hidden />
-                    <span className="hidden sm:inline">Lista</span>
-                  </ToggleGroupItem>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <ToggleGroupItem
+                        value="calendar"
+                        aria-label="Widok kalendarza"
+                        className="gap-1.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                      >
+                        <CalendarDays aria-hidden />
+                        <span className="hidden sm:inline">Kalendarz</span>
+                      </ToggleGroupItem>
+                    </TooltipTrigger>
+                    <TooltipContent>Terminy na siatce miesiąca</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <ToggleGroupItem
+                        value="table"
+                        aria-label="Widok listy"
+                        className="gap-1.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                      >
+                        <List aria-hidden />
+                        <span className="hidden sm:inline">Lista</span>
+                      </ToggleGroupItem>
+                    </TooltipTrigger>
+                    <TooltipContent>Lista do sortowania i filtrowania</TooltipContent>
+                  </Tooltip>
                 </ToggleGroup>
                 <span className="rounded-full border bg-background px-2.5 py-1 font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
                   {visible.length} / {snapshot.schedule.length} poz.
@@ -285,9 +294,9 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
             description="Karta 17025 6.4.13: identyfikacja, producent, lokalizacja, wzorcowania, sprawdzenia, upoważnienia."
           >
             <EquipmentSection
-              snapshot={snapshot}
+              equipment={snapshot.equipment}
               selectedId={selectedEquipmentId}
-              onSelectId={setSelectedEquipmentId}
+              onSelectId={selectEquipment}
             />
           </Panel>
         </TabsContent>
@@ -306,7 +315,7 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
             title="Wyniki badań i kontrola zakresu"
             description="Zakres zapisany przy wyniku; poza zakresem wymaga powtórzenia, a administrator widzi je od razu."
           >
-            <ResultsTable results={snapshot.results} limit={8} />
+            <ResultsTable results={snapshot.results} pageSize={8} />
           </Panel>
         </TabsContent>
 
@@ -329,6 +338,14 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
           )}
         </TabsContent>
       </Tabs>
+
+      <EquipmentDetail
+        snapshot={snapshot}
+        equipmentId={selectedEquipmentId}
+        onClose={() => {
+          setSelectedEquipmentId(null);
+        }}
+      />
     </div>
   );
 }

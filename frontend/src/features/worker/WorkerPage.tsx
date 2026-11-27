@@ -1,10 +1,19 @@
-import { Beaker, CircleAlert, ClipboardCheck, Gauge } from "lucide-react";
+import { Beaker, CircleAlert, ClipboardCheck, Gauge, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { Snapshot } from "@/api/types";
 import { Metric, MetricStrip } from "@/components/MetricStrip";
 import { PageHeader, PageMeta } from "@/components/PageHeader";
 import { Panel } from "@/components/Panel";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { ResultsTable } from "@/features/results/ResultsTable";
 import { dueEquipmentId } from "@/lib/due";
 
@@ -12,10 +21,6 @@ import { CheckEntryForm } from "./CheckEntryForm";
 import { MyTasks } from "./MyTasks";
 import { ResultEntryForm } from "./ResultEntryForm";
 import { StockCountForm } from "./StockCountForm";
-
-function reveal(elementId: string): void {
-  document.getElementById(elementId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
 
 export function WorkerPage({ snapshot }: { snapshot: Snapshot }) {
   const writablePlans = useMemo(
@@ -45,6 +50,8 @@ export function WorkerPage({ snapshot }: { snapshot: Snapshot }) {
   const [reagentId, setReagentId] = useState<string | null>(
     snapshot.reagents.find((reagent) => reagent.canWriteStock)?.id ?? null,
   );
+  const [checkOpen, setCheckOpen] = useState(false);
+  const [stockOpen, setStockOpen] = useState(false);
 
   const tasks = useMemo(
     () =>
@@ -124,48 +131,44 @@ export function WorkerPage({ snapshot }: { snapshot: Snapshot }) {
 
       <Panel
         title="Moje zadania"
-        description="Najbliższe sprawdzenia i spisy; przycisk przenosi do właściwego formularza."
+        description="Najbliższe sprawdzenia i spisy. Wpis otwiera się nad listą, bez przewijania strony."
       >
+        <div className="mb-3 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => {
+              setCheckOpen(true);
+            }}
+          >
+            <ClipboardCheck aria-hidden />
+            Wpisz sprawdzenie
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setStockOpen(true);
+            }}
+          >
+            <Plus aria-hidden />
+            Wpisz spis
+          </Button>
+        </div>
         <MyTasks
           items={tasks}
           plans={snapshot.plans}
           onCheck={(selectedId) => {
             setEquipmentId(selectedId);
-            reveal("check-entry");
+            setCheckOpen(true);
           }}
           onStock={(selectedId) => {
             setReagentId(selectedId);
-            reveal("stock-entry");
+            setStockOpen(true);
           }}
         />
       </Panel>
-
-      <div className="grid gap-5 xl:grid-cols-2">
-        <div id="check-entry" className="min-w-0">
-          <Panel
-            title="Wpisz sprawdzenie"
-            description="Formularz z planu urządzenia; liczby przyjmują przecinek, zakres sprawdza API."
-          >
-            <CheckEntryForm
-              plans={writablePlans}
-              equipmentId={equipmentId}
-              onEquipmentChange={setEquipmentId}
-            />
-          </Panel>
-        </div>
-        <div id="stock-entry" className="min-w-0">
-          <Panel
-            title="Spis stanu odczynnika"
-            description="Bez codziennego zużycia: okresowy stan plus partie przyjęte po spisie."
-          >
-            <StockCountForm
-              reagents={snapshot.reagents}
-              reagentId={reagentId}
-              onReagentChange={setReagentId}
-            />
-          </Panel>
-        </div>
-      </div>
 
       <Panel
         title="Wynik badania"
@@ -178,7 +181,7 @@ export function WorkerPage({ snapshot }: { snapshot: Snapshot }) {
         title="Ostatnie wyniki"
         description="Wszystkie wyniki w Twoim zakresie; czerwone wiersze wymagają powtórzenia lub zostały powtórzone."
       >
-        <ResultsTable results={snapshot.results} limit={8} />
+        <ResultsTable results={snapshot.results} pageSize={8} />
       </Panel>
 
       <p className="text-xs text-muted-foreground">
@@ -186,6 +189,43 @@ export function WorkerPage({ snapshot }: { snapshot: Snapshot }) {
         urządzenia spoza listy upoważnionych kończy się komunikatem o braku uprawnień, bez
         formularza.
       </p>
+
+      <Dialog open={checkOpen} onOpenChange={setCheckOpen}>
+        <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Wpisz sprawdzenie</DialogTitle>
+            <DialogDescription>
+              Formularz z planu urządzenia. Liczby przyjmują przecinek, zakres sprawdza API.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="-mx-1 min-h-0 flex-1 px-1">
+            <CheckEntryForm
+              plans={writablePlans}
+              equipment={snapshot.equipment}
+              equipmentId={equipmentId}
+              onEquipmentChange={setEquipmentId}
+            />
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={stockOpen} onOpenChange={setStockOpen}>
+        <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Spis stanu odczynnika</DialogTitle>
+            <DialogDescription>
+              Bez codziennego zużycia: okresowy stan plus partie przyjęte po spisie.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="-mx-1 min-h-0 flex-1 px-1">
+            <StockCountForm
+              reagents={snapshot.reagents}
+              reagentId={reagentId}
+              onReagentChange={setReagentId}
+            />
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

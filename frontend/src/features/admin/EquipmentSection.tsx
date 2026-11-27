@@ -1,26 +1,29 @@
 import { cn } from "cn";
+import { ArrowUpDown, Search } from "lucide-react";
+import { useMemo, useState } from "react";
 
-import type { EquipmentView, Snapshot } from "@/api/types";
+import type { EquipmentView } from "@/api/types";
+import { SortHead } from "@/components/SortHead";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { formatDate, formatDecimal, formatDue } from "@/lib/format";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { formatDue } from "@/lib/format";
 import { formatMonth } from "@/lib/months";
+import { matchesQuery } from "@/lib/search";
+import { statusSeverity } from "@/lib/status";
+import { nextSort, sortRows, type SortState } from "@/lib/table";
 
-import { CalibrationForm } from "./CalibrationForm";
+type Column = "code" | "name" | "lab" | "lastCalibration" | "nextDue" | "status";
 
-const MODE_LABEL = {
-  EXTERNAL: "zewnętrzne",
-  ON_SITE: "na miejscu",
-} as const;
+const ACCESSORS: Record<Column, (equipment: EquipmentView) => string | number | null> = {
+  code: (equipment) => equipment.displayCode,
+  name: (equipment) => equipment.name,
+  lab: (equipment) => equipment.labName,
+  lastCalibration: (equipment) => equipment.lastCalibration?.calibratedMonth ?? null,
+  nextDue: (equipment) => equipment.nextDue?.validUntil ?? null,
+  status: (equipment) => statusSeverity(equipment.status),
+};
 
 function nextDueLabel(equipment: EquipmentView): string {
   if (equipment.status === "WITHDRAWN") {
@@ -36,50 +39,105 @@ function nextDueLabel(equipment: EquipmentView): string {
 }
 
 export function EquipmentSection({
-  snapshot,
+  equipment,
   selectedId,
   onSelectId,
 }: {
-  snapshot: Snapshot;
+  equipment: EquipmentView[];
   selectedId: string | null;
   onSelectId: (equipmentId: string) => void;
 }) {
-  const selected =
-    snapshot.equipment.find((equipment) => equipment.id === selectedId) ??
-    snapshot.equipment[0] ??
-    null;
-  const plans =
-    selected === null ? [] : snapshot.plans.filter((plan) => plan.equipmentId === selected.id);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortState<Column>>({ column: "code", direction: "asc" });
+
+  const filtered = useMemo(
+    () =>
+      equipment.filter((item) =>
+        matchesQuery(
+          query,
+          item.displayCode,
+          item.name,
+          item.labName,
+          item.location,
+          item.serialNo,
+          item.manufacturer,
+          item.model,
+        ),
+      ),
+    [equipment, query],
+  );
+  const sorted = useMemo(() => sortRows(filtered, sort, ACCESSORS), [filtered, sort]);
+
+  const setSortBy = (column: Column): void => {
+    setSort((current) => nextSort(current, column));
+  };
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-56 flex-1 sm:max-w-sm">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            type="search"
+            value={query}
+            placeholder="Kod, nazwa, pracownia, nr seryjny…"
+            aria-label="Szukaj urządzenia"
+            className="pl-8"
+            onChange={(event) => {
+              setQuery(event.target.value);
+            }}
+          />
+        </div>
+        <span className="font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase tabular-nums">
+          {sorted.length} / {equipment.length}
+        </span>
+        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+          <ArrowUpDown className="size-3" aria-hidden />
+          kliknij nagłówek, aby sortować
+        </span>
+      </div>
+
       <div className="rounded-xl border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Kod</TableHead>
-              <TableHead>Nazwa</TableHead>
-              <TableHead>Pracownia</TableHead>
-              <TableHead>Ostatnie wzorcowanie</TableHead>
-              <TableHead>Następny termin</TableHead>
-              <TableHead>Status</TableHead>
+              <SortHead column="code" label="Kod" sort={sort} onSort={setSortBy} />
+              <SortHead column="name" label="Nazwa" sort={sort} onSort={setSortBy} />
+              <SortHead column="lab" label="Pracownia" sort={sort} onSort={setSortBy} />
+              <SortHead
+                column="lastCalibration"
+                label="Ostatnie wzorcowanie"
+                sort={sort}
+                onSort={setSortBy}
+              />
+              <SortHead column="nextDue" label="Następny termin" sort={sort} onSort={setSortBy} />
+              <SortHead column="status" label="Status" sort={sort} onSort={setSortBy} />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {snapshot.equipment.length === 0 && (
+            {sorted.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
-                  Brak urządzeń w zakresie pracowni.
+                  {equipment.length === 0
+                    ? "Brak urządzeń w zakresie pracowni."
+                    : "Żadne urządzenie nie pasuje do frazy."}
                 </TableCell>
               </TableRow>
             )}
-            {snapshot.equipment.map((equipment) => (
+            {sorted.map((item) => (
               <TableRow
-                key={equipment.id}
+                key={item.id}
                 className={cn(
-                  equipment.id === selected?.id && "bg-accent/70",
-                  equipment.status === "WITHDRAWN" && "opacity-60",
+                  "cursor-pointer",
+                  item.id === selectedId && "bg-accent/70",
+                  item.status === "WITHDRAWN" && "opacity-60",
                 )}
+                onClick={() => {
+                  onSelectId(item.id);
+                }}
               >
                 <TableCell>
                   <Button
@@ -88,213 +146,28 @@ export function EquipmentSection({
                     size="sm"
                     className="h-auto p-0 font-mono"
                     onClick={() => {
-                      onSelectId(equipment.id);
+                      onSelectId(item.id);
                     }}
                   >
-                    {equipment.displayCode}
+                    {item.displayCode}
                   </Button>
                 </TableCell>
-                <TableCell className="font-medium">{equipment.name}</TableCell>
-                <TableCell className="whitespace-nowrap">{equipment.labName}</TableCell>
+                <TableCell className="font-medium">{item.name}</TableCell>
+                <TableCell className="whitespace-nowrap">{item.labName}</TableCell>
                 <TableCell className="whitespace-nowrap">
-                  {equipment.lastCalibration === null
+                  {item.lastCalibration === null
                     ? "—"
-                    : formatMonth(equipment.lastCalibration.calibratedMonth)}
+                    : formatMonth(item.lastCalibration.calibratedMonth)}
                 </TableCell>
-                <TableCell className="whitespace-nowrap">{nextDueLabel(equipment)}</TableCell>
+                <TableCell className="whitespace-nowrap">{nextDueLabel(item)}</TableCell>
                 <TableCell>
-                  <StatusBadge status={equipment.status} />
+                  <StatusBadge status={item.status} />
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
-
-      {selected !== null && (
-        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-muted/30 px-4 py-3">
-            <div>
-              <p className="font-mono text-xs text-muted-foreground">{selected.displayCode}</p>
-              <h3 className="text-lg font-semibold tracking-tight">{selected.name}</h3>
-              <p className="text-sm text-muted-foreground">
-                {selected.manufacturer} {selected.model} · nr {selected.serialNo}
-              </p>
-            </div>
-            <StatusBadge status={selected.status} />
-          </div>
-
-          <div className="p-4">
-            <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <dt className="font-mono text-[9px] tracking-[0.12em] text-muted-foreground uppercase">
-                  Pracownia
-                </dt>
-                <dd>{selected.labName}</dd>
-              </div>
-              <div>
-                <dt className="font-mono text-[9px] tracking-[0.12em] text-muted-foreground uppercase">
-                  Lokalizacja
-                </dt>
-                <dd>{selected.location}</dd>
-              </div>
-              <div>
-                <dt className="font-mono text-[9px] tracking-[0.12em] text-muted-foreground uppercase">
-                  Interwał / tryb
-                </dt>
-                <dd>
-                  {selected.calibrationIntervalMonths === null
-                    ? "—"
-                    : `${selected.calibrationIntervalMonths} mies.`}{" "}
-                  · {MODE_LABEL[selected.calibrationMode]}
-                  {selected.calibrationRequired
-                    ? `, wyprzedzenie ${selected.leadMonths} mies.`
-                    : ""}
-                </dd>
-              </div>
-              <div>
-                <dt className="font-mono text-[9px] tracking-[0.12em] text-muted-foreground uppercase">
-                  Kryteria akceptacji
-                </dt>
-                <dd>{selected.acceptanceCriteria}</dd>
-              </div>
-              <div>
-                <dt className="font-mono text-[9px] tracking-[0.12em] text-muted-foreground uppercase">
-                  Oprogramowanie
-                </dt>
-                <dd>{selected.softwareVersion ?? "—"}</dd>
-              </div>
-              <div className="sm:col-span-2 lg:col-span-3">
-                <dt className="font-mono text-[9px] tracking-[0.12em] text-muted-foreground uppercase">
-                  Upoważnieni do sprawdzeń
-                </dt>
-                <dd className="flex flex-wrap gap-1 pt-0.5">
-                  {selected.authorizedUsers.length === 0 ? (
-                    <span className="text-muted-foreground">Brak listy — wpisuje biuro</span>
-                  ) : (
-                    selected.authorizedUsers.map((user) => (
-                      <Badge key={user.id} variant="secondary">
-                        {user.fullName}
-                      </Badge>
-                    ))
-                  )}
-                </dd>
-              </div>
-            </dl>
-
-            {selected.withdrawnReason !== null && (
-              <p className="mt-3 rounded-lg border border-amber-600/30 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-                Wycofane {formatDate(selected.withdrawnAt ?? "")}: {selected.withdrawnReason}
-              </p>
-            )}
-
-            <div className="mt-5 grid gap-5 lg:grid-cols-2">
-              <div>
-                <h4 className="mb-2 text-sm font-semibold">Historia wzorcowań</h4>
-                <div className="rounded-lg border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Miesiąc</TableHead>
-                        <TableHead>Świadectwo</TableHead>
-                        <TableHead>Wynik</TableHead>
-                        <TableHead>Punkty</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selected.calibrations.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={4} className="py-4 text-center text-muted-foreground">
-                            Brak wpisów wzorcowania.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                      {selected.calibrations.map((calibration) => (
-                        <TableRow key={calibration.id}>
-                          <TableCell className="whitespace-nowrap">
-                            {formatMonth(calibration.calibratedMonth)}
-                          </TableCell>
-                          <TableCell>
-                            {calibration.certificateNo}
-                            <span className="block text-xs text-muted-foreground">
-                              {calibration.vendor}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className={
-                                calibration.result === "OK"
-                                  ? "border-emerald-600/25 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-                                  : "border-red-600/25 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300"
-                              }
-                            >
-                              {calibration.result === "OK" ? "OK" : "NIE OK"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {calibration.points.length === 0
-                              ? "—"
-                              : calibration.points
-                                  .map(
-                                    (point) =>
-                                      `${point.point}: ${formatDecimal(point.error)} ± ${formatDecimal(point.uncertainty)} ${point.unit}`,
-                                  )
-                                  .join(" · ")}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-
-              <div>
-                <h4 className="mb-2 text-sm font-semibold">Plany sprawdzeń</h4>
-                <div className="grid gap-2">
-                  {plans.length === 0 && (
-                    <p className="rounded-lg border px-3 py-4 text-sm text-muted-foreground">
-                      Brak planów sprawdzeń.
-                    </p>
-                  )}
-                  {plans.map((plan) => (
-                    <div
-                      key={plan.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
-                    >
-                      <div>
-                        <p className="font-medium">{plan.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          co {plan.intervalMonths} mies. ·{" "}
-                          {plan.lastRecord === null
-                            ? "brak wpisów"
-                            : `ostatnio ${formatDate(plan.lastRecord.performedOn)}`}
-                          {plan.lastRecord?.outOfRange === true && " · poza zakresem"}
-                        </p>
-                      </div>
-                      {plan.nextDue === null ? (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      ) : (
-                        <StatusBadge status={plan.nextDue.status} />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {selected.canWriteCalibration ? (
-              <div className="mt-5">
-                <CalibrationForm equipment={selected} />
-              </div>
-            ) : (
-              <p className="mt-4 text-xs text-muted-foreground">
-                Wpisy wzorcowań należą do uprawnień biura (`calibration:write`).
-              </p>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { cn } from "cn";
 import { useMemo } from "react";
 
 import type { DueItem, Status } from "@/api/types";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type Tone = "error" | "warning" | "default";
 
@@ -81,26 +82,31 @@ export function DueHorizon({ items, today }: { items: DueItem[]; today: string }
       </div>
       <div className="grid grid-cols-6 gap-2 px-3 py-3 sm:gap-3 sm:px-4">
         {months.map((bucket) => (
-          <div
-            key={bucket.month}
-            className="flex min-w-0 flex-col items-center gap-1.5"
-            title={`${bucket.items.length} pozycji${bucket.overdue > 0 ? `, ${bucket.overdue} zaległych` : ""}`}
-          >
-            <div className="flex h-16 w-full items-end rounded-md bg-muted/40 p-1">
-              <BucketBar
-                height={
-                  bucket.items.length === 0
-                    ? 2
-                    : Math.max(6, Math.round((bucket.items.length / maximum) * 48))
-                }
-                tone={bucket.tone}
-              />
-            </div>
-            <span className="font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase">
-              {bucket.label}
-            </span>
-            <span className="text-xs font-semibold tabular-nums">{bucket.items.length}</span>
-          </div>
+          <Tooltip key={bucket.month}>
+            <TooltipTrigger asChild>
+              <div className="flex min-w-0 flex-col items-center gap-1.5 rounded-md">
+                <div className="flex h-16 w-full items-end rounded-md bg-muted/40 p-1">
+                  <BucketBar
+                    height={
+                      bucket.items.length === 0
+                        ? 2
+                        : Math.max(6, Math.round((bucket.items.length / maximum) * 48))
+                    }
+                    tone={bucket.tone}
+                  />
+                </div>
+                <span className="font-mono text-[9px] tracking-[0.08em] text-muted-foreground uppercase">
+                  {bucket.label}
+                </span>
+                <span className="text-xs font-semibold tabular-nums">{bucket.items.length}</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              {bucket.items.length === 0
+                ? "Brak pozycji w tym miesiącu"
+                : `${bucket.items.length} pozycji${bucket.overdue > 0 ? ` · ${bucket.overdue} już po terminie` : ""}`}
+            </TooltipContent>
+          </Tooltip>
         ))}
       </div>
     </section>

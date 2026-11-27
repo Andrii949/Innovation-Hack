@@ -1,11 +1,11 @@
 import type { SyntheticEvent } from "react";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { generateReport } from "@/api/demoClient";
-import type { Report, Snapshot } from "@/api/types";
+import type { Snapshot } from "@/api/types";
 import { FormField } from "@/components/FormField";
 import { SelectField, type SelectOption } from "@/components/SelectField";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FieldGroup } from "@/components/ui/field";
@@ -18,7 +18,6 @@ export function ReportComposer({ snapshot }: { snapshot: Snapshot }) {
   const [from, setFrom] = useState(`${snapshot.today.slice(0, 7)}-01`);
   const [to, setTo] = useState(snapshot.today);
   const [labId, setLabId] = useState("ALL");
-  const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
 
   const labOptions = useMemo<SelectOption[]>(
     () => [
@@ -37,13 +36,11 @@ export function ReportComposer({ snapshot }: { snapshot: Snapshot }) {
     const labIds = labId === "ALL" ? snapshot.labs.map((lab) => lab.id) : [labId];
     const response = generateReport({ periodFrom: from, periodTo: to, labIds });
     if (!response.ok) {
-      setMessage({ tone: "error", text: response.error.message });
+      toast.error("Raport nie został wysłany", { description: response.error.message });
       return;
     }
-    const report: Report = response.data;
-    setMessage({
-      tone: "ok",
-      text: `${report.title} — wysłany do kierownika (${formatDate(report.periodFrom)}–${formatDate(report.periodTo)}).`,
+    toast.success("Raport wysłany do kierownika", {
+      description: `${response.data.title} · ${formatDate(response.data.periodFrom)}–${formatDate(response.data.periodTo)}`,
     });
   };
 
@@ -103,11 +100,6 @@ export function ReportComposer({ snapshot }: { snapshot: Snapshot }) {
                 Wygeneruj i wyślij
               </Button>
             </div>
-            {message !== null && (
-              <Alert variant={message.tone === "error" ? "destructive" : "default"}>
-                <AlertDescription>{message.text}</AlertDescription>
-              </Alert>
-            )}
           </FieldGroup>
         </form>
       </CardContent>
