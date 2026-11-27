@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:8000"
     files_dir: Path = Path("files")
     timezone: str = "Europe/Warsaw"
+    fcm_credentials_file: Path | None = None
 
     ocr_api_url: str | None = None
     ocr_api_key: str | None = None

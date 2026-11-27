@@ -16,6 +16,10 @@ from app.equipment.models import (
 )
 from app.files.models import Attachment
 from app.forms.models import FormTemplate
+from app.notifications.models import DeviceToken, Notification, NotificationRule
+from app.reagents.models import Reagent, ReagentLot, StockCount
+from app.reports.models import Report
+from app.results.models import TestParameter, TestResult
 from app.settings.models import Setting
 from sqlalchemy import create_engine, pool
 
@@ -36,6 +40,15 @@ _REGISTERED_MODELS = (
     CalibrationPoint,
     CheckPlan,
     CheckRecord,
+    TestParameter,
+    TestResult,
+    Reagent,
+    ReagentLot,
+    StockCount,
+    Notification,
+    NotificationRule,
+    DeviceToken,
+    Report,
 )
 
 config = context.config

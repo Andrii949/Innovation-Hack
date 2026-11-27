@@ -113,7 +113,7 @@ erDiagram
 | `Report` | `period_from`, `period_to`, `parameter_ids`, `attachment_id` (PDF), `created_by`, `created_at` | F11 |
 | `Notification` | `user_id`, `kind`, `ref_type`, `ref_id`, `title`, `due`, `dedupe_key`, `read_at`, `resolved_at`; unikalne `(user_id, dedupe_key)` | F3 |
 | `NotificationRule` | `kind` → `recipients` (role, czy wg zakresu pracowni), `channels` (`IN_APP`, `PUSH`), `enabled` | F3, 01 §3.1 |
-| `DeviceToken` | `user_id`, `platform`, `token` (FCM) | F3 (push) |
+| `DeviceToken` | `user_id`, `platform`, `fid` (Firebase Installation ID — od 2026 FCM wysyła po FID, tokeny rejestracyjne są przestarzałe) | F3 (push) |
 | `Attachment` | `owner_type`, `owner_id`, `lab_id` (do kontroli dostępu), `filename`, `content_type`, `size_bytes`, `sha256`, `storage_key`, `uploaded_by` | F4, F5 |
 | `Setting` | `key` → `value` (JSON) | 01 §3.1 |
 | `AuditLog` | `at`, `user_id`, `action` (`create` / `update` / `delete` / `reject` / `login`), `entity`, `entity_id`, `before`, `after`, `reason` | 7.5.2, 7.11.2 |
@@ -496,7 +496,7 @@ tekstem (biały tekst ma kontrast 2,0:1). Tokeny w `frontend/src/index.css`.
 | Skan QR | `@capacitor/barcode-scanner` (oficjalny) | jedno wywołanie `scanBarcode`; działa też w przeglądarce (html5-qrcode). Alternatywa: `@capacitor-mlkit/barcode-scanning` |
 | Odczyt tagów NFC | plugin NFC dla Capacitor 8 (kandydaci: `@capawesome-team/capacitor-nfc`, `@capacitor-community/nfc`; zgodność sprawdzić w T24) | tylko rekord NDEF URI z `public_id`; w przeglądarce brak — zostaje QR; iOS wymaga `NFCReaderUsageDescription` i uprawnienia do typów tagów |
 | Zdjęcie dokumentu | `@capacitor/camera` | w przeglądarce zapas: `<input type="file" accept="image/*" capture="environment">` |
-| Push | `@capacitor-firebase/messaging` | daje token FCM na obu platformach. Oficjalny `@capacitor/push-notifications` na iOS zwraca token APNs, którego FCM nie przyjmie |
+| Push | `@capacitor-firebase/messaging` + Firebase Installations | aplikacja rejestruje w API **FID** (Firebase Installation ID), nie token: od 2026 FCM wysyła po FID, a token wysłany jako FID wraca jako `UNREGISTERED`. Oficjalny `@capacitor/push-notifications` na iOS zwraca token APNs, którego FCM nie przyjmie |
 | Token sesji | bezpieczny magazyn (Keychain / Keystore), np. `capacitor-secure-storage-plugin` | sprawdzić zgodność z Capacitor 8; w przeglądarce `sessionStorage` |
 
 Ważne szczegóły:
