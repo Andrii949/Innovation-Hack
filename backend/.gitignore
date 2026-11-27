@@ -6,5 +6,5 @@ __pycache__/
 .ty_cache/
 
 # Runtime data
-files/
+/files/
 .env
