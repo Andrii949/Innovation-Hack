@@ -10,6 +10,8 @@ from app.core.clock import get_today
 from app.db import get_db
 from app.equipment._core import Status
 from app.equipment.schemas import (
+    AuthorizedUserOut,
+    AuthorizedUsersUpdate,
     EquipmentCard,
     EquipmentCreate,
     EquipmentOut,
@@ -20,10 +22,13 @@ from app.equipment.service import (
     create_equipment,
     get_equipment_by_qr,
     get_equipment_for_user,
+    list_authorized_users,
     list_equipment_for_user,
     restore,
+    serialize_authorized_user,
     serialize_equipment_card,
     serialize_equipment_out,
+    set_authorized_users,
     update_equipment,
     withdraw,
 )
@@ -123,5 +128,28 @@ def post_restore_equipment(
 ) -> EquipmentOut:
     eq = restore(db, user, equipment_id, payload.reason)
     out = serialize_equipment_out(db, eq, today=today)
+    db.commit()
+    return out
+
+
+@router.get("/{equipment_id}/authorized-users")
+def get_equipment_authorized_users(
+    equipment_id: int,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[AuthorizedUserOut]:
+    users = list_authorized_users(db, user, equipment_id)
+    return [serialize_authorized_user(u) for u in users]
+
+
+@router.put("/{equipment_id}/authorized-users")
+def put_equipment_authorized_users(
+    equipment_id: int,
+    payload: AuthorizedUsersUpdate,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[AuthorizedUserOut]:
+    users = set_authorized_users(db, user, equipment_id, payload.user_ids)
+    out = [serialize_authorized_user(u) for u in users]
     db.commit()
     return out

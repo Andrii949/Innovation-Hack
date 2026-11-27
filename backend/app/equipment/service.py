@@ -10,8 +10,9 @@ from app.auth.models import Lab, User
 from app.auth.permissions import Permission, require, visible_lab_ids
 from app.config import get_settings
 from app.equipment._core import Status, due_status, month_window, next_due_month
-from app.equipment.models import Calibration, Equipment
+from app.equipment.models import Calibration, Equipment, EquipmentAuthorization
 from app.equipment.schemas import (
+    AuthorizedUserOut,
     EquipmentCard,
     EquipmentCreate,
     EquipmentOut,
@@ -437,3 +438,61 @@ def restore(db: Session, user: User, equipment_id: int, reason: str) -> Equipmen
         eq.withdrawn_reason = None
         db.flush()
     return eq
+
+
+def serialize_authorized_user(u: User) -> AuthorizedUserOut:
+    return AuthorizedUserOut(
+        id=u.id,
+        login=u.login,
+        full_name=u.full_name,
+        role=u.role.name,
+    )
+
+
+def list_authorized_users(db: Session, user: User, equipment_id: int) -> list[User]:
+    eq = get_equipment_for_user(db, user, equipment_id)
+    ids = eq.authorized_user_ids
+    if not ids:
+        return []
+    stmt = select(User).where(User.id.in_(ids)).order_by(User.full_name, User.id)
+    return list(db.scalars(stmt).all())
+
+
+def set_authorized_users(
+    db: Session,
+    user: User,
+    equipment_id: int,
+    user_ids: list[int],
+) -> list[User]:
+    eq = get_equipment_or_404(db, equipment_id)
+    require(user, Permission.EQUIPMENT_WRITE, lab_id=eq.lab_id)
+
+    unique_ids = list(dict.fromkeys(user_ids))
+    users_by_id: dict[int, User] = {}
+    if unique_ids:
+        fetched = db.scalars(select(User).where(User.id.in_(unique_ids))).all()
+        users_by_id = {u.id: u for u in fetched}
+        if len(users_by_id) != len(unique_ids):
+            raise AppError(404, "NOT_FOUND", "Nie znaleziono wskazanego użytkownika")
+        for uid in unique_ids:
+            target_user = users_by_id[uid]
+            user_labs = visible_lab_ids(target_user)
+            if user_labs is not None and eq.lab_id not in user_labs:
+                raise AppError(
+                    422,
+                    "USER_NOT_IN_LAB",
+                    "Użytkownik nie jest przypisany do pracowni tego urządzenia",
+                )
+
+    wanted = set(unique_ids)
+    current = {auth_row.user_id: auth_row for auth_row in list(eq.authorizations)}
+    for uid, auth_row in current.items():
+        if uid not in wanted:
+            eq.authorizations.remove(auth_row)
+    for uid in unique_ids:
+        if uid not in current:
+            eq.authorizations.append(EquipmentAuthorization(equipment_id=eq.id, user_id=uid))
+
+    db.flush()
+    db.refresh(eq)
+    return [users_by_id[uid] for uid in unique_ids]

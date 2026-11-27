@@ -49,10 +49,32 @@ class Equipment(Base):
         back_populates="equipment",
         cascade="all, delete-orphan",
     )
+    authorizations: Mapped[list["EquipmentAuthorization"]] = relationship(
+        back_populates="equipment",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
     @property
     def authorized_user_ids(self) -> set[int]:
-        return set()
+        return {auth_row.user_id for auth_row in self.authorizations}
+
+
+class EquipmentAuthorization(Base):
+    __tablename__ = "equipment_authorization"
+
+    equipment_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("equipment.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("app_user.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    equipment: Mapped[Equipment] = relationship(back_populates="authorizations")
 
 
 class Calibration(Base):

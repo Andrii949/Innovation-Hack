@@ -46,6 +46,17 @@ class ReasonRequest(BaseModel):
     reason: str
 
 
+class AuthorizedUsersUpdate(BaseModel):
+    user_ids: list[int]
+
+
+class AuthorizedUserOut(BaseModel):
+    id: int
+    login: str
+    full_name: str
+    role: str
+
+
 class CheckPlanSummaryOut(BaseModel):
     id: int
     name: str
