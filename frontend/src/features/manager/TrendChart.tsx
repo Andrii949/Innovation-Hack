@@ -38,7 +38,7 @@ function shortDate(date: string): string {
 }
 
 function tickLabel(value: number): string {
-  return formatDecimal(String(Number(value.toFixed(2))));
+  return formatDecimal(value.toFixed(2));
 }
 
 function isPoint(value: unknown): value is Point {

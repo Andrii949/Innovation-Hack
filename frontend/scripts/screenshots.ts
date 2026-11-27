@@ -38,6 +38,9 @@ async function settle(page: Page): Promise<void> {
 }
 
 async function capture(page: Page, name: string, fullPage = true): Promise<void> {
+  // Park the pointer so hover tooltips and hover states do not leak into the frame.
+  await page.mouse.move(2, 2);
+  await page.waitForTimeout(120);
   await page.screenshot({ path: `${OUT}/${name}.png`, fullPage });
   await Bun.stdout.write(`  captured ${name}.png\n`);
 }
