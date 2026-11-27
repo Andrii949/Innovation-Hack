@@ -3,7 +3,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from app.equipment._core import Status
+from app.core.status import Status
 
 
 class EquipmentCreate(BaseModel):
@@ -163,6 +163,10 @@ class CalibrationCreate(BaseModel):
     points: list[CalibrationPointInput] = Field(min_length=1)
     note: str | None = None
     attachment_ids: list[int] = []
+
+
+class CalibrationExtractRequest(BaseModel):
+    attachment_id: int
 
 
 class CalibrationOut(BaseModel):

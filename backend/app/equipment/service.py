@@ -3,15 +3,20 @@ import importlib.util
 import re
 import secrets
 from datetime import UTC, date, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit.context import audit_context
+from app.audit.models import AuditLog
+from app.audit.service import log_event
 from app.auth.models import Lab, User
 from app.auth.permissions import Permission, require, visible_lab_ids
 from app.config import get_settings
-from app.equipment._core import Status, due_status, month_window, next_due_month, parse_decimal
+from app.core.dates import due_status, month_window, next_due_month
+from app.core.ranges import parse_decimal
+from app.core.status import Status
 from app.equipment.models import (
     Calibration,
     CalibrationPoint,
@@ -36,9 +41,11 @@ from app.equipment.schemas import (
     EquipmentUpdate,
 )
 from app.errors import AppError
-from app.files.service import attach, list_attachment_ids
+from app.files.models import Attachment
+from app.files.service import attach, list_attachment_ids, page_images
 from app.forms.models import FormTemplate
 from app.forms.validation import FieldSpec, validate_form_values
+from app.integrations.ocr import CalibrationDraft, ocr_enabled, request_calibration_ocr
 from app.settings.service import get_setting
 
 PUBLIC_ID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
@@ -616,6 +623,29 @@ def record_calibration(
         else None
     )
 
+    source = "MANUAL"
+    ocr_meta: dict[str, Any] | None = None
+    for att_id in data.attachment_ids:
+        ocr_log = db.scalars(
+            select(AuditLog)
+            .where(
+                AuditLog.action == "ocr_extract",
+                AuditLog.entity == "attachment",
+                AuditLog.entity_id == str(att_id),
+            )
+            .order_by(AuditLog.id.desc())
+            .limit(1)
+        ).first()
+        if ocr_log is not None and isinstance(ocr_log.after, dict):
+            source = "OCR"
+            ocr_meta = {
+                "provider": ocr_log.after.get("provider"),
+                "model": ocr_log.after.get("model"),
+                "confidence": ocr_log.after.get("confidence", {}),
+                "attachment_id": att_id,
+            }
+            break
+
     cal = Calibration(
         equipment_id=eq.id,
         calibrated_month=cal_date,
@@ -625,8 +655,8 @@ def record_calibration(
         result=data.result,
         next_due_month=due_date,
         note=data.note,
-        source="MANUAL",
-        ocr_meta=None,
+        source=source,
+        ocr_meta=ocr_meta,
         created_by=user.id,
         points=parsed_points,
     )
@@ -655,6 +685,47 @@ def record_calibration(
 
     db.refresh(cal)
     return cal
+
+
+def extract_calibration(
+    db: Session,
+    user: User,
+    equipment_id: int,
+    attachment_id: int,
+) -> CalibrationDraft:
+    eq = get_equipment_or_404(db, equipment_id)
+    require(user, Permission.CALIBRATION_WRITE, lab_id=eq.lab_id)
+
+    att = db.get(Attachment, attachment_id)
+    if att is None:
+        raise AppError(404, "NOT_FOUND", "Nie znaleziono załącznika")
+
+    if att.owner_type is None:
+        if att.uploaded_by != user.id:
+            raise AppError(403, "FORBIDDEN", "Brak dostępu do wskazanego załącznika")
+    elif att.lab_id != eq.lab_id:
+        raise AppError(403, "FORBIDDEN", "Załącznik należy do innej pracowni niż urządzenie")
+
+    if not ocr_enabled(db):
+        raise AppError(409, "OCR_DISABLED", "Rozpoznawanie dokumentów OCR jest wyłączone")
+
+    images = page_images(db, att, limit=5)
+    draft = request_calibration_ocr(images, cfg=get_settings().ocr_config)
+
+    log_event(
+        db,
+        action="ocr_extract",
+        entity="attachment",
+        entity_id=str(att.id),
+        after={
+            "provider": draft.provider,
+            "model": draft.model,
+            "confidence": draft.confidence,
+            "equipment_id": eq.id,
+        },
+        user_id=user.id,
+    )
+    return draft
 
 
 def _validate_check_lead(db: Session, lead_months: int) -> None:
