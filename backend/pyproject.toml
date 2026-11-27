@@ -1,0 +1,81 @@
+[project]
+name = "innovation-hack-backend"
+version = "0.1.0"
+description = "Intelligent Laboratory — FastAPI backend"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.165.0",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.16.2",
+    "pytest>=9.2.0",
+    "ruff>=0.17.6",
+    "ty>=0.0.112",
+]
+
+[build-system]
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "app"
+module-root = ""
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+# Strict where it catches bugs and inconsistency; deliberately not "ALL", which adds
+# taste rules (pylint max-branches/max-returns, docstring style) that slow work without value.
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # import order
+    "N",        # pep8 naming
+    "UP",       # pyupgrade
+    "B",        # bugbear
+    "SIM",      # simplify
+    "C4",       # comprehensions
+    "PIE",      # misc lints
+    "RUF",      # ruff-specific
+    "RET",      # consistent returns
+    "ARG",      # unused arguments
+    "PTH",      # pathlib
+    "DTZ",      # naive datetimes
+    "ASYNC",    # async hygiene
+    "S",        # bandit
+    "T20",      # print statements
+]
+ignore = [
+    "COM812",  # conflicts with ruff format
+    "ISC001",  # conflicts with ruff format
+    "S101",    # assert is the test mechanism, see per-file ignores
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "INP001"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[tool.ty.analysis]
+return-type-inference = "always"
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.src]
+include = ["app", "tests"]

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.vite/
+*.local
+
+# Firebase config for push (T26): project-specific, never committed.
+google-services.json
+GoogleService-Info.plist

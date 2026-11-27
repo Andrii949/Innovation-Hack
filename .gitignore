@@ -1,0 +1,16 @@
+# System / tools
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Node / bun
+node_modules/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.ty_cache/
