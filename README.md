@@ -10,6 +10,7 @@ Hackathon: digitalizing the supervision of a laboratory's measuring equipment.
 | [docs/02-architektura.md](docs/02-architektura.md) | Architecture: decisions, data model, due dates and statuses, permissions, API, flows, web + mobile (Capacitor) |
 | [docs/03-implemetacja.md](docs/03-implemetacja.md) | Implementation plan: team tracks, schedule, 31 tasks with tests |
 | [docs/04-research.md](docs/04-research.md) | Research: PN-EN ISO/IEC 17025 requirements, existing products, what we adopt |
+| [docs/05-kryteria.md](docs/05-kryteria.md) | Jury criteria mapped to the project: costs, KPI simulation, innovation, pitch and Q&A |
 
 Convention: the README is an index, content lives in `docs/`, numbered `NN-topic.md`.
 Reading order: 01 → 04 → 02 → 03. The docs are in Polish; code, comments, commits and
