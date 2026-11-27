@@ -97,6 +97,17 @@ def current_stock(db: Session, reagent_id: int) -> Decimal:
     return last.quantity + Decimal(received_after)
 
 
+def _valid_lots(lots: list[ReagentLot], today: date) -> list[ReagentLot]:
+    return [lot for lot in lots if lot.received_on <= today <= lot.expiry_date and lot.quantity > 0]
+
+
+def _effective_stock(reagent: Reagent, stock: Decimal, valid_lots: list[ReagentLot]) -> Decimal:
+    if reagent.kind != "CRM":
+        return stock
+    valid_quantity = sum((lot.quantity for lot in valid_lots), start=Decimal(0))
+    return min(stock, valid_quantity)
+
+
 def last_stock_change(db: Session, reagent_id: int) -> date | None:
     """Day of the last count or of a later lot receipt."""
     last = _last_count(db, reagent_id)
@@ -147,7 +158,12 @@ def stock_items(db: Session, *, today: date, lab_ids: set[int] | None = None) ->
         return []
     items: list[DueItem] = []
     for reagent in _active_reagents(db, lab_ids):
-        if reagent.min_stock is not None and current_stock(db, reagent.id) < reagent.min_stock:
+        stock = current_stock(db, reagent.id)
+        lots = _valid_lots(_lots_in_use(db, reagent.id), today) if reagent.kind == "CRM" else []
+        if (
+            reagent.min_stock is not None
+            and _effective_stock(reagent, stock, lots) < reagent.min_stock
+        ):
             items.append(
                 DueItem(
                     kind=DueKind.LOW_STOCK,
@@ -200,6 +216,8 @@ def serialize_lot(reagent: Reagent, lot: ReagentLot, *, today: date) -> LotOut:
 def serialize_reagent(db: Session, reagent: Reagent, *, today: date) -> ReagentOut:
     stock = current_stock(db, reagent.id)
     lots = _lots_in_use(db, reagent.id)
+    valid = _valid_lots(lots, today)
+    usable = _effective_stock(reagent, stock, valid)
     last = _last_count(db, reagent.id)
     return ReagentOut(
         id=reagent.id,
@@ -213,7 +231,9 @@ def serialize_reagent(db: Session, reagent: Reagent, *, today: date) -> ReagentO
         expiry_lead_months=reagent.expiry_lead_months,
         active=reagent.active,
         current_stock=format(stock, "f"),
-        low_stock=reagent.min_stock is not None and stock < reagent.min_stock,
+        usable_stock_estimate=format(usable, "f") if reagent.kind == "CRM" else None,
+        recommended_lot_no=valid[0].lot_no if valid and usable > 0 else None,
+        low_stock=reagent.min_stock is not None and usable < reagent.min_stock,
         last_counted_on=last.counted_on if last is not None else None,
         nearest_expiry=lots[0].expiry_date if lots else None,
         lots=[serialize_lot(reagent, lot, today=today) for lot in lots],

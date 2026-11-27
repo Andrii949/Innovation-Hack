@@ -8,11 +8,13 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
+from app.equipment.models import Equipment
 
 
 class TestParameter(Base):
@@ -64,4 +66,12 @@ class TestResult(Base):
         index=True,
     )
 
+    equipment_id: Mapped[int | None] = mapped_column(ForeignKey("equipment.id"), index=True)
+    review_calibration_id: Mapped[int | None] = mapped_column(ForeignKey("calibration.id"))
+    review_decision: Mapped[str | None] = mapped_column(String(16))
+    review_note: Mapped[str | None] = mapped_column(Text)
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("app_user.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    equipment: Mapped[Equipment | None] = relationship(lazy="selectin")
     parameter: Mapped[TestParameter] = relationship(lazy="selectin")

@@ -95,9 +95,11 @@ def _parameters_for(db: Session, data: ReportCreate) -> list[TestParameter]:
     return list(db.scalars(stmt).all())
 
 
-def _report_parameter(db: Session, param: TestParameter, data: ReportCreate) -> ReportParameter:
+def _report_parameter(
+    db: Session, user: User, param: TestParameter, data: ReportCreate
+) -> ReportParameter:
     series = result_series(
-        db, parameter_id=param.id, date_from=data.period_from, date_to=data.period_to
+        db, parameter_id=param.id, date_from=data.period_from, date_to=data.period_to, user=user
     )
     tz = ZoneInfo(get_settings().timezone)
     return ReportParameter(
@@ -133,7 +135,7 @@ def create_report(db: Session, user: User, data: ReportCreate, *, today: date) -
             details=[{"field": "period_from", "message": "period_from > period_to"}],
         )
     params = _parameters_for(db, data)
-    sections = [_report_parameter(db, p, data) for p in params]
+    sections = [_report_parameter(db, user, p, data) for p in params]
     pdf = render_pdf(
         "report.typ",
         ReportData(

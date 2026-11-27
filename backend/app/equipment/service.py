@@ -12,7 +12,7 @@ from app.audit.context import audit_context
 from app.audit.models import AuditLog
 from app.audit.service import log_event
 from app.auth.models import Lab, User
-from app.auth.permissions import Permission, require, visible_lab_ids
+from app.auth.permissions import Permission, has_permission, require, visible_lab_ids
 from app.config import get_settings
 from app.core.dates import due_status, month_window, next_due_month
 from app.core.ranges import parse_decimal
@@ -47,6 +47,7 @@ from app.files.service import attach, list_attachment_ids, page_images
 from app.forms.models import FormTemplate
 from app.forms.validation import FieldSpec, validate_form_values
 from app.integrations.ocr import CalibrationDraft, ocr_enabled, request_calibration_ocr
+from app.results.reviews import flag_results_for_review
 from app.settings.service import get_setting
 
 PUBLIC_ID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
@@ -165,6 +166,14 @@ def can_user_write_checks(user: User, eq: Equipment) -> bool:
     return True
 
 
+def can_user_write_results(user: User, eq: Equipment) -> bool:
+    return (
+        has_permission(user, Permission.RESULT_WRITE)
+        and eq.withdrawn_at is None
+        and (has_permission(user, Permission.EQUIPMENT_WRITE) or user.id in eq.authorized_user_ids)
+    )
+
+
 def serialize_equipment_out(db: Session, eq: Equipment, *, today: date) -> EquipmentOut:
     last = last_calibration(db, eq.id)
     due = equipment_due_month(eq, last)
@@ -216,6 +225,7 @@ def serialize_equipment_card(
         **base.model_dump(),
         check_plans=plans,
         can_write=can_user_write_checks(user, eq),
+        can_write_result=can_user_write_results(user, eq),
         qr_url=f"{base_url}/e/{eq.public_id}",
     )
 
@@ -720,6 +730,9 @@ def record_calibration(
         eq.withdrawn_at = datetime.now(UTC)
         eq.withdrawn_reason = f"Negatywny wynik wzorcowania{cert_suffix}"
         db.flush()
+
+    if data.result == "NOK":
+        flag_results_for_review(db, cal)
 
     db.refresh(cal)
     return cal

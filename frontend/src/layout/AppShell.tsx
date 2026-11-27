@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { Bell, Check, Menu, RotateCcw } from "lucide-react";
+import { Bell, Check, ChevronDown, Menu, RotateCcw } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import type { Snapshot } from "@/api/types";
@@ -34,7 +34,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDateTime } from "@/lib/format";
 
@@ -190,6 +189,33 @@ export function AppShell({
             </DropdownMenuContent>
           </DropdownMenu>
 
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="hidden md:inline-flex"
+                aria-label="Wybierz rolę"
+              >
+                {snapshot.session.role.name}
+                <ChevronDown aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>{snapshot.session.user.fullName}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {snapshot.demoRoles.map((role) => (
+                <DropdownMenuItem key={role.code} onSelect={() => onRoleChange(role.code)}>
+                  {role.name}
+                  {role.code === snapshot.session.role.code && (
+                    <Check className="ml-auto" aria-hidden />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <ResetDataDialog
             className="hidden text-muted-foreground md:inline-flex"
             onReset={onReset}
@@ -207,45 +233,6 @@ export function AppShell({
           >
             <Menu aria-hidden />
           </Button>
-        </div>
-
-        <div className="hidden border-t border-border/60 bg-muted/30 md:block">
-          <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5">
-            <span className="font-mono text-[9px] tracking-[0.18em] text-muted-foreground uppercase">
-              Podgląd roli
-            </span>
-            <ToggleGroup
-              type="single"
-              value={snapshot.session.role.code}
-              onValueChange={(value) => {
-                if (value !== "") {
-                  onRoleChange(value);
-                }
-              }}
-              variant="outline"
-              size="sm"
-              spacing={0}
-              className="max-w-full overflow-x-auto"
-            >
-              {snapshot.demoRoles.map((role) => (
-                <ToggleGroupItem
-                  key={role.code}
-                  value={role.code}
-                  aria-label={role.name}
-                  className="shrink-0 px-2.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
-                >
-                  {role.name}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-            <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-              {snapshot.session.user.fullName}
-              <span className="hidden h-3 w-px bg-border sm:block" aria-hidden />
-              <span className="hidden font-mono text-[10px] tracking-[0.1em] uppercase sm:inline">
-                {labs}
-              </span>
-            </span>
-          </div>
         </div>
       </header>
 

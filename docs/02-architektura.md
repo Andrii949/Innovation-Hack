@@ -485,9 +485,9 @@ składa backend jako SVG (punkty, linie progu), bez pakietów `typst` z internet
 | Formularze | React Hook Form |
 | Etykiety z QR | `qrcode` |
 
-**Kolory firmowe** (logo Cementowni Warta): navy `#0C3F76` — primary, przyciski i linki —
-oraz lime `#8DC63F` — akcent, wykresy i obramowania; lime na białym tylko jako tło z ciemnym
-tekstem (biały tekst ma kontrast 2,0:1). Tokeny w `frontend/src/index.css`.
+**Identyfikacja wizualna** — paleta i typografia są opisane w
+[06-identyfikacja-wizualna.md](06-identyfikacja-wizualna.md) na podstawie publicznego serwisu Warty.
+Tokeny wyglądu są w `frontend/src/index.css`.
 
 **Capacitor 8** (build iOS wymaga Xcode 26+ na macOS):
 

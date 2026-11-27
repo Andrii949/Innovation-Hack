@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 
 import {
@@ -19,6 +19,12 @@ import { WorkerPage } from "@/features/worker/WorkerPage";
 import { AppShell } from "@/layout/AppShell";
 import { roleCodeFromHash, roleHash } from "@/lib/demoRoleRoute";
 import { getServerUrl, isNativeApp, needsServerSetup } from "@/platform/server";
+
+const Workspace = lazy(() =>
+  import("@/features/workspace/Workspace").then((module) => ({ default: module.Workspace })),
+);
+
+const workspaceLoading = <output className="block p-6 text-sm">Ładowanie laboratorium…</output>;
 
 function View({ snapshot }: { snapshot: Snapshot }) {
   switch (viewForSession(snapshot.session)) {
@@ -84,6 +90,17 @@ export default function App() {
           setReady(true);
         }}
       />
+    );
+  }
+
+  if (
+    !new URLSearchParams(window.location.search).has("demo") &&
+    !window.location.hash.startsWith("#/role/")
+  ) {
+    return (
+      <Suspense fallback={workspaceLoading}>
+        <Workspace />
+      </Suspense>
     );
   }
 

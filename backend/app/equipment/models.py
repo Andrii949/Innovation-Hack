@@ -214,3 +214,20 @@ class EquipmentCatalogItem(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     search_aliases: Mapped[str | None] = mapped_column(String(255), nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class CalibrationPlan(Base):
+    """A dispatch window approved separately from the agency's certificate."""
+
+    __tablename__ = "calibration_plan"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    equipment_id: Mapped[int] = mapped_column(ForeignKey("equipment.id"), index=True)
+    dispatch_on: Mapped[date] = mapped_column(Date)
+    return_on: Mapped[date] = mapped_column(Date)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[int] = mapped_column(ForeignKey("app_user.id"))
+    approved_by: Mapped[int | None] = mapped_column(ForeignKey("app_user.id"))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    equipment: Mapped[Equipment] = relationship(lazy="selectin")

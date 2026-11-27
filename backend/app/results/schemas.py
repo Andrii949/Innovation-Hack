@@ -62,6 +62,7 @@ class TestResultCreate(BaseModel):
     sample_label: str = Field(min_length=1, max_length=255)
     value: str
     repeat_of_id: int | None = None
+    equipment_id: int | None = None
 
 
 class TestResultOut(BaseModel):
@@ -77,6 +78,18 @@ class TestResultOut(BaseModel):
     repeat_of_id: int | None
     created_by: int
     created_at: str
+    equipment_id: int | None
+    equipment_code: str | None
+    review_decision: str | None
+    review_calibration_id: int | None
+    review_note: str | None
+    reviewed_by: int | None
+    reviewed_at: datetime | None
+
+
+class ResultReviewCreate(BaseModel):
+    decision: Literal["ACCEPTED", "REPEAT"]
+    note: str = Field(min_length=1, max_length=4000)
 
 
 class SeriesParameter(BaseModel):
