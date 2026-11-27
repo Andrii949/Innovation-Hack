@@ -8,7 +8,9 @@ fi
 
 case "$mode" in
   api)
+    python -m app.core.db_security
     DATABASE_URL="${MIGRATION_DATABASE_URL:-$DATABASE_URL}" alembic upgrade head
+    python -m app.core.db_security
     exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" "$@"
     ;;
   worker)
@@ -16,7 +18,11 @@ case "$mode" in
       exec python -m app.worker "$@"
     fi
     echo "[worker] app.worker is not implemented yet; idling until notification worker lands." >&2
-    exec sleep infinity
+    trap 'exit 0' TERM INT
+    while :; do
+      sleep 3600 &
+      wait $!
+    done
     ;;
   *)
     exec "$mode" "$@"

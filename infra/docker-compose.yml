@@ -25,6 +25,7 @@ services:
     build:
       context: ../backend
       dockerfile: Dockerfile
+    init: true
     restart: unless-stopped
     depends_on:
       db:
@@ -58,6 +59,7 @@ services:
       context: ../backend
       dockerfile: Dockerfile
     command: ["worker"]
+    init: true
     restart: unless-stopped
     depends_on:
       api:
@@ -88,6 +90,11 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:2020/healthz >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   db-data:
