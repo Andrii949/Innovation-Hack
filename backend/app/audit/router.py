@@ -6,6 +6,9 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.audit.service import list_audit_logs
+from app.auth.deps import current_user
+from app.auth.models import User
+from app.auth.permissions import Permission, require
 from app.db import get_db
 
 router = APIRouter(prefix="/audit", tags=["audit"])
@@ -27,12 +30,14 @@ class AuditLogOut(BaseModel):
 
 @router.get("")
 def get_audit(
+    user: Annotated[User, Depends(current_user)],
     db: Annotated[Session, Depends(get_db)],
     entity: str | None = None,
     entity_id: str | None = None,
     date_from: Annotated[date | None, Query(alias="from")] = None,
     date_to: Annotated[date | None, Query(alias="to")] = None,
 ) -> list[AuditLogOut]:
+    require(user, Permission.AUDIT_READ)
     rows = list_audit_logs(
         db,
         entity=entity,

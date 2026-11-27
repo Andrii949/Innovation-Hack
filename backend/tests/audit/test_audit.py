@@ -1,3 +1,5 @@
+from typing import Any
+
 from app.audit.context import audit_context
 from app.audit.models import AuditLog
 from app.audit.service import log_event
@@ -82,12 +84,21 @@ def test_log_event_writes_reject(db: Session) -> None:
     assert row.reason == "out_of_range"
 
 
-def test_get_audit_endpoint_filters(client: TestClient, db: Session) -> None:
+def test_get_audit_endpoint_filters(
+    client: TestClient,
+    db: Session,
+    make_user: Any,
+    auth: Any,
+) -> None:
+    admin = make_user("admin", all_labs=True)
     with audit_context(user_id=1, reason="cfg"):
         db.add(Setting(key="worker_interval_minutes", value=30))
         db.flush()
 
-    response = client.get("/api/audit?entity=setting&entity_id=worker_interval_minutes")
+    response = client.get(
+        "/api/audit?entity=setting&entity_id=worker_interval_minutes",
+        headers=auth(admin),
+    )
     assert response.status_code == 200
     items = response.json()
     assert len(items) == 1
