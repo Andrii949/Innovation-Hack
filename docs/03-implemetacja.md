@@ -10,7 +10,9 @@ osobny worker liczy terminy i tworzy powiadomienia. Szczegóły: [02-architektur
 
 **Stack:** Python 3.12+ (uv), FastAPI, SQLAlchemy 2, Alembic, Pydantic v2, pwdlib[argon2],
 PostgreSQL 17, React + TypeScript + Vite, shadcn/ui (Tailwind CSS 4), TanStack Query,
-openapi-typescript + openapi-fetch, Capacitor 8.
+openapi-typescript + openapi-fetch, Capacitor 8. Identyfikacja: QR i tag NFC (ten sam link).
+OCR świadectw: opcjonalne zewnętrzne API zgodne z OpenAI (`/chat/completions`, model
+multimodalny albo OCR, np. Qwen-VL) — tylko szkic pól, zatwierdza admin.
 
 **Spec:** [01-zadanie.md](01-zadanie.md) (wymagania), [02-architektura.md](02-architektura.md)
 (projekt), [04-research.md](04-research.md) (uzasadnienie), [05-kryteria.md](05-kryteria.md)
@@ -28,6 +30,8 @@ openapi-typescript + openapi-fetch, Capacitor 8.
 - Miesiące w API jako `"YYYY-MM"`, daty jako `"YYYY-MM-DD"`.
 - Błędy API: `{"error": "<KOD>", "message": "<tekst>"}` — kody z 02 §7.
 - Każdy zapis przechodzi przez historię zmian; zapisów technicznych nie usuwamy.
+- OCR: odpowiedź dostawcy to dane niezaufane — liczby jako tekst, ten sam parser co przy wpisie ręcznym (przecinek/kropka), złe pola odrzucane; `extract` nic nie zapisuje; klucz API tylko w env; testy bez sieci (dostawca zaślepiony).
+- NFC: tag NDEF zawiera ten sam URL co QR; brak nowej logiki uprawnień — karta i wpis sprawdzane tak samo jak po skanie.
 - CORS: `capacitor://localhost`, `https://localhost`, adres webowy, `http://localhost:5173`.
 - Komendy backendu uruchamiamy w `backend/`: `uv run ruff check .`, `uv run ruff format --check .`, `uv run ty check`, `uv run pytest`; frontendu w `frontend/`: `bun fmt --check`, `bun lint --max-warnings 0`, `bun check`, `bun test` (bramki jakości z AGENTS.md).
 - „Dziś” w testach: `TODAY = date(2026, 11, 27)` (stała w `tests/conftest.py`).
@@ -35,13 +39,14 @@ openapi-typescript + openapi-fetch, Capacitor 8.
 
 ## Na co uważać
 
-Pięć sytuacji, których spec nie opisuje wprost, a które najłatwiej zepsują demo:
+Sześć sytuacji, których spec nie opisuje wprost, a które najłatwiej zepsują demo:
 
 1. **Liczba z przecinkiem lub śmieci** („3,35”, „0,105”, „1,2,3”, „abc”, puste) → przecinek działa, śmieci dają 422 `INVALID_NUMBER`, nigdy 500. Testy: T03, T11, T14.
 2. **Przełom miesięcy i lat** — termin 01/2027 z wyprzedzeniem 1 → alert od 01.12.2026; 31.05.2027 − 6 mies. → 30.11.2026; ostatni dzień miesiąca jeszcze „ważny”. Testy: T02.
 3. **Sesja wygasła w trakcie skanu** — po zalogowaniu użytkownik wraca na `/e/<id>`, a parametr `next` nie przekieruje poza aplikację. Testy: T19, T28.
 4. **Skan bez uprawnień** — inna pracownia, brak na liście upoważnionych, urządzenie wycofane → 403 / 409 z kodem, bez formularza. Testy: T11, lista kontrolna T24.
 5. **Worker uruchomiony dwa razy** (albo dwa naraz) → żadnych zdublowanych powiadomień. Testy: T15.
+6. **OCR zwraca śmieci albo dostawca milczy** — zły JSON, liczba „-” albo 502 po timeoucie → formularz zostaje pusty z komunikatem, wpis ręczny działa; nic nie zapisuje się automatycznie. Testy: T37.
 
 ---
 
@@ -49,10 +54,10 @@ Pięć sytuacji, których spec nie opisuje wprost, a które najłatwiej zepsują
 
 | Osoba | Ścieżka | Zakres | Zadania |
 |---|---|---|---|
-| **Timur** | A + B — rdzeń i urządzenia (backend) | szkielet, historia zmian, logowanie, uprawnienia, ustawienia, pliki, rejestr, upoważnienia, wzorcowania, sprawdzenia, harmonogram | T01, T04–T12, T16 |
+| **Timur** | A + B — rdzeń i urządzenia (backend) | szkielet, historia zmian, logowanie, uprawnienia, ustawienia, pliki, rejestr, upoważnienia, wzorcowania, sprawdzenia, harmonogram, OCR świadectwa | T01, T04–T12, T16, T37 |
 | **Andrii** | C — odczynniki, cement, wykresy, PDF (backend) | daty i liczby, odczynniki, wyniki z kontrolą zakresu, powiadomienia i worker, kanały, wydruki PDF, wykresy, raport dla kierownika | T02, T03, T13–T15, T17, T31–T33 |
-| **Jakub** | D — cały frontend (React UI) | wszystkie ekrany w jednym stylu, także ekrany telefonu w T24–T25 | T19–T22, T34, ekrany T24–T25 |
-| **Ivan** | E + F — Capacitor, QR, DevOps, dane, testy | projekty natywne, skaner, aparat, push, Docker, serwer testowy, dane demo, e2e, raport walidacji, skrypt KPI | T18, T23, T26–T29, T35, natywna część T24–T25 |
+| **Jakub** | D — cały frontend (React UI) | wszystkie ekrany w jednym stylu, formularz OCR, także ekrany telefonu w T24–T25 | T19–T22, T34, T38, ekrany T24–T25 |
+| **Ivan** | E + F — Capacitor, QR i NFC, DevOps, dane, testy | projekty natywne, skaner, NFC, aparat, push, Docker, serwer testowy, dane demo, e2e, raport walidacji, skrypt KPI | T18, T23, T26–T29, T35, natywna część T24–T25 |
 | **Misza** | Product, QA, pitch | kryteria (05), koszty i KPI z mentorami, testy akceptacyjne z listą kontrolną, scenariusz demo, prezentacja, Q&A | T30, T36 |
 
 Ekrany robi tylko Jakub (jeden styl, bez konfliktów w `frontend/src`); Ivan dostarcza
@@ -64,9 +69,9 @@ funkcje natywne (`src/platform/*`, `scanEquipment()`, aparat, push), które ekra
 |---|---|---|
 | 0 | Start | T01 na `main`, kontrakt schematów, front i Capacitor założone, ustalone: kto ma Maca |
 | 1–2 | **M1** — przekrój pionowy w przeglądarce | dodaję urządzenie, wpisuję wzorcowanie, widzę status w harmonogramie |
-| 3–4 | **M2** — telefon | Android: skan QR → karta → sprawdzenie; dzwonek powiadomień u admina |
+| 3–4 | **M2** — telefon | Android: skan QR albo zbliżenie NFC → karta → sprawdzenie; dzwonek powiadomień u admina |
 | 5 | **M3** — komplet funkcji | odczynniki, wyniki z kontrolą zakresu, wykresy i raport dla kierownika, ustawienia, historia zmian; liczby KPI i kosztów od mentorów (T36) |
-| 6 | **M4** — utwardzenie | e2e zielone, build iOS, push (jeśli czas), dane demo, skrypt KPI (T35); wieczorem zamrożenie funkcji i slajdy |
+| 6 | **M4** — utwardzenie | e2e zielone, build iOS, push, OCR świadectwa i zapis tagów NFC, dane demo, skrypt KPI (T35); wieczorem zamrożenie funkcji i slajdy |
 | 7 | Demo | scenariusz T30 przechodzi 2× bez błędu; próba Q&A |
 
 Priorytety: **P0** — potrzebne do demo; **P1** — pełne 11 funkcji i materiały do kryteriów
@@ -94,6 +99,7 @@ backend/
     files/         models.py  service.py  router.py
     forms/         models.py  validation.py  router.py
     equipment/     models.py  schemas.py  service.py  router.py
+    integrations/  ocr.py (klient OpenAI-compatible: Qwen-VL, OpenAI, lokalny vLLM)
     reagents/      models.py  schemas.py  service.py  router.py
     results/       models.py  schemas.py  service.py  router.py
     schedule/      service.py  router.py
@@ -336,6 +342,7 @@ def test_open_bounds():  # konsystencja zaczynów: brak zakresu
 - `update_equipment`, `withdraw(db, user, equipment_id: int, reason: str) -> Equipment`, `restore(db, user, equipment_id: int, reason: str) -> Equipment`
 - `GET/POST /api/equipment`, `GET/PATCH /api/equipment/{id}`, `POST /api/equipment/{id}/withdraw`, `POST /api/equipment/{id}/restore`, `GET /api/equipment/by-qr/{public_id}` → `EquipmentCard` (`EquipmentOut` + `check_plans` (wypełni T11) + `can_write` (T09) + `qr_url = f"{PUBLIC_BASE_URL}/e/{public_id}"`)
 - `EquipmentOut`: pola modelu + `code`, `status`, `next_due_month`
+- `public_id` jest wspólny dla QR i NFC: tag NDEF niesie ten sam `qr_url`, a `by-qr` obsługuje oba nośniki
 - fixture `make_equipment(lab, number="121", interval=12, lead=1, last_calibrated_month: str | None = None, **kw) -> Equipment`
 
 - [ ] **Testy (czerwone):**
@@ -393,6 +400,7 @@ def test_sticker_month_creates_first_calibration(client, make_lab, make_user, au
 
 **Daje:**
 - `CalibrationCreate`: `calibrated_month: "YYYY-MM"`, `vendor: str`, `certificate_no: str | None`, `adjustments: str | None`, `result: "OK" | "NOK"`, `points: list[{point, error, uncertainty, unit}]` (min. 1, liczby jako tekst), `note: str | None`, `attachment_ids: list[int] = []`
+- `source` (`MANUAL` / `OCR`) i `ocr_meta` ustawia serwer na podstawie użytego szkicu; klient ich nie podaje (T37)
 - `record_calibration(db, user, equipment_id: int, data: CalibrationCreate) -> Calibration`
 - `GET/POST /api/equipment/{id}/calibrations`
 - fixture `make_calibration(eq, month: str, result: str = "OK") -> Calibration`
@@ -605,6 +613,7 @@ def test_existing_key_is_skipped_without_error(db, admin_a, overdue_in_a):  # dw
 - `sniff_content_type(data: bytes) -> str | None` — `image/jpeg` (`FF D8 FF`), `image/png` (`89 50 4E 47`), `application/pdf` (`%PDF`)
 - `save_upload(db, user, *, filename: str, data: bytes) -> Attachment` (limit `max_upload_mb`, plik w `FILES_DIR/<sha256[:2]>/<uuid>`)
 - `attach(db, user, attachment_ids: list[int], *, owner_type: str, owner_id: int, lab_id: int) -> None` (tylko własne, jeszcze nieprzypięte)
+- `page_images(db, attachment, limit: int = 5) -> list[bytes]` — PDF → PNG przez `pdftoppm -r 200`, JPEG/PNG bez zmian; wejście dla OCR (T37)
 - `POST /api/attachments` (multipart), `GET /api/attachments/{id}` (nieprzypięty: tylko autor; przypięty: zakres pracowni)
 
 - [ ] **Testy (czerwone):** `test_upload_jpeg_returns_id_and_sha256`; `test_too_large_is_413` (`FILE_TOO_LARGE`); `test_exe_renamed_to_jpg_is_415` (`UNSUPPORTED_FILE_TYPE`); `test_cannot_attach_someone_elses_upload` (403 `FORBIDDEN`); `test_download_respects_lab_scope` (pracownik W, plik w A → 403 `LAB_OUT_OF_SCOPE`).
@@ -710,8 +719,8 @@ describe("lib", () => {
 
 - [ ] **Lista i formularz:** filtry (pracownia, status, szukaj); dodawanie i edycja z polami z 02 §3.2, w tym „Ostatnie wzorcowanie (z naklejki)” MM/RRRR.
 - [ ] **Karta:** dane, status, następny termin, historia wzorcowań i sprawdzeń, plany sprawdzeń, lista upoważnionych (do wyboru tylko osoby z tej pracowni), wycofaj / przywróć z powodem.
-- [ ] **Formularz wzorcowania:** miesiąc świadectwa, firma, nr świadectwa, adiustacje, punkty (dodawane wiersze: punkt, błąd, niepewność, jednostka), skan (upload → `attachment_ids`), OK / NIE OK → po zapisie odświeżenie karty.
-- [ ] **Etykiety:** `/labels?ids=` — kod, nazwa, następny termin MM/RRRR, QR z `equipmentUrl(...)` (biblioteka `qrcode`), druk przez `window.print()`.
+- [ ] **Formularz wzorcowania:** miesiąc świadectwa, firma, nr świadectwa, adiustacje, punkty (dodawane wiersze: punkt, błąd, niepewność, jednostka), skan (upload → `attachment_ids`), OK / NIE OK → po zapisie odświeżenie karty. Przycisk „Odczytaj ze skanu” (szkic pól) — T38.
+- [ ] **Etykiety:** `/labels?ids=` — kod, nazwa, następny termin MM/RRRR, QR z `equipmentUrl(...)` (biblioteka `qrcode`), druk przez `window.print()`; tag NFC zapisujemy zewnętrzną aplikacją NFC Tools tym samym linkiem albo ekranem w aplikacji mobilnej (P2, T24).
 - [ ] **Sprawdź:** dodaję urządzenie z naklejką 12/2025 → status „Zbliża się termin”; wpisuję wzorcowanie 11/2026 OK → „Ważne”, termin 11/2027; wydrukowana etykieta skanuje się telefonem.
 - [ ] **Commit:** `feat(web): equipment registry, card, calibration form, labels`
 
@@ -721,7 +730,7 @@ describe("lib", () => {
 
 - [ ] **Odczynniki:** lista (stan, próg, najbliższa ważność, status), przyjęcie partii, utylizacja partii.
 - [ ] **Wyniki:** formularz (parametr, próbka, wartość) → przy `in_range = false` czerwony wynik i „Powtórz badanie”, przy 422 `OUT_OF_RANGE` komunikat z zakresem; lista z czerwonymi wierszami.
-- [ ] **Ustawienia:** ogólne (klucze z `DEFAULT_SETTINGS`), pracownie, użytkownicy, formularze (edytor listy pól), parametry (edycja min/max/reakcji, import CSV), reguły powiadomień, „QR konfiguracyjny” z adresem serwera (dla T23).
+- [ ] **Ustawienia:** ogólne (klucze z `DEFAULT_SETTINGS`), pracownie, użytkownicy, formularze (edytor listy pól), parametry (edycja min/max/reakcji, import CSV), reguły powiadomień, „QR konfiguracyjny” z adresem serwera (dla T23), integracje: OCR włącz/wyłącz i limit stron (model, URL i klucz tylko z env; ekran pokazuje status konfiguracji).
 - [ ] **Historia zmian:** filtry (obiekt, ID, daty), widok przed / po.
 - [ ] **Sprawdź:** SO₃ = 3,35 → czerwone; zmiana ustawienia widoczna w historii z moim loginem.
 - [ ] **Commit:** `feat(web): reagents, results, settings, audit views`
@@ -739,14 +748,15 @@ describe("lib", () => {
 
 ### T24 · Skan → karta → sprawdzenie — E · P0 · zależy od: T11, T23
 
-**Pliki:** `src/features/scan/{scan.ts,ScanButton.tsx,QrResolvePage.tsx}`, `src/features/checks/{CheckForm,DynamicField}.tsx`.
+**Pliki:** `src/features/scan/{scan.ts,nfc.ts,ScanButton.tsx,QrResolvePage.tsx}`, `src/features/checks/{CheckForm,DynamicField}.tsx`.
 
-**Daje:** `scanEquipment(): Promise<string | null>` — `scanBarcode` z `@capacitor/barcode-scanner` (podpowiedź: QR) → `parseEquipmentUrl`.
+**Daje:** `scanEquipment(): Promise<string | null>` — najpierw tag NFC (jeśli jest plugin i uprawnienie), inaczej `scanBarcode` z `@capacitor/barcode-scanner` (podpowiedź: QR) → `parseEquipmentUrl`; oba nośniki dają ten sam `public_id`.
 
-- [ ] **Skan:** `bun add @capacitor/barcode-scanner @capacitor/camera`; przycisk „Skanuj” w `LabLayout`; kod spoza systemu → komunikat „To nie jest kod urządzenia”.
+- [ ] **Skan QR:** `bun add @capacitor/barcode-scanner @capacitor/camera`; przycisk „Skanuj” w `LabLayout`; kod spoza systemu → komunikat „To nie jest kod urządzenia”.
+- [ ] **NFC:** `bun add <plugin NFC>` po sprawdzeniu zgodności z Capacitor 8 (kandydaci: `@capawesome-team/capacitor-nfc`, `@capacitor-community/nfc`); Android: `android.permission.NFC` i `<uses-feature android:name="android.hardware.nfc" android:required="false"/>`; iOS: `NFCReaderUsageDescription` i `com.apple.developer.nfc.read-types` w entitlements; odczyt rekordu NDEF URI → `parseEquipmentUrl`; tag bez linku → „To nie jest tag urządzenia”; brak NFC → przycisk pokazuje tylko QR.
 - [ ] **Karta (`/e/:publicId`):** kod, nazwa, status, następny termin, plany z przyciskiem „Wpisz sprawdzenie”, gdy `can_write`; inaczej baner „Brak uprawnień do wpisu dla tego urządzenia”; wycofane → baner „Urządzenie wycofane — wpisy zablokowane”.
 - [ ] **Formularz sprawdzenia:** pola z szablonu (`DynamicField`; liczby z przecinkiem, podpowiedź jednostki i min–max), wymagane pola, opcjonalne zdjęcie (`Camera.getPhoto` → `POST /api/attachments`), zapis → wynik na czerwono przy `out_of_range`.
-- [ ] **Sprawdź na telefonie (lista kontrolna):** skan wydrukowanej etykiety → karta; pracownik bez upoważnienia → baner, brak formularza; pracownik z innej pracowni → komunikat z `LAB_OUT_OF_SCOPE`; urządzenie wycofane → baner; temperatura 23,5 → czerwone, a u admina dzwonek „poza zakresem”.
+- [ ] **Sprawdź na telefonie (lista kontrolna):** skan wydrukowanej etykiety → karta; zbliżenie tagu NFC → ta sama karta; tag innego systemu → komunikat; pracownik bez upoważnienia → baner, brak formularza; pracownik z innej pracowni → komunikat z `LAB_OUT_OF_SCOPE`; urządzenie wycofane → baner; temperatura 23,5 → czerwone, a u admina dzwonek „poza zakresem”.
 - [ ] **Commit:** `feat(mobile): scan, equipment card, check form`
 
 ### T25 · Moje zadania i spis odczynników na telefonie — E · P1 · zależy od: T13, T24
@@ -772,6 +782,7 @@ describe("lib", () => {
 **Pliki:** `backend/Dockerfile`, `frontend/Dockerfile`, `infra/{docker-compose.yml,Caddyfile,.env.example,backup.sh}`.
 
 - [ ] **Compose:** `db`, `api` (migracje przy starcie), `worker`, `web` (Caddy: `{$DOMAIN}`, `/api/*` → `api:8000`, reszta → zbudowany frontend, automatyczne HTTPS).
+- [ ] **Env:** `.env.example` uzupełniony o `OCR_API_URL`, `OCR_API_KEY`, `OCR_MODEL`, `OCR_TIMEOUT_S` (puste; brak = OCR wyłączony).
 - [ ] **Baza:** osobna rola aplikacji; na `audit_log` tylko `INSERT` i `SELECT` (17025 7.5.2).
 - [ ] **Serwer testowy (do dnia 2):** maszyna z domeną, `docker compose up -d --build`, `python -m app.seed`.
 - [ ] **Sprawdź:** `curl https://$DOMAIN/api/health` → `{"status":"ok"}`; telefon w sieci hackathonu otwiera stronę.
@@ -805,9 +816,9 @@ describe("lib", () => {
   1. Problem: papier, naklejki, segregatory (01 §2).
   2. Specjalistka: harmonogram — po terminie i zbliżające się; dzwonek.
   3. Grafik miesięczny pracowni A.
-  4. Telefon: laborant skanuje etykietę → sprawdzenie temperatury 23,5 → czerwone → u specjalistki powiadomienie.
+  4. Telefon: laborant skanuje etykietę (QR) albo zbliża tag NFC → sprawdzenie temperatury 23,5 → czerwone → u specjalistki powiadomienie.
   5. Nieupoważniony laborant skanuje → „Brak uprawnień”.
-  6. Specjalistka wpisuje wzorcowanie (punkty, niepewność, skan, OK) → zielony status, nowy termin.
+  6. Specjalistka wpisuje wzorcowanie (jeśli P2 gotowe: OCR szkicuje pola ze skanu, ona poprawia; punkty, niepewność, skan, OK) → zielony status, nowy termin.
   7. Odczynniki: „mało” po spisie z telefonu; CRM z terminem ważności.
   8. Wynik SO₃ = 3,35 → czerwony, poza 0,10–3,20 %.
   9. Wykres SO₃ z progiem → raport PDF → kierownik dostaje go w dzwonku (F10, F11).
@@ -894,3 +905,53 @@ describe("lib", () => {
 - [ ] Lista kontrolna akceptacji z tabeli 05 §b przejść na serwerze testowym (dzień 6) — każdą funkcję F1–F11 kliknąć w przeglądarce i na telefonie.
 - [ ] **Sprawdź:** w 05 nie zostało założenie, na które mentorzy odpowiedzieli; tabela „Luki do zamknięcia” aktualna.
 - [ ] **Commit:** `docs(criteria): costs and KPI from mentors`
+
+### T37 · OCR świadectwa — zewnętrzne API (backend) — B · P2 · zależy od: T07, T10, T16
+
+**Pliki:** utwórz `backend/app/integrations/ocr.py`; rozszerz `app/config.py`, `app/files/service.py`, `app/equipment/{models,schemas,service,router}.py`; migracja (`source`, `ocr_meta`); test `backend/tests/equipment/test_ocr.py`.
+
+**Daje:**
+- `OcrConfig` z env: `OCR_API_URL`, `OCR_API_KEY`, `OCR_MODEL`, `OCR_TIMEOUT_S`; brak URL lub klucza = OCR wyłączony
+- `ocr_enabled(db) -> bool` — ustawienie `ocr_enabled` (domyślnie `false`) i komplet konfiguracji
+- `extract_calibration(db, user, equipment_id: int, attachment_id: int) -> CalibrationDraft` — `page_images(...)` z T16, `httpx.post(f"{OCR_API_URL}/chat/completions", timeout=OCR_TIMEOUT_S)`, obraz jako data URL, stały prompt o JSON; bez ponowień
+- `CalibrationDraft`: `vendor`, `certificate_no`, `calibrated_month`, `adjustments`, `points[]`, `confidence` (0–1 na pole), `provider`, `model`, `raw_text`; brakujące pole = `null`
+- walidacja szkicu: miesiąc `YYYY-MM`, liczby tym samym parserem co ręcznie (`"0,10"`/`"0.10"` → `Decimal`), złe pole → `null` + `warning` (nie 422 całego szkicu); teksty tylko jako propozycja
+- `POST /api/equipment/{id}/calibrations/extract` (`{"attachment_id": …}`) → 200 szkic; załącznik musi być własny (nieprzypięty) albo w zakresie pracowni urządzenia; 403 bez `calibration:write`, 409 `OCR_DISABLED`, 415 zły typ, 502 `OCR_FAILED`, 504 `OCR_TIMEOUT`; **nic nie zapisuje**
+- przy `POST /calibrations` serwer zapisuje `source` (`MANUAL` / `OCR`) i `ocr_meta` (dostawca, model, pewność, `attachment_id`); klient ich nie podaje
+
+- [ ] **Testy (czerwone)** — dostawca zaślepiony (`ocr_stub` podstawia `httpx.post`; żadnej sieci):
+
+```python
+def test_extract_returns_draft_and_saves_nothing(client, admin_a, eq_a, auth, ocr_stub):
+    before = client.get(f"/api/equipment/{eq_a.id}/calibrations", headers=auth(admin_a)).json()
+    r = client.post(f"/api/equipment/{eq_a.id}/calibrations/extract",
+                    headers=auth(admin_a), json={"attachment_id": ocr_stub.attachment_id})
+    assert r.status_code == 200
+    assert r.json()["points"][0]["error"] == "-0.001" and r.json()["calibrated_month"] == "2026-10"
+    after = client.get(f"/api/equipment/{eq_a.id}/calibrations", headers=auth(admin_a)).json()
+    assert len(after) == len(before)
+
+def test_extract_disabled_is_409_and_provider_not_called(client, admin_a, eq_a, auth, ocr_stub):
+    r = client.post(f"/api/equipment/{eq_a.id}/calibrations/extract",
+                    headers=auth(admin_a), json={"attachment_id": ocr_stub.attachment_id})
+    assert r.status_code == 409 and r.json()["error"] == "OCR_DISABLED"
+    assert not ocr_stub.called
+```
+
+  Dodatkowo: `test_provider_error_is_502` i `test_timeout_is_504` (stub rzuca `httpx.ReadTimeout`); `test_garbage_numbers_are_dropped_not_422` (provider zwraca `"n/d"` → pole `null` + `warning`); `test_extract_requires_calibration_write` (pracownik → 403 `FORBIDDEN`); `test_cannot_extract_foreign_attachment` (załącznik z pracowni W, urządzenie w A → 403 `FORBIDDEN`); `test_create_records_ocr_source` (`source == "OCR"`, `ocr_meta["provider"]`, w historii widać dostawcę).
+- [ ] **Uruchom:** `uv run pytest tests/equipment/test_ocr.py -q` → FAIL.
+- [ ] **Implementacja:** `ocr_enabled` w `DEFAULT_SETTINGS`; log tylko metadanych (rozmiar, model, czas), nigdy treści dokumentu ani odpowiedzi; brak klucza w odpowiedzi API i w `audit`.
+- [ ] **Uruchom:** → PASS.
+- [ ] **Commit:** `feat(equipment): OCR draft for calibration certificates`
+
+### T38 · OCR w formularzu wzorcowania (web) — D · P2 · zależy od: T21, T37
+
+**Pliki:** `src/features/equipment/{CalibrationForm,CalibrationOcrImport}.tsx`.
+
+- [ ] **Import:** skan/PDF → `POST /api/attachments` → „Odczytaj ze skanu” (`POST .../calibrations/extract`); szkic wypełnia firmę, numer, miesiąc, adiustacje i punkty; pewność < 0,7 podświetlona, brak pola = puste (nie „0”).
+- [ ] **Jawna akcja:** przycisk aktywny tylko przy `calibration:write`; komunikat przed wysyłką „Skan zostanie przesłany do zewnętrznego dostawcy OCR”; bez zgody — tylko wpis ręczny.
+- [ ] **Błędy:** 409 → „Rozpoznawanie wyłączone — wpisz ręcznie”; 502/504 → „Nie udało się odczytać skanu — wpisz ręcznie”; formularz nigdy nie blokuje się na OCR.
+- [ ] **Kontrola człowieka:** OK / NIE OK wybiera admin; „Wyczyść szkic” przywraca puste pola; po zapisie karta pokazuje w historii „wpis wsparty OCR (model)”.
+- [ ] **Test (mock API):** szkic wypełnia firmę, miesiąc i punkty; wyczyszczenie przywraca puste pola; 409 nie pokazuje błędu całego formularza.
+- [ ] **Sprawdź:** syntetyczny skan wielostronicowy → szkic z 5 stron; uszkodzony plik → komunikat, wpis ręczny działa.
+- [ ] **Commit:** `feat(web): OCR-assisted calibration form`
