@@ -263,6 +263,10 @@ export function reagentStock(db: MockDb, reagentId: string): ReagentStock {
     }
   }
 
+  if (compareDecimals(usableStock, stock) > 0) {
+    usableStock = stock;
+  }
+
   const low = compareDecimals(usableStock, reagent.minStock) < 0;
   const expiryStatus = nearestLot
     ? expiryWindow(nearestLot.expiryDate, reagent.expiryLeadMonths, db.today).status
