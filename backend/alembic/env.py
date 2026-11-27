@@ -5,11 +5,24 @@ from app.audit.models import AuditLog
 from app.auth.models import Lab, Role, User, UserSession, user_lab
 from app.config import get_settings
 from app.db import Base
+from app.equipment.models import Calibration, CalibrationPoint, Equipment
 from app.files.models import Attachment
 from app.settings.models import Setting
 from sqlalchemy import create_engine, pool
 
-_REGISTERED_MODELS = (Setting, AuditLog, Lab, Role, User, UserSession, user_lab, Attachment)
+_REGISTERED_MODELS = (
+    Setting,
+    AuditLog,
+    Lab,
+    Role,
+    User,
+    UserSession,
+    user_lab,
+    Attachment,
+    Equipment,
+    Calibration,
+    CalibrationPoint,
+)
 
 config = context.config
 

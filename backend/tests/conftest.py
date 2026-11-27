@@ -12,6 +12,9 @@ from app.auth.service import ensure_default_roles
 from app.config import get_settings
 from app.core.clock import get_today
 from app.db import get_db
+from app.equipment._core import next_due_month
+from app.equipment.models import Calibration, Equipment
+from app.equipment.service import new_public_id, parse_month_str
 from app.main import app
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine, select
@@ -137,3 +140,47 @@ def auth(db: Session) -> Callable[[User], dict[str, str]]:
         return {"Authorization": f"Bearer {raw_token}"}
 
     return _auth
+
+
+@pytest.fixture
+def make_equipment(db: Session) -> Callable[..., Equipment]:
+    def _make_equipment(
+        lab: Lab,
+        number: str = "121",
+        name: str = "Waga analityczna",
+        interval: int | None = 12,
+        lead: int = 1,
+        last_calibrated_month: str | None = None,
+        *,
+        calibration_required: bool = True,
+        calibration_mode: str = "EXTERNAL",
+    ) -> Equipment:
+        eq = Equipment(
+            public_id=new_public_id(),
+            lab_id=lab.id,
+            number=number,
+            name=name,
+            calibration_required=calibration_required,
+            calibration_interval_months=interval if calibration_required else None,
+            calibration_mode=calibration_mode,
+            lead_months=lead,
+        )
+        db.add(eq)
+        db.flush()
+        db.refresh(eq)
+        if last_calibrated_month is not None:
+            cal_date = parse_month_str(last_calibrated_month)
+            due = next_due_month(cal_date, interval) if interval is not None else None
+            cal = Calibration(
+                equipment_id=eq.id,
+                calibrated_month=cal_date,
+                result="OK",
+                next_due_month=due,
+                note="Przeniesione z ewidencji papierowej",
+                source="MANUAL",
+            )
+            db.add(cal)
+            db.flush()
+        return eq
+
+    return _make_equipment
