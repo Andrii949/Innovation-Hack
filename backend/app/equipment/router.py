@@ -6,9 +6,17 @@ from sqlalchemy.orm import Session
 
 from app.auth.deps import current_user
 from app.auth.models import User
+from app.auth.permissions import Permission, require
 from app.core.clock import get_today
 from app.core.status import Status
 from app.db import get_db
+from app.equipment.catalog import (
+    create_catalog_item,
+    get_catalog_item_or_404,
+    list_catalog_items,
+    serialize_catalog_item,
+    update_catalog_item,
+)
 from app.equipment.schemas import (
     AuthorizedUserOut,
     AuthorizedUsersUpdate,
@@ -21,6 +29,9 @@ from app.equipment.schemas import (
     CheckRecordCreate,
     CheckRecordOut,
     EquipmentCard,
+    EquipmentCatalogCreate,
+    EquipmentCatalogOut,
+    EquipmentCatalogUpdate,
     EquipmentCreate,
     EquipmentOut,
     EquipmentUpdate,
@@ -55,6 +66,63 @@ from app.integrations.ocr import CalibrationDraft
 
 router = APIRouter(prefix="/equipment", tags=["equipment"])
 check_plans_router = APIRouter(prefix="/check-plans", tags=["checks"])
+catalog_router = APIRouter(prefix="/equipment-catalog", tags=["equipment-catalog"])
+
+
+@catalog_router.get("")
+def get_equipment_catalog(
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    q: str | None = None,
+    manufacturer: str | None = None,
+    category: str | None = None,
+    lab_code: str | None = None,
+    include_inactive: bool = False,
+) -> list[EquipmentCatalogOut]:
+    require(user, Permission.EQUIPMENT_READ)
+    return list_catalog_items(
+        db,
+        query=q,
+        manufacturer=manufacturer,
+        category=category,
+        lab_code=lab_code,
+        include_inactive=include_inactive,
+    )
+
+
+@catalog_router.get("/{catalog_id}")
+def get_equipment_catalog_detail(
+    catalog_id: int,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> EquipmentCatalogOut:
+    require(user, Permission.EQUIPMENT_READ)
+    return serialize_catalog_item(get_catalog_item_or_404(db, catalog_id))
+
+
+@catalog_router.post("", status_code=status.HTTP_201_CREATED)
+def post_equipment_catalog_item(
+    payload: EquipmentCatalogCreate,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> EquipmentCatalogOut:
+    item = create_catalog_item(db, user, payload)
+    out = serialize_catalog_item(item)
+    db.commit()
+    return out
+
+
+@catalog_router.patch("/{catalog_id}")
+def patch_equipment_catalog_item(
+    catalog_id: int,
+    payload: EquipmentCatalogUpdate,
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> EquipmentCatalogOut:
+    item = update_catalog_item(db, user, catalog_id, payload)
+    out = serialize_catalog_item(item)
+    db.commit()
+    return out
 
 
 @router.get("")

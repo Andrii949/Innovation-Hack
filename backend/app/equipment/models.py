@@ -193,3 +193,24 @@ class CheckRecord(Base):
     )
 
     check_plan: Mapped[CheckPlan] = relationship(back_populates="records")
+
+
+class EquipmentCatalogItem(Base):
+    __tablename__ = "equipment_catalog"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    category: Mapped[str] = mapped_column(String(100), nullable=False)
+    manufacturer: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    model: Mapped[str] = mapped_column(String(255), nullable=False)
+    software_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    suggested_lab_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    calibration_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    calibration_interval_months: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    calibration_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="EXTERNAL")
+    lead_months: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    acceptance_criteria: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    search_aliases: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
