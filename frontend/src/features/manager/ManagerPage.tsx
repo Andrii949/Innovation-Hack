@@ -45,7 +45,9 @@ export function ManagerPage({ snapshot }: { snapshot: Snapshot }) {
     [chartParameters],
   );
 
-  const pendingReports = snapshot.reports.filter((report) => report.status === "SENT");
+  const pendingReports = snapshot.notifications.filter(
+    (notification) => notification.kind === "REPORT_READY" && notification.readAt === null,
+  );
   const outOfRange = useMemo(
     () => snapshot.results.filter((result) => !result.inRange),
     [snapshot.results],
@@ -154,7 +156,7 @@ export function ManagerPage({ snapshot }: { snapshot: Snapshot }) {
         <TabsContent value="raporty">
           <Panel
             title="Raporty z biura"
-            description="Biuro generuje raport z harmonogramu, spisów i wyników; kierownik potwierdza odbiór."
+            description="Biuro generuje raport z harmonogramu, spisów i wyników; kierownik dostaje powiadomienie i otwiera raport."
           >
             <ReportsInbox snapshot={snapshot} />
           </Panel>

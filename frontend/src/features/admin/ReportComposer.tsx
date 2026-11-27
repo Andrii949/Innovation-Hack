@@ -14,7 +14,7 @@ import { formatDate } from "@/lib/format";
 import { can } from "@/lib/permissions";
 
 export function ReportComposer({ snapshot }: { snapshot: Snapshot }) {
-  const allowed = can(snapshot.session, "report:generate") && can(snapshot.session, "report:send");
+  const allowed = can(snapshot.session, "report:write");
   const [from, setFrom] = useState(`${snapshot.today.slice(0, 7)}-01`);
   const [to, setTo] = useState(snapshot.today);
   const [labId, setLabId] = useState("ALL");

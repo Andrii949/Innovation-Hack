@@ -121,20 +121,20 @@ function calibrationDueItem(db: MockDb, equipmentId: string): DueItem | null {
     return null;
   }
   const label = `${displayCodeOf(db, equipment.labId, equipment.number)} · ${equipment.name}`;
+  const base = {
+    kind: "CALIBRATION" as const,
+    refType: "equipment" as const,
+    refId: equipment.id,
+    labId: equipment.labId,
+    label,
+  };
   const calibration = latestCalibrationOf(db, equipment.id);
   if (!calibration) {
     return {
-      id: `CALIBRATION:${equipment.id}`,
-      kind: "CALIBRATION",
-      refType: "EQUIPMENT",
-      refId: equipment.id,
-      labId: equipment.labId,
-      labName: labNameOf(db, equipment.labId),
-      label,
-      equipmentId: equipment.id,
-      due: db.today,
-      alertFrom: db.today,
-      validUntil: db.today,
+      ...base,
+      due: null,
+      alertFrom: null,
+      validUntil: null,
       status: "NO_DATA",
     };
   }
@@ -145,14 +145,7 @@ function calibrationDueItem(db: MockDb, equipmentId: string): DueItem | null {
     db.today,
   );
   return {
-    id: `CALIBRATION:${equipment.id}`,
-    kind: "CALIBRATION",
-    refType: "EQUIPMENT",
-    refId: equipment.id,
-    labId: equipment.labId,
-    labName: labNameOf(db, equipment.labId),
-    label,
-    equipmentId: equipment.id,
+    ...base,
     due: window.due,
     alertFrom: window.alertFrom,
     validUntil: window.validUntil,
@@ -171,21 +164,18 @@ function checkDueItem(db: MockDb, planId: string): DueItem | null {
   }
   const record = latestCheckRecordOf(db, plan.id);
   const base = {
-    id: `CHECK:${plan.id}`,
     kind: "CHECK" as const,
-    refType: "CHECK_PLAN" as const,
+    refType: "check_plan" as const,
     refId: plan.id,
     labId: equipment.labId,
-    labName: labNameOf(db, equipment.labId),
     label: `${displayCodeOf(db, equipment.labId, equipment.number)} · ${plan.name}`,
-    equipmentId: equipment.id,
   };
   if (!record) {
     return {
       ...base,
-      due: db.today,
-      alertFrom: db.today,
-      validUntil: db.today,
+      due: null,
+      alertFrom: null,
+      validUntil: null,
       status: "NO_DATA",
     };
   }
@@ -276,14 +266,11 @@ function dueItemsForReagents(db: MockDb): DueItem[] {
     const stock = reagentStock(db, reagent.id);
     if (stock.low && stock.lastMovementOn !== null) {
       items.push({
-        id: `LOW_STOCK:${reagent.id}`,
         kind: "LOW_STOCK",
-        refType: "REAGENT",
+        refType: "reagent",
         refId: reagent.id,
         labId: reagent.labId,
-        labName: labNameOf(db, reagent.labId),
         label: `${reagent.name} · stan ${stock.stock} ${reagent.unit} / próg ${reagent.minStock}`,
-        equipmentId: null,
         due: stock.lastMovementOn,
         alertFrom: stock.lastMovementOn,
         validUntil: stock.lastMovementOn,
@@ -297,14 +284,11 @@ function dueItemsForReagents(db: MockDb): DueItem[] {
     );
     if (countWindow.status === "COUNT_DUE") {
       items.push({
-        id: `STOCK_COUNT:${reagent.id}`,
         kind: "STOCK_COUNT",
-        refType: "REAGENT",
+        refType: "reagent",
         refId: reagent.id,
         labId: reagent.labId,
-        labName: labNameOf(db, reagent.labId),
         label: `Spis stanu: ${reagent.name}`,
-        equipmentId: null,
         due: countWindow.due,
         alertFrom: countWindow.due,
         validUntil: countWindow.due,
@@ -327,14 +311,11 @@ function dueItemsForLots(db: MockDb): DueItem[] {
     }
     const window = expiryWindow(lot.expiryDate, reagent.expiryLeadMonths, db.today);
     items.push({
-      id: `LOT_EXPIRY:${lot.id}`,
       kind: "LOT_EXPIRY",
-      refType: "REAGENT_LOT",
+      refType: "reagent_lot",
       refId: lot.id,
       labId: reagent.labId,
-      labName: labNameOf(db, reagent.labId),
       label: `${reagent.name} · partia ${lot.lotNo}`,
-      equipmentId: null,
       due: window.due,
       alertFrom: window.alertFrom,
       validUntil: window.validUntil,
@@ -376,7 +357,9 @@ const STATUS_ORDER: Record<Status, number> = {
 export function sortDueItems(items: DueItem[]): DueItem[] {
   return items.toSorted((left, right) => {
     const byStatus = STATUS_ORDER[left.status] - STATUS_ORDER[right.status];
-    return byStatus !== 0 ? byStatus : left.validUntil.localeCompare(right.validUntil);
+    return byStatus !== 0
+      ? byStatus
+      : (left.validUntil ?? "").localeCompare(right.validUntil ?? "");
   });
 }
 
@@ -483,9 +466,6 @@ function buildReportViews(db: MockDb): ReportView[] {
     .map((report) => ({
       ...report,
       createdByName: db.users.find((user) => user.id === report.createdBy)?.fullName ?? "—",
-      acknowledgedByName:
-        db.users.find((user) => user.id === report.acknowledgedByUserId)?.fullName ?? null,
-      status: report.acknowledgedAt === null ? ("SENT" as const) : ("ACKNOWLEDGED" as const),
     }))
     .toSorted((left, right) => right.sentAt.localeCompare(left.sentAt));
 }

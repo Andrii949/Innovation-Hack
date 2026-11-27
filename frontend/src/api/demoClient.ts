@@ -15,7 +15,6 @@ import type {
 } from "@/api/types";
 
 import {
-  acknowledgeReport as mockAcknowledgeReport,
   addTestResult as mockAddTestResult,
   type CalibrationInput,
   type CheckInput,
@@ -96,10 +95,6 @@ export function recordStockCount(input: StockCountInput): ApiResult<StockCount> 
 
 export function addTestResult(input: TestResultInput): ApiResult<TestResult> {
   return commit(() => mockAddTestResult(db, input));
-}
-
-export function acknowledgeReport(reportId: string): ApiResult<Report> {
-  return commit(() => mockAcknowledgeReport(db, reportId));
 }
 
 export function generateReport(input: ReportInput): ApiResult<Report> {

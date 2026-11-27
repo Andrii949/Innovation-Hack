@@ -1,12 +1,6 @@
-import { cn } from "cn";
 import { FileText } from "lucide-react";
-import { useState } from "react";
 
-import { acknowledgeReport } from "@/api/demoClient";
 import type { Snapshot } from "@/api/types";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Empty,
   EmptyDescription,
@@ -15,7 +9,6 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { formatDate, formatDateTime } from "@/lib/format";
-import { can } from "@/lib/permissions";
 
 const SUMMARY_FIELDS = [
   ["equipment", "Urządzenia"],
@@ -30,14 +23,6 @@ const SUMMARY_FIELDS = [
 ] as const;
 
 export function ReportsInbox({ snapshot }: { snapshot: Snapshot }) {
-  const [error, setError] = useState<string | null>(null);
-  const canAcknowledge = can(snapshot.session, "report:acknowledge");
-
-  const acknowledge = (reportId: string): void => {
-    const response = acknowledgeReport(reportId);
-    setError(response.ok ? null : response.error.message);
-  };
-
   if (snapshot.reports.length === 0) {
     return (
       <Empty className="py-6">
@@ -54,21 +39,8 @@ export function ReportsInbox({ snapshot }: { snapshot: Snapshot }) {
 
   return (
     <div className="grid gap-3">
-      {error !== null && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
       {snapshot.reports.map((report) => (
-        <article
-          key={report.id}
-          className={cn(
-            "overflow-hidden rounded-xl border bg-card shadow-sm",
-            report.status === "SENT"
-              ? "border-l-2 border-l-amber-500"
-              : "border-l-2 border-l-chart-2",
-          )}
-        >
+        <article key={report.id} className="overflow-hidden rounded-xl border bg-card shadow-sm">
           <header className="flex flex-wrap items-start justify-between gap-3 border-b bg-muted/30 px-3 py-2.5">
             <div>
               <p className="font-mono text-[9px] tracking-[0.16em] text-muted-foreground uppercase">
@@ -80,16 +52,6 @@ export function ReportsInbox({ snapshot }: { snapshot: Snapshot }) {
                 {report.createdByName}
               </p>
             </div>
-            <Badge
-              variant="outline"
-              className={
-                report.status === "ACKNOWLEDGED"
-                  ? "border-emerald-600/25 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-                  : "border-amber-600/30 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
-              }
-            >
-              {report.status === "ACKNOWLEDGED" ? "Potwierdzony" : "Do potwierdzenia"}
-            </Badge>
           </header>
 
           <div className="p-3">
@@ -106,24 +68,9 @@ export function ReportsInbox({ snapshot }: { snapshot: Snapshot }) {
               ))}
             </dl>
 
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">
-                {report.acknowledgedAt === null
-                  ? "PDF (Typst) poza zakresem prototypu; dane i podsumowanie są pełne."
-                  : `Potwierdził ${report.acknowledgedByName ?? "—"} · ${formatDateTime(report.acknowledgedAt)}`}
-              </p>
-              {report.acknowledgedAt === null && canAcknowledge && (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => {
-                    acknowledge(report.id);
-                  }}
-                >
-                  Potwierdź odbiór
-                </Button>
-              )}
-            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              PDF (Typst) poza zakresem prototypu; dane i podsumowanie są pełne.
+            </p>
           </div>
         </article>
       ))}

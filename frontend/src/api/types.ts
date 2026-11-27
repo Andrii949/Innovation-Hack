@@ -26,21 +26,21 @@ export const DUE_KINDS = [
 
 export type DueKind = (typeof DUE_KINDS)[number];
 
-export type DueRefType = "EQUIPMENT" | "CHECK_PLAN" | "REAGENT_LOT" | "REAGENT";
+/** `ref_type` values as the API returns them (docs/02 §4.4). */
+export type DueRefType = "equipment" | "check_plan" | "reagent_lot" | "reagent";
 
 /** One row of the unified schedule (docs/02 §4.4). */
 export type DueItem = {
-  id: string;
   kind: DueKind;
   refType: DueRefType;
+  /** Demo ids are slugs; the API's `ref_id` is an integer, mapped at the client seam. */
   refId: string;
   labId: string;
-  labName: string;
   label: string;
-  equipmentId: string | null;
-  due: IsoDate;
-  alertFrom: IsoDate;
-  validUntil: IsoDate;
+  /** Null until data exists for the deadline (status `NO_DATA`), as the API returns it. */
+  due: IsoDate | null;
+  alertFrom: IsoDate | null;
+  validUntil: IsoDate | null;
   status: Status;
 };
 
@@ -60,9 +60,7 @@ export type Permission =
   | "users:write"
   | "audit:read"
   | "report:read"
-  | "report:generate"
-  | "report:send"
-  | "report:acknowledge";
+  | "report:write";
 
 export type Role = {
   code: string;
@@ -295,7 +293,7 @@ export type Notification = {
     | "STOCK_COUNT_DUE"
     | "CHECK_OUT_OF_RANGE"
     | "RESULT_OUT_OF_RANGE"
-    | "REPORT_SENT";
+    | "REPORT_READY";
   refType: string;
   refId: string;
   title: string;
@@ -306,8 +304,6 @@ export type Notification = {
   resolvedAt: IsoDateTime | null;
   createdAt: IsoDateTime;
 };
-
-export type ReportStatus = "SENT" | "ACKNOWLEDGED";
 
 export type ReportSummary = {
   equipment: number;
@@ -330,16 +326,12 @@ export type Report = {
   createdBy: string;
   createdAt: IsoDateTime;
   sentAt: IsoDateTime;
-  acknowledgedAt: IsoDateTime | null;
-  acknowledgedByUserId: string | null;
   summary: ReportSummary;
   notes: string;
 };
 
 export type ReportView = Report & {
   createdByName: string;
-  acknowledgedByName: string | null;
-  status: ReportStatus;
 };
 
 export type AuditAction = "create" | "update" | "delete" | "reject" | "login";
@@ -370,11 +362,14 @@ export type ErrorCode =
   | "DUPLICATE_LAB_CODE"
   | "USER_NOT_IN_LAB"
   | "INVALID_NUMBER"
-  | "INVALID_DATE"
   | "OUT_OF_RANGE"
-  | "RENDER_FAILED"
-  // Provisional until the backend publishes OpenAPI.
-  | "REQUIRED_FIELD";
+  | "VALIDATION_ERROR"
+  | "FILE_TOO_LARGE"
+  | "UNSUPPORTED_FILE_TYPE"
+  | "OCR_DISABLED"
+  | "OCR_FAILED"
+  | "OCR_TIMEOUT"
+  | "RENDER_FAILED";
 
 export type ApiError = {
   error: ErrorCode;

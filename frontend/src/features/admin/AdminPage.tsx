@@ -263,11 +263,18 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
             {view === "calendar" ? (
               <ScheduleCalendar
                 items={visible}
+                plans={snapshot.plans}
+                labs={snapshot.labs}
                 today={snapshot.today}
                 onSelectEquipment={selectEquipment}
               />
             ) : (
-              <ScheduleTable items={visible} onSelectEquipment={selectEquipment} />
+              <ScheduleTable
+                items={visible}
+                plans={snapshot.plans}
+                labs={snapshot.labs}
+                onSelectEquipment={selectEquipment}
+              />
             )}
           </Panel>
         </TabsContent>

@@ -20,6 +20,7 @@ import type {
   TestResult,
 } from "@/api/types";
 
+import { canReceiveReports } from "./access";
 import { buildReportSummary, computeDueItems } from "./compose";
 import type { MockDb, RoleRecord, UserRecord } from "./types";
 
@@ -45,7 +46,6 @@ const roles: RoleRecord[] = [
     "reagent:read",
     "result:read",
     "report:read",
-    "report:acknowledge",
   ]),
   role("ADMIN", "Specjalista (biuro)", [
     "equipment:read",
@@ -62,8 +62,7 @@ const roles: RoleRecord[] = [
     "users:write",
     "audit:read",
     "report:read",
-    "report:generate",
-    "report:send",
+    "report:write",
   ]),
   role("PRACOWNIK", "Pracownik pracowni", [
     "equipment:read",
@@ -1127,8 +1126,8 @@ const dueTitles: Record<DueKind, string> = {
 
 const alertStatuses = new Set<Status>(["DUE_SOON", "OVERDUE", "NO_DATA", "LOW", "COUNT_DUE"]);
 
-const plDate = (date: string): string =>
-  `${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)}`;
+const plDate = (date: string | null): string =>
+  date === null ? "brak terminu" : `${date.slice(8, 10)}.${date.slice(5, 7)}.${date.slice(0, 4)}`;
 
 function isAddressed(item: DueItem, permission: Permission[]): boolean {
   switch (item.kind) {
@@ -1218,14 +1217,14 @@ export function createDb(): MockDb {
       },
       {
         id: "audit-4",
-        at: "2026-11-05T08:20:00",
-        userId: "u-manager",
-        userName: "dr Anita Smolarek-Nowak",
-        action: "update",
+        at: "2026-11-25T15:10:00",
+        userId: "u-admin",
+        userName: "Marcin Lis",
+        action: "create",
         entity: "report",
-        entityId: "rep-2026-10",
-        before: '{"acknowledged_at":null}',
-        after: '{"acknowledged_at":"2026-11-05T08:20:00"}',
+        entityId: "rep-2026-11",
+        before: null,
+        after: '{"title":"Raport nadzoru — listopad 2026"}',
         reason: null,
       },
       {
@@ -1254,8 +1253,6 @@ export function createDb(): MockDb {
     createdBy: "u-admin",
     createdAt: "2026-11-25T15:10:00",
     sentAt: "2026-11-25T15:10:00",
-    acknowledgedAt: null,
-    acknowledgedByUserId: null,
     summary: buildReportSummary(db, "2026-11-01", "2026-11-27", allLabIds),
     notes: "Terminy, spisy stanu, wyniki w okresie oraz kolejka powtórzeń.",
   };
@@ -1268,8 +1265,6 @@ export function createDb(): MockDb {
     createdBy: "u-admin",
     createdAt: "2026-11-03T09:00:00",
     sentAt: "2026-11-03T09:00:00",
-    acknowledgedAt: "2026-11-05T08:20:00",
-    acknowledgedByUserId: "u-manager",
     summary: buildReportSummary(db, "2026-10-01", "2026-10-31", allLabIds),
     notes: "Raport miesięczny po przeglądzie kierownika.",
   };
@@ -1320,16 +1315,16 @@ export function createDb(): MockDb {
 
   for (const user of db.users) {
     const roleRow = db.roles.find((row) => row.code === user.roleCode);
-    if (!roleRow?.permissions.includes("report:acknowledge")) {
+    if (!roleRow || !canReceiveReports(roleRow.permissions)) {
       continue;
     }
     db.notifications.push({
       id: `n-${user.id}-report-rep-2026-11`,
       userId: user.id,
-      kind: "REPORT_SENT",
+      kind: "REPORT_READY",
       refType: "REPORT",
       refId: firstReport.id,
-      title: "Nowy raport do potwierdzenia",
+      title: "Nowy raport dla kierownika",
       body: `${firstReport.title} — wysłany przez ${db.users.find((row) => row.id === firstReport.createdBy)?.fullName ?? "administratora"}.`,
       due: null,
       dedupeKey: `report:${firstReport.id}`,

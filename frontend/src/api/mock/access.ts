@@ -27,3 +27,11 @@ export function activeUser(db: MockDb): UserRecord {
   }
   return user;
 }
+
+/**
+ * Report recipients are the readers: `report:read` without the office's `report:write` (docs 02
+ * §5).
+ */
+export function canReceiveReports(permissions: Permission[]): boolean {
+  return permissions.includes("report:read") && !permissions.includes("report:write");
+}

@@ -53,7 +53,7 @@ export function DueHorizon({ items, today }: { items: DueItem[]; today: string }
     const future = items.filter((item) => item.status !== "OVERDUE");
     return Array.from({ length: 6 }, (_, index) => {
       const month = shiftMonth(start, index);
-      const inMonth = future.filter((item) => item.validUntil.startsWith(month));
+      const inMonth = future.filter((item) => item.validUntil?.startsWith(month) === true);
       const bucketItems = index === 0 ? [...overdue, ...inMonth] : inMonth;
       return {
         month,

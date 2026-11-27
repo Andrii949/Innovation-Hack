@@ -8,7 +8,7 @@ import { can } from "@/lib/permissions";
 export type DemoView = "manager" | "office" | "lab";
 
 export function viewForSession(session: Session): DemoView {
-  if (can(session, "report:acknowledge")) {
+  if (can(session, "report:read") && !can(session, "report:write")) {
     return "manager";
   }
   if (can(session, "calibration:write")) {

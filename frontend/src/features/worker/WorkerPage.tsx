@@ -6,6 +6,7 @@ import { Metric, MetricStrip } from "@/components/MetricStrip";
 import { PageHeader, PageMeta } from "@/components/PageHeader";
 import { Panel } from "@/components/Panel";
 import { ResultsTable } from "@/features/results/ResultsTable";
+import { dueEquipmentId } from "@/lib/due";
 
 import { CheckEntryForm } from "./CheckEntryForm";
 import { MyTasks } from "./MyTasks";
@@ -52,14 +53,15 @@ export function WorkerPage({ snapshot }: { snapshot: Snapshot }) {
           return false;
         }
         if (item.kind === "CHECK") {
-          return item.equipmentId !== null && writableEquipment.has(item.equipmentId);
+          const planEquipmentId = dueEquipmentId(item, snapshot.plans);
+          return planEquipmentId !== null && writableEquipment.has(planEquipmentId);
         }
         if (item.kind === "STOCK_COUNT" || item.kind === "LOW_STOCK") {
           return writableReagents.has(item.refId);
         }
         return false;
       }),
-    [snapshot.schedule, writableEquipment, writableReagents],
+    [snapshot.schedule, snapshot.plans, writableEquipment, writableReagents],
   );
   const checkTasks = tasks.filter((task) => task.kind === "CHECK");
   const stockTasks = new Set(
@@ -126,6 +128,7 @@ export function WorkerPage({ snapshot }: { snapshot: Snapshot }) {
       >
         <MyTasks
           items={tasks}
+          plans={snapshot.plans}
           onCheck={(selectedId) => {
             setEquipmentId(selectedId);
             reveal("check-entry");

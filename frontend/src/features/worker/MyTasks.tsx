@@ -1,7 +1,7 @@
 import { cn } from "cn";
 import { CircleCheck } from "lucide-react";
 
-import type { DueItem } from "@/api/types";
+import type { CheckPlan, DueItem } from "@/api/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,7 @@ import {
   ItemGroup,
   ItemTitle,
 } from "@/components/ui/item";
+import { dueEquipmentId, dueKey } from "@/lib/due";
 import { formatDue } from "@/lib/format";
 import { dueKindLabel, type StatusColor, statusColor } from "@/lib/status";
 
@@ -31,10 +32,12 @@ const ACCENT: Record<StatusColor, string> = {
 
 export function MyTasks({
   items,
+  plans,
   onCheck,
   onStock,
 }: {
   items: DueItem[];
+  plans: CheckPlan[];
   onCheck: (equipmentId: string) => void;
   onStock: (reagentId: string) => void;
 }) {
@@ -56,54 +59,57 @@ export function MyTasks({
 
   return (
     <ItemGroup className="gap-0 divide-y">
-      {items.map((item) => (
-        <Item
-          key={item.id}
-          size="sm"
-          className="relative flex-col items-stretch gap-2 py-3 pl-4 sm:flex-row sm:items-center"
-        >
-          <span
-            className={cn(
-              "absolute inset-y-2 left-0 w-0.5 rounded-full",
-              ACCENT[statusColor(item.status)],
-            )}
-            aria-hidden
-          />
-          <ItemContent className="min-w-0">
-            <ItemTitle className="text-wrap">{item.label}</ItemTitle>
-            <ItemDescription>
-              {formatDue(item)} · {dueKindLabel(item.kind)}
-            </ItemDescription>
-          </ItemContent>
-          <ItemActions className="w-full justify-between sm:w-auto sm:justify-end">
-            <StatusBadge status={item.status} />
-            {item.kind === "CHECK" && item.equipmentId !== null && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  onCheck(item.equipmentId ?? "");
-                }}
-              >
-                Wpisz sprawdzenie
-              </Button>
-            )}
-            {(item.kind === "STOCK_COUNT" || item.kind === "LOW_STOCK") && (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  onStock(item.refId);
-                }}
-              >
-                Wpisz spis
-              </Button>
-            )}
-          </ItemActions>
-        </Item>
-      ))}
+      {items.map((item) => {
+        const equipmentId = item.kind === "CHECK" ? dueEquipmentId(item, plans) : null;
+        return (
+          <Item
+            key={dueKey(item)}
+            size="sm"
+            className="relative flex-col items-stretch gap-2 py-3 pl-4 sm:flex-row sm:items-center"
+          >
+            <span
+              className={cn(
+                "absolute inset-y-2 left-0 w-0.5 rounded-full",
+                ACCENT[statusColor(item.status)],
+              )}
+              aria-hidden
+            />
+            <ItemContent className="min-w-0">
+              <ItemTitle className="text-wrap">{item.label}</ItemTitle>
+              <ItemDescription>
+                {formatDue(item)} · {dueKindLabel(item.kind)}
+              </ItemDescription>
+            </ItemContent>
+            <ItemActions className="w-full justify-between sm:w-auto sm:justify-end">
+              <StatusBadge status={item.status} />
+              {equipmentId !== null && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    onCheck(equipmentId);
+                  }}
+                >
+                  Wpisz sprawdzenie
+                </Button>
+              )}
+              {(item.kind === "STOCK_COUNT" || item.kind === "LOW_STOCK") && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    onStock(item.refId);
+                  }}
+                >
+                  Wpisz spis
+                </Button>
+              )}
+            </ItemActions>
+          </Item>
+        );
+      })}
     </ItemGroup>
   );
 }

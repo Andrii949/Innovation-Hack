@@ -18,7 +18,13 @@ import type {
   TestResult,
 } from "@/api/types";
 
-import { activeUser, userHasPermission, userLabIds } from "./access";
+import {
+  activeUser,
+  canReceiveReports,
+  userHasPermission,
+  userLabIds,
+  userPermissions,
+} from "./access";
 import { buildReportSummary, reagentStock } from "./compose";
 import { addMonths, isIsoDate, parseMonth } from "./dates";
 import { compareDecimals, isInRange, normalizeDecimal } from "./decimal";
@@ -169,13 +175,13 @@ export function recordCalibration(db: MockDb, input: CalibrationInput): ApiResul
     return failure("LAB_OUT_OF_SCOPE", "Pracownia spoza zakresu użytkownika.");
   }
   if (parseMonth(input.calibratedMonth) === null) {
-    return failure("INVALID_DATE", "Miesiąc wzorcowania musi mieć format RRRR-MM.");
+    return failure("VALIDATION_ERROR", "Miesiąc wzorcowania musi mieć format RRRR-MM.");
   }
   if (input.certificateNo.trim() === "") {
-    return failure("REQUIRED_FIELD", "Podaj numer świadectwa.");
+    return failure("VALIDATION_ERROR", "Podaj numer świadectwa.");
   }
   if (input.result !== "OK" && input.result !== "NOK") {
-    return failure("REQUIRED_FIELD", "Zaznacz wynik wzorcowania: OK albo NIE OK.");
+    return failure("VALIDATION_ERROR", "Zaznacz wynik wzorcowania: OK albo NIE OK.");
   }
   for (const point of input.points) {
     if (normalizeDecimal(point.error) === null || normalizeDecimal(point.uncertainty) === null) {
@@ -257,7 +263,7 @@ export function recordCheck(db: MockDb, input: CheckInput): ApiResult<CheckRecor
   for (const field of template.fields) {
     const raw = input.values[field.key] ?? "";
     if (field.required && raw.trim() === "") {
-      return failure("REQUIRED_FIELD", `Uzupełnij pole: ${field.label}.`);
+      return failure("VALIDATION_ERROR", `Uzupełnij pole: ${field.label}.`);
     }
     if (field.type === "number" && raw.trim() !== "") {
       const normalized = normalizeDecimal(raw);
@@ -272,7 +278,7 @@ export function recordCheck(db: MockDb, input: CheckInput): ApiResult<CheckRecor
     }
     if (field.type === "date" && raw.trim() !== "") {
       if (!isIsoDate(raw)) {
-        return failure("INVALID_DATE", `Pole „${field.label}” nie jest poprawną datą.`);
+        return failure("VALIDATION_ERROR", `Pole „${field.label}” nie jest poprawną datą.`);
       }
     }
     values[field.key] = raw;
@@ -398,7 +404,7 @@ export function addTestResult(db: MockDb, input: TestResultInput): ApiResult<Tes
     return failure("NOT_FOUND", "Nie znaleziono parametru badania.");
   }
   if (input.sampleLabel.trim() === "") {
-    return failure("REQUIRED_FIELD", "Podaj oznaczenie próbki.");
+    return failure("VALIDATION_ERROR", "Podaj oznaczenie próbki.");
   }
   const value = normalizeDecimal(input.value);
   if (value === null) {
@@ -465,8 +471,7 @@ export function addTestResult(db: MockDb, input: TestResultInput): ApiResult<Tes
       if (
         reader.active &&
         userHasPermission(db, reader, "result:read") &&
-        (userHasPermission(db, reader, "equipment:write") ||
-          userHasPermission(db, reader, "report:acknowledge"))
+        userHasPermission(db, reader, "equipment:write")
       ) {
         notify(db, reader.id, payload);
       }
@@ -475,52 +480,23 @@ export function addTestResult(db: MockDb, input: TestResultInput): ApiResult<Tes
   return success(result);
 }
 
-export function acknowledgeReport(db: MockDb, reportId: string): ApiResult<Report> {
-  const user = activeUser(db);
-  if (!userHasPermission(db, user, "report:acknowledge")) {
-    return failure("FORBIDDEN", "Brak uprawnień do potwierdzania raportów.");
-  }
-  const report = db.reports.find((candidate) => candidate.id === reportId);
-  if (!report) {
-    return failure("NOT_FOUND", "Nie znaleziono raportu.");
-  }
-  if (report.acknowledgedAt === null) {
-    report.acknowledgedAt = afterNow();
-    report.acknowledgedByUserId = user.id;
-    resolveNotifications(
-      db,
-      (notification) => notification.kind === "REPORT_SENT" && notification.refId === report.id,
-    );
-    appendAudit(db, {
-      action: "update",
-      entity: "report",
-      entityId: report.id,
-      before: '{"acknowledged_at":null}',
-      after: JSON.stringify({ acknowledged_at: report.acknowledgedAt }),
-    });
-  }
-  return success(report);
-}
-
 export function generateReport(db: MockDb, input: ReportInput): ApiResult<Report> {
   const user = activeUser(db);
-  for (const permission of ["report:generate", "report:send"] as const) {
-    if (!userHasPermission(db, user, permission)) {
-      return failure("FORBIDDEN", "Brak uprawnień do generowania i wysyłki raportu.");
-    }
+  if (!userHasPermission(db, user, "report:write")) {
+    return failure("FORBIDDEN", "Brak uprawnień do generowania i wysyłki raportu.");
   }
   if (
     !isIsoDate(input.periodFrom) ||
     !isIsoDate(input.periodTo) ||
     input.periodFrom > input.periodTo
   ) {
-    return failure("INVALID_DATE", "Zakres dat jest niepoprawny.");
+    return failure("VALIDATION_ERROR", "Zakres dat jest niepoprawny.");
   }
   const uniqueLabs = [...new Set(input.labIds)].filter((labId) =>
     userLabIds(db, user).includes(labId),
   );
   if (uniqueLabs.length === 0) {
-    return failure("REQUIRED_FIELD", "Wybierz pracownię objętą raportem.");
+    return failure("VALIDATION_ERROR", "Wybierz pracownię objętą raportem.");
   }
 
   const periodLabel = `${input.periodFrom.slice(8, 10)}.${input.periodFrom.slice(5, 7)}–${input.periodTo.slice(8, 10)}.${input.periodTo.slice(5, 7)}.${input.periodTo.slice(0, 4)}`;
@@ -533,8 +509,6 @@ export function generateReport(db: MockDb, input: ReportInput): ApiResult<Report
     createdBy: user.id,
     createdAt: afterNow(),
     sentAt: afterNow(),
-    acknowledgedAt: null,
-    acknowledgedByUserId: null,
     summary: buildReportSummary(db, input.periodFrom, input.periodTo, uniqueLabs),
     notes: "Raport wygenerowany z bieżącego harmonogramu, spisów i wyników.",
   };
@@ -547,13 +521,13 @@ export function generateReport(db: MockDb, input: ReportInput): ApiResult<Report
     after: JSON.stringify({ title: report.title, labs: uniqueLabs }),
   });
 
-  for (const manager of db.users) {
-    if (manager.active && userHasPermission(db, manager, "report:acknowledge")) {
-      notify(db, manager.id, {
-        kind: "REPORT_SENT",
+  for (const reader of db.users) {
+    if (reader.active && canReceiveReports(userPermissions(db, reader))) {
+      notify(db, reader.id, {
+        kind: "REPORT_READY",
         refType: "REPORT",
         refId: report.id,
-        title: "Nowy raport do potwierdzenia",
+        title: "Nowy raport dla kierownika",
         body: `${report.title} — wysłany przez ${user.fullName}.`,
         due: null,
         dedupeKey: `report:${report.id}`,

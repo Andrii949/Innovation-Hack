@@ -1,4 +1,4 @@
-import type { DueItem } from "@/api/types";
+import type { CheckPlan, DueItem, Lab } from "@/api/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,14 +9,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { dueEquipmentId, dueKey, dueLabName } from "@/lib/due";
 import { formatDue } from "@/lib/format";
 import { dueKindLabel } from "@/lib/status";
 
 export function ScheduleTable({
   items,
+  plans,
+  labs,
   onSelectEquipment,
 }: {
   items: DueItem[];
+  plans: CheckPlan[];
+  labs: Lab[];
   onSelectEquipment: (equipmentId: string) => void;
 }) {
   return (
@@ -38,31 +43,36 @@ export function ScheduleTable({
             </TableCell>
           </TableRow>
         )}
-        {items.map((item) => (
-          <TableRow key={item.id}>
-            <TableCell className="whitespace-nowrap tabular-nums">{formatDue(item)}</TableCell>
-            <TableCell className="max-w-[24rem] text-wrap">
-              {item.equipmentId !== null ? (
-                <Button
-                  type="button"
-                  variant="link"
-                  size="sm"
-                  className="h-auto justify-start p-0 text-left whitespace-normal"
-                  onClick={() => onSelectEquipment(item.equipmentId ?? "")}
-                >
-                  {item.label}
-                </Button>
-              ) : (
-                item.label
-              )}
-            </TableCell>
-            <TableCell className="whitespace-nowrap">{item.labName}</TableCell>
-            <TableCell className="whitespace-nowrap">{dueKindLabel(item.kind)}</TableCell>
-            <TableCell>
-              <StatusBadge status={item.status} />
-            </TableCell>
-          </TableRow>
-        ))}
+        {items.map((item) => {
+          const equipmentId = dueEquipmentId(item, plans);
+          return (
+            <TableRow key={dueKey(item)}>
+              <TableCell className="whitespace-nowrap tabular-nums">{formatDue(item)}</TableCell>
+              <TableCell className="max-w-[24rem] text-wrap">
+                {equipmentId !== null ? (
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="h-auto justify-start p-0 text-left whitespace-normal"
+                    onClick={() => {
+                      onSelectEquipment(equipmentId);
+                    }}
+                  >
+                    {item.label}
+                  </Button>
+                ) : (
+                  item.label
+                )}
+              </TableCell>
+              <TableCell className="whitespace-nowrap">{dueLabName(item, labs)}</TableCell>
+              <TableCell className="whitespace-nowrap">{dueKindLabel(item.kind)}</TableCell>
+              <TableCell>
+                <StatusBadge status={item.status} />
+              </TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );

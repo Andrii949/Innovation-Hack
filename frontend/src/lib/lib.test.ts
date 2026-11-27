@@ -32,20 +32,30 @@ describe("presentation helpers", () => {
     expect(formatDate("2026-11-27")).toBe("27.11.2026");
     expect(
       formatDue({
-        id: "1",
         kind: "CALIBRATION",
-        refType: "EQUIPMENT",
+        refType: "equipment",
         refId: "eq",
         labId: "lab",
-        labName: "Pracownia",
         label: "Waga",
-        equipmentId: "eq",
         due: "2027-03-01",
         alertFrom: "2027-02-01",
         validUntil: "2027-03-31",
         status: "OK",
       }),
     ).toBe("03/2027");
+    expect(
+      formatDue({
+        kind: "CALIBRATION",
+        refType: "equipment",
+        refId: "eq",
+        labId: "lab",
+        label: "Waga",
+        due: null,
+        alertFrom: null,
+        validUntil: null,
+        status: "NO_DATA",
+      }),
+    ).toBe("brak terminu");
   });
 
   it("checks only the capabilities the API issued", () => {

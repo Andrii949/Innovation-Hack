@@ -24,6 +24,9 @@ export function formatRange(min: string | null, max: string | null, unit: string
 }
 
 export function formatDue(item: DueItem): string {
+  if (item.validUntil === null) {
+    return "brak terminu";
+  }
   if (item.kind === "CALIBRATION" || item.kind === "CHECK") {
     return formatMonth(item.validUntil.slice(0, 7));
   }

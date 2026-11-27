@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import type { DueItem, Status } from "@/api/types";
+import type { CheckPlan, DueItem, Lab, Status } from "@/api/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +27,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { dayLabel, monthGrid, monthLabel, shiftMonth, WEEKDAY_LABELS } from "@/lib/calendar";
+import { dueEquipmentId, dueKey, dueLabName } from "@/lib/due";
 import { formatDate } from "@/lib/format";
 import { dueKindLabel, statusBadgeClass, statusDotClass } from "@/lib/status";
 
@@ -45,24 +46,31 @@ function sortItems(items: DueItem[]): DueItem[] {
   return items.toSorted(
     (left, right) =>
       STATUS_RANK[left.status] - STATUS_RANK[right.status] ||
-      left.validUntil.localeCompare(right.validUntil),
+      (left.validUntil ?? "").localeCompare(right.validUntil ?? ""),
   );
 }
 
 function firstDateWithItems(items: DueItem[], month: string, fallback: string): string {
   const dates = items
-    .filter((item) => item.status !== "NO_DATA" && item.validUntil.startsWith(month))
+    .filter(
+      (item): item is DueItem & { validUntil: string } =>
+        item.validUntil?.startsWith(month) === true,
+    )
     .map((item) => item.validUntil)
-    .toSorted();
+    .toSorted((left, right) => left.localeCompare(right));
   return dates[0] ?? fallback;
 }
 
 export function ScheduleCalendar({
   items,
+  plans,
+  labs,
   today,
   onSelectEquipment,
 }: {
   items: DueItem[];
+  plans: CheckPlan[];
+  labs: Lab[];
   today: string;
   onSelectEquipment: (equipmentId: string) => void;
 }) {
@@ -74,6 +82,9 @@ export function ScheduleCalendar({
   const itemsByDate = useMemo(() => {
     const map = new Map<string, DueItem[]>();
     for (const item of sortItems(items)) {
+      if (item.validUntil === null) {
+        continue;
+      }
       const bucket = map.get(item.validUntil) ?? [];
       bucket.push(item);
       map.set(item.validUntil, bucket);
@@ -86,7 +97,7 @@ export function ScheduleCalendar({
     [items],
   );
   const monthItems = useMemo(
-    () => items.filter((item) => item.validUntil.startsWith(month)),
+    () => items.filter((item) => item.validUntil?.startsWith(month) === true),
     [items, month],
   );
   const cells = useMemo(() => monthGrid(month), [month]);
@@ -104,8 +115,9 @@ export function ScheduleCalendar({
   };
 
   const jumpTo = (item: DueItem): void => {
-    setMonth(item.validUntil.slice(0, 7));
-    setSelectedDate(item.validUntil);
+    const target = item.validUntil ?? today;
+    setMonth(target.slice(0, 7));
+    setSelectedDate(target);
   };
 
   return (
@@ -123,7 +135,7 @@ export function ScheduleCalendar({
             <div className="mt-1.5 flex flex-wrap gap-1">
               {backlog.slice(0, 4).map((item) => (
                 <button
-                  key={item.id}
+                  key={dueKey(item)}
                   type="button"
                   className={cn(
                     "max-w-60 truncate rounded-md border px-1.5 py-0.5 text-[10px]",
@@ -234,7 +246,7 @@ export function ScheduleCalendar({
                 <div className="mt-1 hidden flex-col gap-0.5 sm:flex">
                   {(itemsByDate.get(cell.date) ?? []).slice(0, 2).map((item) => (
                     <span
-                      key={item.id}
+                      key={dueKey(item)}
                       className={cn(
                         "truncate rounded border px-1 py-0.5 text-[9px] leading-tight",
                         statusBadgeClass(item.status),
@@ -253,7 +265,7 @@ export function ScheduleCalendar({
                 <div className="mt-1 flex flex-wrap items-center gap-0.5 sm:hidden">
                   {(itemsByDate.get(cell.date) ?? []).slice(0, 3).map((item) => (
                     <span
-                      key={item.id}
+                      key={dueKey(item)}
                       className={cn("size-1.5 rounded-full", statusDotClass(item.status))}
                     />
                   ))}
@@ -288,31 +300,34 @@ export function ScheduleCalendar({
           </Empty>
         ) : (
           <ItemGroup className="gap-0 divide-y">
-            {selectedItems.map((item) => (
-              <Item key={item.id} size="xs" className="flex-col items-stretch gap-2 py-2.5">
-                <ItemContent className="min-w-0">
-                  <ItemTitle className="text-wrap text-[13px]">{item.label}</ItemTitle>
-                  <ItemDescription>
-                    {dueKindLabel(item.kind)} · {item.labName}
-                  </ItemDescription>
-                </ItemContent>
-                <ItemActions className="w-full justify-between">
-                  <StatusBadge status={item.status} />
-                  {item.equipmentId !== null && (
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      onClick={() => {
-                        onSelectEquipment(item.equipmentId ?? "");
-                      }}
-                    >
-                      Karta
-                    </Button>
-                  )}
-                </ItemActions>
-              </Item>
-            ))}
+            {selectedItems.map((item) => {
+              const equipmentId = dueEquipmentId(item, plans);
+              return (
+                <Item key={dueKey(item)} size="xs" className="flex-col items-stretch gap-2 py-2.5">
+                  <ItemContent className="min-w-0">
+                    <ItemTitle className="text-wrap text-[13px]">{item.label}</ItemTitle>
+                    <ItemDescription>
+                      {dueKindLabel(item.kind)} · {dueLabName(item, labs)}
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemActions className="w-full justify-between">
+                    <StatusBadge status={item.status} />
+                    {equipmentId !== null && (
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        onClick={() => {
+                          onSelectEquipment(equipmentId);
+                        }}
+                      >
+                        Karta
+                      </Button>
+                    )}
+                  </ItemActions>
+                </Item>
+              );
+            })}
           </ItemGroup>
         )}
         <div className="flex items-center gap-1.5 border-t bg-muted/20 px-3 py-2 text-[10px] text-muted-foreground">
