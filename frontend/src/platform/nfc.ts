@@ -1,6 +1,6 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 
-import { parseEquipmentUrl } from "@/lib/qr";
+import { equipmentUrl, isValidPublicId, parseEquipmentUrl } from "@/lib/qr";
 
 export const NDEF_URI_PREFIXES: readonly string[] = [
   "",
@@ -50,11 +50,24 @@ export type NdefRecordLike = {
   url?: string;
 };
 
+export type EncodedNdefUriRecord = {
+  tnf: 1;
+  type: number[];
+  payload: number[];
+};
+
 export type NfcReadResult =
   | { kind: "equipment"; publicId: string; rawUrl: string }
   | { kind: "invalid_tag"; message: string }
   | { kind: "cancelled" }
   | { kind: "unavailable" };
+
+export type NfcWriteResult =
+  | { kind: "written"; url: string }
+  | { kind: "invalid_id" }
+  | { kind: "cancelled" }
+  | { kind: "unavailable" }
+  | { kind: "error"; message: string };
 
 type CapacitorNfcEvent = {
   message?: {
@@ -69,10 +82,15 @@ type CapacitorNfcPluginShape = {
     eventName: "nfcTagScanned",
     listener: (event: CapacitorNfcEvent) => void,
   ) => Promise<{ remove: () => Promise<void> }>;
+  write?: (options: { records: readonly EncodedNdefUriRecord[] }) => Promise<void>;
 };
 
 type WebNdefReaderInstance = {
   scan: (options?: { signal?: AbortSignal }) => Promise<void>;
+  write?: (
+    message: { records: ReadonlyArray<{ recordType: "url"; data: string }> },
+    options?: { signal?: AbortSignal },
+  ) => Promise<void>;
   addEventListener: (
     type: string,
     listener: (event: unknown) => void,
@@ -322,6 +340,31 @@ function readViaWebNfc(
   });
 }
 
+export function encodeNdefUriRecord(uri: string): EncodedNdefUriRecord {
+  const trimmed = uri.trim();
+  let bestIndex = 0;
+  let bestPrefix = "";
+
+  for (let i = 1; i < NDEF_URI_PREFIXES.length; i += 1) {
+    const candidate = NDEF_URI_PREFIXES[i];
+    if (
+      candidate !== undefined &&
+      trimmed.startsWith(candidate) &&
+      candidate.length > bestPrefix.length
+    ) {
+      bestIndex = i;
+      bestPrefix = candidate;
+    }
+  }
+
+  const suffixBytes = new TextEncoder().encode(trimmed.slice(bestPrefix.length));
+  return {
+    tnf: 1,
+    type: [0x55],
+    payload: [bestIndex, ...Array.from(suffixBytes)],
+  };
+}
+
 export function readEquipmentNfcTag(signal?: AbortSignal): Promise<NfcReadResult> {
   if (Capacitor.isPluginAvailable("CapacitorNfc")) {
     return readViaCapacitorNfc(signal);
@@ -331,4 +374,66 @@ export function readEquipmentNfcTag(signal?: AbortSignal): Promise<NfcReadResult
     return readViaWebNfc(WebNdef, signal);
   }
   return Promise.resolve({ kind: "unavailable" });
+}
+
+export async function writeEquipmentNfcTag(
+  baseUrl: string,
+  publicId: string,
+  options?: {
+    signal?: AbortSignal;
+    writerOverride?: (
+      url: string,
+      record: EncodedNdefUriRecord,
+      signal?: AbortSignal,
+    ) => Promise<void>;
+  },
+): Promise<NfcWriteResult> {
+  if (!isValidPublicId(publicId)) {
+    return { kind: "invalid_id" };
+  }
+
+  const url = equipmentUrl(baseUrl, publicId);
+  if (parseEquipmentUrl(url) !== publicId) {
+    return { kind: "invalid_id" };
+  }
+
+  if (options?.signal?.aborted) {
+    return { kind: "cancelled" };
+  }
+
+  const record = encodeNdefUriRecord(url);
+
+  try {
+    if (options?.writerOverride !== undefined) {
+      await options.writerOverride(url, record, options.signal);
+      return { kind: "written", url };
+    }
+
+    if (
+      Capacitor.isPluginAvailable("CapacitorNfc") &&
+      typeof CapacitorNfcPlugin.write === "function"
+    ) {
+      await CapacitorNfcPlugin.write({ records: [record] });
+      return { kind: "written", url };
+    }
+
+    const WebNdef = getWebNdefConstructor();
+    if (WebNdef !== null) {
+      const reader = new WebNdef();
+      if (typeof reader.write === "function") {
+        await reader.write(
+          { records: [{ recordType: "url", data: url }] },
+          options?.signal !== undefined ? { signal: options.signal } : undefined,
+        );
+        return { kind: "written", url };
+      }
+    }
+
+    return { kind: "unavailable" };
+  } catch {
+    if (options?.signal?.aborted) {
+      return { kind: "cancelled" };
+    }
+    return { kind: "error", message: "Nie udało się zapisać tagu NFC" };
+  }
 }

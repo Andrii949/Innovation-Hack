@@ -1,13 +1,20 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 
 import { parseEquipmentUrl } from "@/lib/qr";
-import { isNfcAvailable, readEquipmentNfcTag } from "@/platform/nfc";
+import { isNfcAvailable, type NfcReadResult, readEquipmentNfcTag } from "@/platform/nfc";
 
 export type ScanOutcome =
   | { status: "ok"; publicId: string; source: "nfc" | "qr" }
   | { status: "invalid_code"; message: string }
   | { status: "cancelled" }
   | { status: "unavailable"; message: string };
+
+export type ScanBridges = {
+  nfcAvailable?: boolean;
+  readNfc?: (signal?: AbortSignal) => Promise<NfcReadResult>;
+  canQr?: boolean;
+  readQr?: () => Promise<string | null>;
+};
 
 type BarcodeScannerPluginShape = {
   scanBarcode: (options: { hint: number }) => Promise<{ ScanResult?: string }>;
@@ -45,12 +52,19 @@ export async function scanRawQrCode(): Promise<string | null> {
   }
 }
 
-export async function scanEquipment(options?: {
-  preferNfc?: boolean;
-  signal?: AbortSignal;
-}): Promise<ScanOutcome> {
-  if (options?.preferNfc === true && isNfcAvailable()) {
-    const nfcResult = await readEquipmentNfcTag(options.signal);
+export async function scanEquipment(
+  options?: {
+    preferNfc?: boolean;
+    signal?: AbortSignal;
+  },
+  bridges?: ScanBridges,
+): Promise<ScanOutcome> {
+  const preferNfc = options?.preferNfc ?? true;
+  const nfcAvailable = bridges?.nfcAvailable ?? isNfcAvailable();
+  const readNfc = bridges?.readNfc ?? readEquipmentNfcTag;
+
+  if (preferNfc && nfcAvailable) {
+    const nfcResult = await readNfc(options?.signal);
     switch (nfcResult.kind) {
       case "equipment":
         return { status: "ok", publicId: nfcResult.publicId, source: "nfc" };
@@ -63,14 +77,16 @@ export async function scanEquipment(options?: {
     }
   }
 
-  if (!canScanQr()) {
+  const qrAvailable = bridges?.canQr ?? canScanQr();
+  if (!qrAvailable) {
     return {
       status: "unavailable",
       message: "Skaner kodów QR wymaga aplikacji mobilnej.",
     };
   }
 
-  const raw = await scanRawQrCode();
+  const readQr = bridges?.readQr ?? scanRawQrCode;
+  const raw = await readQr();
   if (raw === null) {
     return { status: "cancelled" };
   }
