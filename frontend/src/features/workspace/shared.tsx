@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { type FormEvent, type ReactNode, useEffect, useId, useState } from "react";
 import { toast } from "sonner";
 
@@ -330,11 +331,15 @@ export function Rows({
   renderAction?: (row: ApiRecord) => ReactNode;
 }) {
   if (rows.length === 0) {
-    return <p className="px-4 py-6 text-sm text-muted-foreground">Brak pozycji.</p>;
+    return (
+      <p className="rounded-md border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+        Brak pozycji.
+      </p>
+    );
   }
   return (
-    <Table>
-      <TableHeader>
+    <Table className="max-sm:block">
+      <TableHeader className="max-sm:hidden">
         <TableRow>
           {columns.map(([key, title]) => (
             <TableHead key={key}>{title}</TableHead>
@@ -342,16 +347,24 @@ export function Rows({
           {renderAction && <TableHead>Akcje</TableHead>}
         </TableRow>
       </TableHeader>
-      <TableBody>
+      <TableBody className="max-sm:grid max-sm:gap-2">
         {rows.map((row, index) => (
-          <TableRow key={textValue(row.id ?? row.key, String(index))}>
-            {columns.map(([key, , display]) => (
-              <TableCell key={key} className="max-w-[35rem] whitespace-normal">
+          <TableRow key={textValue(row.id ?? row.key, String(index))} className={recordRow}>
+            {columns.map(([key, title, display], column) => (
+              <TableCell
+                key={key}
+                data-label={title}
+                className={cn(
+                  "max-w-[35rem] whitespace-normal",
+                  recordField,
+                  column === 0 && recordTitle,
+                )}
+              >
                 {display ? display(row[key]) : textValue(row[key])}
               </TableCell>
             ))}
             {renderAction && (
-              <TableCell>
+              <TableCell className="max-sm:mt-1.5 max-sm:p-0">
                 <div className="flex flex-wrap gap-1.5">{renderAction(row)}</div>
               </TableCell>
             )}
@@ -361,6 +374,15 @@ export function Rows({
     </Table>
   );
 }
+
+// Below the sm breakpoint every row becomes a record card: the first column is its title, the
+// others are "label: value" lines taken from data-label, so no column is cut off on a phone.
+const recordRow =
+  "max-sm:grid max-sm:gap-1 max-sm:rounded-md max-sm:border-0 max-sm:bg-card max-sm:p-3 max-sm:ring-1 max-sm:ring-border max-sm:ring-inset max-sm:even:bg-card";
+const recordField =
+  "max-sm:flex max-sm:items-baseline max-sm:justify-between max-sm:gap-4 max-sm:p-0 max-sm:text-right max-sm:before:shrink-0 max-sm:before:text-left max-sm:before:text-xs max-sm:before:text-muted-foreground max-sm:before:content-[attr(data-label)]";
+const recordTitle =
+  "max-sm:mb-1 max-sm:justify-start max-sm:text-left max-sm:text-[15px] max-sm:font-semibold max-sm:text-brand-navy-ink max-sm:before:hidden";
 
 export function choice(...choices: [string, string][]): Option[] {
   return choices.map(([value, label]) => ({ value, label }));

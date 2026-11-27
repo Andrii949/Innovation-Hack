@@ -11,6 +11,7 @@ import {
 } from "@/api/workspaceClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { scheduleDue } from "@/lib/overview";
 import { enablePushNotifications } from "@/platform/push";
 import { isNativeApp } from "@/platform/server";
 
@@ -51,10 +52,23 @@ export function Schedule({ token }: WorkspaceProps) {
   }
   const labs = useApi<ApiRecord[]>("/labs", token);
   const state = useApi<ApiRecord[]>(`/schedule?${query}`, token);
+  const rows = useMemo(
+    () =>
+      state?.data?.map((row) => ({
+        label: row.label,
+        kind: row.kind,
+        due: scheduleDue({
+          kind: textValue(row.kind),
+          due: typeof row.due === "string" ? row.due : null,
+        }),
+        status: row.status,
+      })),
+    [state],
+  );
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Harmonogram</CardTitle>
+        <CardTitle>Terminy pracowni</CardTitle>
         <CardDescription>Najbliższe terminy i zadania pracowni.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -98,11 +112,7 @@ export function Schedule({ token }: WorkspaceProps) {
             Pokaż aktualne
           </label>
         </div>
-        {state?.data ? (
-          <Rows rows={state.data} columns={scheduleColumns} />
-        ) : (
-          <Loading state={state} />
-        )}
+        {rows ? <Rows rows={rows} columns={scheduleColumns} /> : <Loading state={state} />}
       </CardContent>
     </Card>
   );
@@ -181,7 +191,7 @@ export function Reagents({ token, permissions }: WorkspaceProps) {
       <Card>
         <CardHeader className="gap-3 sm:flex sm:items-center sm:justify-between">
           <div>
-            <CardTitle>Odczynniki i CRM</CardTitle>
+            <CardTitle>Zapasy i partie</CardTitle>
             <CardDescription>
               CRM to certyfikowany materiał odniesienia. Tu sprawdzisz zapasy i ważność partii.
             </CardDescription>
@@ -306,7 +316,7 @@ export function Notifications({ token, after }: WorkspaceProps & { after: () => 
     <Card>
       <CardHeader className="gap-3 sm:flex sm:items-center sm:justify-between">
         <div>
-          <CardTitle>Powiadomienia</CardTitle>
+          <CardTitle>Twoje powiadomienia</CardTitle>
           <CardDescription>Terminy, przekroczenia i gotowe raporty.</CardDescription>
         </div>
         {isNativeApp() && (
@@ -388,7 +398,7 @@ export function CalibrationPlans({ token, permissions }: WorkspaceProps) {
     <Card>
       <CardHeader className="gap-3 sm:flex sm:items-center sm:justify-between">
         <div>
-          <CardTitle>Plan wzorcowań</CardTitle>
+          <CardTitle>Wysyłki do wzorcowania</CardTitle>
           <CardDescription>
             Wysyłka urządzeń do firmy wzorcującej i zatwierdzenia kierownika.
           </CardDescription>

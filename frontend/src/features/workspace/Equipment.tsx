@@ -1,4 +1,5 @@
-import { ArrowLeft, Download, ExternalLink, QrCode, ScanLine } from "lucide-react";
+import { cn } from "cn";
+import { ArrowLeft, Download, ExternalLink, MapPin, QrCode, ScanLine } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -10,11 +11,12 @@ import {
   objectValue,
   textValue,
 } from "@/api/workspaceClient";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { formatMonth } from "@/lib/months";
 import { isValidPublicId, parseEquipmentUrl } from "@/lib/qr";
+import { isStatus, statusBadgeClass, statusDotClass } from "@/lib/status";
 import { isNfcAvailable } from "@/platform/nfc";
 import { canScanQr, scanEquipment } from "@/platform/scan";
 
@@ -33,7 +35,7 @@ import {
   type WorkspaceProps,
 } from "./shared";
 
-const statusLabels: Record<string, string> = {
+export const statusLabels: Record<string, string> = {
   OK: "Aktualne",
   DUE_SOON: "Zbliża się termin",
   OVERDUE: "Po terminie",
@@ -46,13 +48,21 @@ const statusLabels: Record<string, string> = {
 
 export function Status({ value }: { value: unknown }) {
   const key = textValue(value);
+  const known = isStatus(key);
   return (
-    <Badge
-      variant={key === "OVERDUE" || key === "WITHDRAWN" ? "destructive" : "outline"}
-      className={key === "OK" ? "border-brand-lime bg-brand-lime-soft text-brand-navy" : undefined}
+    <span
+      data-status={key}
+      className={cn(
+        "inline-flex w-fit items-center gap-1.5 rounded-sm border px-1.5 py-0.5 text-xs font-semibold whitespace-nowrap",
+        known ? statusBadgeClass(key) : "border-border bg-muted text-muted-foreground",
+      )}
     >
+      <span
+        aria-hidden
+        className={cn("size-1.5 shrink-0 rounded-full", known ? statusDotClass(key) : "bg-border")}
+      />
       {statusLabels[key] ?? key}
-    </Badge>
+    </span>
   );
 }
 
@@ -95,6 +105,11 @@ const deviceFields: Field[] = [
 const withdrawFields: Field[] = [
   { key: "reason", label: "Uzasadnienie", required: true, type: "note" },
 ];
+
+/** API months ("2026-05") as printed on calibration stickers ("05/2026"). */
+function month(value: unknown) {
+  return typeof value === "string" ? formatMonth(value) : "—";
+}
 
 export function apiSave(path: string, token: string, method: string) {
   return (data: unknown) => api(path, token, method, data);
@@ -436,13 +451,22 @@ function EquipmentDetails({
     <>
       <Card className="border-t-4 border-t-brand-lime">
         <CardHeader className="gap-4 sm:flex sm:justify-between">
-          <div>
-            <p className="mb-1 text-xs font-semibold tracking-widest text-muted-foreground">
-              {device.code}
-            </p>
-            <CardTitle className="text-2xl text-brand-navy">{device.name}</CardTitle>
-            <CardDescription>
-              {[device.manufacturer, device.model, device.location].filter(Boolean).join(" · ")}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="rounded-sm bg-brand-navy px-2 py-0.5 text-sm font-bold text-white tabular-nums">
+                {device.code}
+              </span>
+              <Status value={device.status} />
+            </div>
+            <CardTitle className="mt-2.5 text-2xl">{device.name}</CardTitle>
+            <CardDescription className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+              <span>{[device.manufacturer, device.model].filter(Boolean).join(" ")}</span>
+              {typeof device.location === "string" && (
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="size-3.5" aria-hidden />
+                  {device.location}
+                </span>
+              )}
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-start gap-2">
@@ -462,23 +486,23 @@ function EquipmentDetails({
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted p-4 text-sm sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border bg-border text-sm sm:grid-cols-4">
             {[
-              ["last_calibrated_month", "Ostatnie wzorcowanie"],
-              ["next_due_month", "Następne wzorcowanie"],
-              ["serial_no", "Numer seryjny"],
-            ].map(([key = "", label]) => (
-              <div key={key}>
-                <dt className="text-muted-foreground">{label}</dt>
-                <dd className="mt-1 font-semibold">{textValue(device[key])}</dd>
+              ["Ostatnie wzorcowanie", month(device.last_calibrated_month)],
+              ["Następne wzorcowanie", month(device.next_due_month)],
+              [
+                "Cykl wzorcowania",
+                device.calibration_interval_months == null
+                  ? "—"
+                  : `${textValue(device.calibration_interval_months)} mies.`,
+              ],
+              ["Numer seryjny", textValue(device.serial_no)],
+            ].map(([label, value]) => (
+              <div key={label} className="bg-card px-3 py-2.5">
+                <dt className="text-xs text-muted-foreground">{label}</dt>
+                <dd className="mt-0.5 text-[15px] font-semibold text-brand-navy-ink">{value}</dd>
               </div>
             ))}
-            <div>
-              <dt className="mb-1 text-muted-foreground">Stan</dt>
-              <dd>
-                <Status value={device.status} />
-              </dd>
-            </div>
           </dl>
           <div className="flex flex-wrap items-center gap-2">
             <DownloadButton
@@ -696,17 +720,17 @@ function CheckHistory({ token, id, revision }: { token: string; id: number; revi
 const registerColumns: Columns = [
   ["code", "Kod"],
   ["name", "Urządzenie"],
-  ["last_calibrated_month", "Ostatnie wzorcowanie"],
-  ["next_due_month", "Następny termin"],
+  ["last_calibrated_month", "Ostatnie wzorcowanie", month],
+  ["next_due_month", "Następny termin", month],
   ["status", "Status", (value) => <Status value={value} />],
 ];
 
 const calibrationColumns: Columns = [
-  ["calibrated_month", "Miesiąc"],
+  ["calibrated_month", "Miesiąc", month],
   ["vendor", "Firma"],
   ["certificate_no", "Świadectwo"],
   ["result", "Decyzja"],
-  ["next_due_month", "Termin z wpisu"],
+  ["next_due_month", "Termin z wpisu", month],
 ];
 
 const pointColumns: Columns = [
@@ -719,7 +743,7 @@ const pointColumns: Columns = [
 const checkPlanColumns: Columns = [
   ["name", "Czynność"],
   ["last_performed_on", "Ostatnie sprawdzenie"],
-  ["next_due_month", "Następny termin"],
+  ["next_due_month", "Następny termin", month],
   ["status", "Status", (value) => <Status value={value} />],
 ];
 

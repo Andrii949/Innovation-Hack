@@ -28,19 +28,17 @@ const COLORS: Record<Status, StatusColor> = {
 };
 
 const DOT_CLASSES: Record<StatusColor, string> = {
-  success: "bg-emerald-500",
-  warning: "bg-amber-500",
-  error: "bg-red-500",
-  default: "bg-muted-foreground/50",
+  success: "bg-status-ok",
+  warning: "bg-status-due",
+  error: "bg-status-alarm",
+  default: "bg-status-idle",
 };
 
 const BADGE_CLASSES: Record<StatusColor, string> = {
-  success:
-    "border-emerald-600/25 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
-  warning:
-    "border-amber-600/30 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
-  error: "border-red-600/25 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300",
-  default: "border-border bg-muted text-muted-foreground",
+  success: "border-status-ok/60 bg-status-ok-soft text-status-ok-ink",
+  warning: "border-status-due/70 bg-status-due-soft text-status-due-ink",
+  error: "border-status-alarm/35 bg-status-alarm-soft text-status-alarm-ink",
+  default: "border-border bg-status-idle-soft text-status-idle-ink",
 };
 
 const KIND_LABELS: Record<DueKind, string> = {
@@ -62,6 +60,10 @@ const SEVERITY: Record<Status, number> = {
   WITHDRAWN: 6,
   NOT_REQUIRED: 7,
 };
+
+export function isStatus(value: string): value is Status {
+  return Object.hasOwn(LABELS, value);
+}
 
 export function statusSeverity(status: Status): number {
   return SEVERITY[status];

@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { formatDecimal, formatRange } from "@/lib/format";
 
 import { apiSave, DownloadButton } from "./Equipment";
 import {
@@ -163,7 +164,7 @@ export function Results({
       <Card>
         <CardHeader className="gap-3 sm:flex sm:items-center sm:justify-between">
           <div>
-            <CardTitle>Wyniki badań</CardTitle>
+            <CardTitle>Wpisane wyniki</CardTitle>
             <CardDescription>Wyniki próbek i kontrola zakresu wpisu.</CardDescription>
           </div>
           {canWrite && (
@@ -337,7 +338,7 @@ function ThresholdDot({ cx, cy, payload }: { cx?: number; cy?: number; payload?:
 
 const thresholdDot = <ThresholdDot />;
 
-function ResultChart({
+export function ResultChart({
   token,
   parameters,
   preferred,
@@ -371,12 +372,22 @@ function ResultChart({
   );
   const lower = data?.data?.threshold_min;
   const upper = data?.data?.threshold_max;
+  // recharts maps a missing ReferenceArea edge to the far side of the plot, so the zones outside
+  // the thresholds get an explicit edge well past every value and are clipped to the plot.
+  const reach =
+    10 *
+    Math.max(
+      1,
+      Math.abs(Number(lower ?? 0)),
+      Math.abs(Number(upper ?? 0)),
+      ...ticks.map(({ measurement }) => Math.abs(measurement)),
+    );
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Wykres pomiarów i progi weryfikacji</CardTitle>
+        <CardTitle>Wyniki względem progów</CardTitle>
         <CardDescription>
-          Linie wyznaczają progi weryfikacji. Pomiary poza progiem mają czerwone znaczniki.
+          Zielone pasmo leży między progami weryfikacji. Pomiary poza progiem są czerwone.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -419,14 +430,30 @@ function ResultChart({
           <Loading state={data} />
         ) : (
           <>
-            <div className="flex flex-wrap gap-2 text-sm">
-              <Badge variant="outline">{data.data.count} pomiarów</Badge>
-              <Badge variant={data.data.out_of_threshold > 0 ? "destructive" : "outline"}>
-                {data.data.out_of_threshold} poza progiem
-              </Badge>
-              <Badge variant="outline">Dolny próg: {lower ?? "brak"}</Badge>
-              <Badge variant="outline">Górny próg: {upper ?? "brak"}</Badge>
-            </div>
+            <dl className="flex flex-wrap gap-x-8 gap-y-2 border-y py-2.5">
+              <div>
+                <dt className="text-xs text-muted-foreground">Pomiary</dt>
+                <dd className="text-base font-semibold">{data.data.count}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Poza progiem</dt>
+                <dd
+                  className={
+                    data.data.out_of_threshold > 0
+                      ? "text-base font-semibold text-status-alarm-ink"
+                      : "text-base font-semibold"
+                  }
+                >
+                  {data.data.out_of_threshold}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Progi weryfikacji</dt>
+                <dd className="text-base font-semibold">
+                  {formatRange(lower ?? null, upper ?? null, data.data.parameter.unit)}
+                </dd>
+              </div>
+            </dl>
             {ticks.length === 0 ? (
               <Message>Brak pomiarów w wybranym okresie.</Message>
             ) : (
@@ -439,29 +466,52 @@ function ResultChart({
                     <CartesianGrid stroke="var(--border)" vertical={false} />
                     <XAxis
                       dataKey="label"
-                      tickFormatter={(label: string) => label.slice(5, 10)}
+                      tickFormatter={(label: string) =>
+                        `${label.slice(8, 10)}.${label.slice(5, 7)}`
+                      }
                       minTickGap={24}
                       fontSize={12}
+                      stroke="var(--muted-foreground)"
                     />
                     <YAxis
                       unit={` ${data.data.parameter.unit}`}
                       domain={automaticDomain}
                       fontSize={12}
+                      stroke="var(--muted-foreground)"
+                      tickFormatter={(value: number) => formatDecimal(String(value))}
                     />
                     <Tooltip />
                     {lower != null && upper != null && (
                       <ReferenceArea
                         y1={Number(lower)}
                         y2={Number(upper)}
-                        fill="#8dc63f"
-                        fillOpacity={0.14}
+                        fill="var(--status-ok)"
+                        fillOpacity={0.16}
                         ifOverflow="extendDomain"
+                      />
+                    )}
+                    {upper != null && (
+                      <ReferenceArea
+                        y1={Number(upper)}
+                        y2={Number(upper) + reach}
+                        fill="var(--status-alarm)"
+                        fillOpacity={0.06}
+                        ifOverflow="hidden"
+                      />
+                    )}
+                    {lower != null && (
+                      <ReferenceArea
+                        y1={Number(lower) - reach}
+                        y2={Number(lower)}
+                        fill="var(--status-alarm)"
+                        fillOpacity={0.06}
+                        ifOverflow="hidden"
                       />
                     )}
                     {lower != null && (
                       <ReferenceLine
                         y={Number(lower)}
-                        stroke="#60a501"
+                        stroke="var(--brand-lime-ink)"
                         strokeDasharray="5 4"
                         ifOverflow="extendDomain"
                       />
@@ -469,7 +519,7 @@ function ResultChart({
                     {upper != null && (
                       <ReferenceLine
                         y={Number(upper)}
-                        stroke="#60a501"
+                        stroke="var(--brand-lime-ink)"
                         strokeDasharray="5 4"
                         ifOverflow="extendDomain"
                       />
@@ -482,6 +532,7 @@ function ResultChart({
                       stroke="var(--brand-navy)"
                       strokeWidth={2}
                       dot={thresholdDot}
+                      isAnimationActive={false}
                     />
                   </LineChart>
                 </ResponsiveContainer>

@@ -22,7 +22,7 @@ describe("presentation helpers", () => {
     expect(statusLabel("COUNT_DUE")).toBe("Zrób spis");
     expect(statusColor("OVERDUE")).toBe("error");
     expect(statusColor("OK")).toBe("success");
-    expect(statusBadgeClass("LOW")).toContain("red");
+    expect(statusBadgeClass("LOW")).toContain("status-alarm");
   });
 
   it("formats measurements as Polish decimals", () => {

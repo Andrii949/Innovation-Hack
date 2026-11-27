@@ -4,6 +4,7 @@ import { api, type ApiRecord, textValue } from "@/api/workspaceClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { describeAudit } from "@/lib/audit";
 
 import { apiSave, calibrationFields, modelFields } from "./Equipment";
 import {
@@ -489,16 +490,20 @@ function Users({ token }: WorkspaceProps) {
 export function Audit({ token }: WorkspaceProps) {
   const [offset, setOffset] = useState(0);
   const state = useApi<ApiRecord[]>("/audit", token);
+  const page = useMemo(
+    () => state?.data?.slice(offset, offset + 50).map(auditRow) ?? [],
+    [state, offset],
+  );
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Historia zmian</CardTitle>
+        <CardTitle>Dziennik operacji</CardTitle>
         <CardDescription>Zapis operacji wykonanych w laboratorium.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
         {state?.data ? (
           <>
-            <Rows rows={state.data.slice(offset, offset + 50)} columns={auditColumns} />
+            <Rows rows={page} columns={auditColumns} />
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -577,10 +582,21 @@ const userColumns: Columns = [
   ["active", "Aktywny", (value) => (value ? "Tak" : "Nie")],
 ];
 
+function auditRow(row: ApiRecord): ApiRecord {
+  const entry = describeAudit({
+    action: textValue(row.action),
+    entity: textValue(row.entity),
+    entity_id: typeof row.entity_id === "string" ? row.entity_id : null,
+    before: row.before,
+    after: row.after,
+  });
+  return { ...row, operation: entry.title, subject: entry.subject };
+}
+
 const auditColumns: Columns = [
   ["at", "Czas", (value) => textValue(value).replace("T", " ").slice(0, 19)],
-  ["action", "Operacja"],
-  ["entity", "Obiekt"],
+  ["operation", "Operacja"],
+  ["subject", "Obiekt"],
   ["entity_id", "Identyfikator"],
   ["user_id", "Użytkownik"],
   ["reason", "Powód"],
