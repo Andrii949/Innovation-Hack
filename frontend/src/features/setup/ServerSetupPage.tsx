@@ -1,3 +1,4 @@
+import { QrCode } from "lucide-react";
 import type { SyntheticEvent } from "react";
 import { useState } from "react";
 
@@ -14,7 +15,13 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { checkServer, normalizeServerUrl, setServerUrl } from "@/platform/server";
+import { canScanQr, scanRawQrCode } from "@/platform/scan";
+import {
+  checkServer,
+  normalizeServerUrl,
+  parseServerConfigQr,
+  setServerUrl,
+} from "@/platform/server";
 
 type Props = {
   onDone: () => void;
@@ -25,16 +32,7 @@ export default function ServerSetupPage({ onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const handleSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault();
-    setError(null);
-
-    const url = normalizeServerUrl(address);
-    if (url === null) {
-      setError("Podaj adres serwera, np. https://lab.example.com.");
-      return;
-    }
-
+  const verifyAndSave = async (url: string): Promise<void> => {
     setBusy(true);
     const reachable = await checkServer(url);
     setBusy(false);
@@ -46,6 +44,39 @@ export default function ServerSetupPage({ onDone }: Props) {
 
     setServerUrl(url);
     onDone();
+  };
+
+  const handleSubmit = async (event: SyntheticEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    setError(null);
+
+    const url = normalizeServerUrl(address);
+    if (url === null) {
+      setError("Podaj adres serwera, np. https://lab.example.com.");
+      return;
+    }
+
+    await verifyAndSave(url);
+  };
+
+  const handleScanConfigQr = async (): Promise<void> => {
+    setError(null);
+    setBusy(true);
+    const raw = await scanRawQrCode();
+    if (raw === null) {
+      setBusy(false);
+      return;
+    }
+
+    const parsed = parseServerConfigQr(raw);
+    if (parsed === null) {
+      setBusy(false);
+      setError("To nie jest kod konfiguracyjny serwera.");
+      return;
+    }
+
+    setAddress(parsed);
+    await verifyAndSave(parsed);
   };
 
   return (
@@ -102,10 +133,22 @@ export default function ServerSetupPage({ onDone }: Props) {
                 </Alert>
               )}
             </CardContent>
-            <CardFooter>
+            <CardFooter className="grid gap-2">
               <Button type="submit" className="h-11 w-full" disabled={busy}>
                 {busy ? "Sprawdzanie…" : "Sprawdź i zapisz"}
               </Button>
+              {canScanQr() && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 w-full"
+                  disabled={busy}
+                  onClick={() => void handleScanConfigQr()}
+                >
+                  <QrCode className="mr-2 size-4" />
+                  Skanuj QR konfiguracyjny
+                </Button>
+              )}
             </CardFooter>
           </form>
         </Card>

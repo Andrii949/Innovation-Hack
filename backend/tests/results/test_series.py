@@ -51,6 +51,7 @@ def get_series(
     return response.json()
 
 
+@pytest.mark.req("F10")
 def test_series_uses_range_when_no_verify_threshold(
     client: TestClient,
     make_parameter: MakeParameter,
@@ -71,6 +72,7 @@ def test_series_uses_range_when_no_verify_threshold(
     assert body["out_of_threshold"] == 1
 
 
+@pytest.mark.req("F10")
 def test_verify_threshold_overrides_range(
     client: TestClient,
     make_parameter: MakeParameter,

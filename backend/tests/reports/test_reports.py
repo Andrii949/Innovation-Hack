@@ -66,6 +66,7 @@ def create_report(client: TestClient, headers: dict[str, str], **body: Any) -> d
     return response.json()
 
 
+@pytest.mark.req("F11")
 @pytest.mark.usefixtures("so3_with_results")
 def test_create_report_returns_pdf(
     client: TestClient, admin: User, manager: User, auth: Auth
@@ -83,6 +84,7 @@ def test_create_report_returns_pdf(
     assert "poza progiem: 1" in text
 
 
+@pytest.mark.req("F11")
 @pytest.mark.usefixtures("so3_with_results")
 def test_manager_gets_report_ready_notification(
     client: TestClient, db: Session, admin: User, manager: User, auth: Auth

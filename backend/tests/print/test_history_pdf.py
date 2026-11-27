@@ -31,6 +31,7 @@ def lab_a(make_lab: MakeLab) -> Lab:
     return make_lab("A")
 
 
+@pytest.mark.req("F4", "17025-6.4.13")
 def test_history_pdf_contains_code_calibrations_and_checks(
     client: TestClient,
     db: Session,

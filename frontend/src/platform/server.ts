@@ -1,5 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 
+import { parseEquipmentUrl } from "@/lib/qr";
+
 const SERVER_URL_KEY = "lab.server-url";
 const HEALTH_PATH = "/api/health";
 const HEALTH_TIMEOUT_MS = 5000;
@@ -32,8 +34,52 @@ export function normalizeServerUrl(raw: string): string | null {
   return parsed.origin + (parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/+$/, ""));
 }
 
+export function parseServerConfigQr(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    return null;
+  }
+
+  let candidate = trimmed;
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        !("serverUrl" in parsed) ||
+        typeof parsed.serverUrl !== "string"
+      ) {
+        return null;
+      }
+      candidate = parsed.serverUrl;
+    } catch {
+      return null;
+    }
+  }
+
+  if (parseEquipmentUrl(candidate) !== null) {
+    return null;
+  }
+
+  const normalized = normalizeServerUrl(candidate);
+  if (normalized === null) {
+    return null;
+  }
+
+  try {
+    return new URL(normalized).pathname === "/" ? normalized : null;
+  } catch {
+    return null;
+  }
+}
+
 export function getServerUrl(): string | null {
   return localStorage.getItem(SERVER_URL_KEY);
+}
+
+export function getApiBaseUrl(): string {
+  return isNativeApp() ? (getServerUrl() ?? "") : "";
 }
 
 export function setServerUrl(url: string): void {

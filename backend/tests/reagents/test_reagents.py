@@ -2,6 +2,7 @@ from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
 
+import pytest
 from app.auth.models import Lab, User
 from app.core.status import Status
 from app.reagents.models import Reagent, ReagentLot, StockCount
@@ -19,6 +20,7 @@ MakeCount = Callable[..., StockCount]
 Auth = Callable[[User], dict[str, str]]
 
 
+@pytest.mark.req("F8")
 def test_current_stock_is_last_count_plus_later_receipts(
     db: Session,
     make_lab: MakeLab,
@@ -47,6 +49,7 @@ def test_stock_without_count_is_sum_of_lots_still_in_use(
     assert current_stock(db, r.id) == Decimal(1000)
 
 
+@pytest.mark.req("F8")
 def test_low_stock_in_schedule(
     db: Session, make_lab: MakeLab, make_reagent: MakeReagent, make_count: MakeCount
 ) -> None:
@@ -58,6 +61,7 @@ def test_low_stock_in_schedule(
     assert [(i.ref_id, i.status, i.due) for i in items] == [(r.id, Status.LOW, date(2026, 11, 20))]
 
 
+@pytest.mark.req("F8")
 def test_lot_expiry_uses_lead_months(
     db: Session, make_lab: MakeLab, make_reagent: MakeReagent, make_lot: MakeLot
 ) -> None:
@@ -82,6 +86,7 @@ def test_disposed_lot_is_ignored(
     assert list_due_items(db, today=TODAY, kinds={DueKind.LOT_EXPIRY}) == []
 
 
+@pytest.mark.req("F8")
 def test_stock_count_due_after_interval(
     db: Session, make_lab: MakeLab, make_reagent: MakeReagent, make_count: MakeCount
 ) -> None:
