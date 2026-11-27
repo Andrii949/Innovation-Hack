@@ -6,12 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.audit.context import clear_audit_context
 from app.audit.listener import register_audit_listener
 from app.audit.router import router as audit_router
+from app.auth.router import router as auth_router
 from app.config import get_settings
 from app.db import SessionLocal
 from app.errors import register_error_handlers
 
 api = APIRouter(prefix="/api")
 api.include_router(audit_router)
+api.include_router(auth_router)
 
 
 @api.get("/health")

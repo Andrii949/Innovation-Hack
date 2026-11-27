@@ -2,12 +2,13 @@ from logging.config import fileConfig
 
 from alembic import context
 from app.audit.models import AuditLog
+from app.auth.models import Lab, Role, User, UserSession, user_lab
 from app.config import get_settings
 from app.db import Base
 from app.settings.models import Setting
 from sqlalchemy import create_engine, pool
 
-_REGISTERED_MODELS = (Setting, AuditLog)
+_REGISTERED_MODELS = (Setting, AuditLog, Lab, Role, User, UserSession, user_lab)
 
 config = context.config
 
