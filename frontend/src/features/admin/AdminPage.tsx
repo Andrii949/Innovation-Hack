@@ -13,9 +13,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ResultsTable } from "@/features/results/ResultsTable";
+import { ReviewQueue } from "@/features/results/ReviewQueue";
 import { dueKindLabel, isDueKind } from "@/lib/status";
 
 import { AuditList } from "./AuditList";
+import { CalibrationPlanPanel } from "./CalibrationPlanPanel";
 import { DueHorizon } from "./DueHorizon";
 import { EquipmentDetail } from "./EquipmentDetail";
 import { EquipmentSection } from "./EquipmentSection";
@@ -32,6 +34,7 @@ const KIND_OPTIONS: SelectOption[] = [
 const SECTIONS: SelectOption[] = [
   { value: "harmonogram", label: "Harmonogram" },
   { value: "urzadzenia", label: "Urządzenia" },
+  { value: "plany", label: "Plan wzorcowania" },
   { value: "odczynniki", label: "Odczynniki" },
   { value: "wyniki", label: "Wyniki" },
   { value: "raporty", label: "Raporty" },
@@ -59,6 +62,7 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
   const lowStock = snapshot.schedule.filter((item) => item.status === "LOW");
   const outOfRange = snapshot.results.filter((result) => !result.inRange);
   const repeatPending = outOfRange.filter((result) => result.repeat === null);
+  const reviewPending = snapshot.reviews.filter((review) => review.decision === "PENDING");
 
   const filtered = useMemo(
     () =>
@@ -94,6 +98,11 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
       >
         <PageMeta label="Rejestr" value={`${snapshot.equipment.length} urządzeń`} />
         <PageMeta label="Pracownie" value={snapshot.labs.map((lab) => lab.code).join(" / ")} />
+        <PageMeta
+          label="Do weryfikacji"
+          value={reviewPending.length}
+          tone={reviewPending.length > 0 ? "alert" : "default"}
+        />
         <PageMeta
           label="Otwarte alerty"
           value={overdue.length + dueSoon.length + lowStock.length + repeatPending.length}
@@ -169,10 +178,19 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
           </TabsTrigger>
           <TabsTrigger
             className="flex-none gap-2 px-2.5 pb-2 text-[13px] sm:px-3 sm:text-sm data-active:text-primary data-active:after:bg-chart-2"
-            value="odczynniki"
+            value="plany"
           >
             <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
               03
+            </span>
+            Plan wzorcowania
+          </TabsTrigger>
+          <TabsTrigger
+            className="flex-none gap-2 px-2.5 pb-2 text-[13px] sm:px-3 sm:text-sm data-active:text-primary data-active:after:bg-chart-2"
+            value="odczynniki"
+          >
+            <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
+              04
             </span>
             Odczynniki
           </TabsTrigger>
@@ -181,7 +199,7 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
             value="wyniki"
           >
             <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
-              04
+              05
             </span>
             Wyniki
           </TabsTrigger>
@@ -190,7 +208,7 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
             value="raporty"
           >
             <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
-              05
+              06
             </span>
             Raporty
           </TabsTrigger>
@@ -199,7 +217,7 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
             value="historia"
           >
             <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
-              06
+              07
             </span>
             Historia
           </TabsTrigger>
@@ -328,22 +346,42 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
           </Panel>
         </TabsContent>
 
+        <TabsContent value="plany">
+          <Panel
+            title="Plan wzorcowania"
+            description="Wysyłka do dostawcy zewnętrznego i planowany zwrot. Aplikacja sprawdza, ile urządzeń zamiennych zostaje w pracowni; kierownik zatwierdza plan bez konfliktu."
+          >
+            <CalibrationPlanPanel snapshot={snapshot} />
+          </Panel>
+        </TabsContent>
+
         <TabsContent value="odczynniki">
           <Panel
             title="Odczynniki i CRM"
-            description="Stan z ostatniego spisu plus partie przyjęte później; próg i wyprzedzenie na karcie odczynnika."
+            description="Zapas całkowity i dostępny z partii ważnych; próg liczony od zapasu dostępnego, a najwcześniej wygasająca partia jest wskazana do użycia."
           >
             <ReagentPanel reagents={snapshot.reagents} />
           </Panel>
         </TabsContent>
 
         <TabsContent value="wyniki">
-          <Panel
-            title="Wyniki badań i kontrola zakresu"
-            description="Zakres zapisany przy wyniku; poza zakresem wymaga powtórzenia, a administrator widzi je od razu."
-          >
-            <ResultsTable results={snapshot.results} pageSize={8} />
-          </Panel>
+          <div className="grid gap-5">
+            <Panel
+              title="Do weryfikacji po wzorcowaniu NIE OK"
+              description={`${reviewPending.length} wyników czeka na decyzję. Wybór „zaakceptuj” albo „powtórz badanie” zapisuje autora i datę.`}
+            >
+              <ReviewQueue
+                reviews={snapshot.reviews}
+                emptyText="Brak wyników do weryfikacji. Przy wzorcowaniu NIE OK wskaż okres przeglądu."
+              />
+            </Panel>
+            <Panel
+              title="Wyniki badań i kontrola zakresu"
+              description="Zakres zapisany przy wyniku; poza zakresem wymaga powtórzenia, a administrator widzi je od razu."
+            >
+              <ResultsTable results={snapshot.results} pageSize={8} />
+            </Panel>
+          </div>
         </TabsContent>
 
         <TabsContent value="raporty">

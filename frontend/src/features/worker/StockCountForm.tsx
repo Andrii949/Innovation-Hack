@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import { Beaker } from "lucide-react";
 import type { SyntheticEvent } from "react";
 import { useMemo, useState } from "react";
@@ -23,7 +24,7 @@ import { formatDate, formatDecimal } from "@/lib/format";
 function StockFields({ reagent }: { reagent: ReagentView }) {
   const [quantity, setQuantity] = useState("");
 
-  const stock = Number(reagent.stock);
+  const stock = Number(reagent.usableStock);
   const minimum = Number(reagent.minStock);
   const level =
     Number.isFinite(stock) && Number.isFinite(minimum) && minimum > 0
@@ -45,9 +46,20 @@ function StockFields({ reagent }: { reagent: ReagentView }) {
     <form onSubmit={submit} className="grid gap-3">
       <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 text-sm sm:grid-cols-3">
         <div>
-          <p className="text-xs text-muted-foreground">Stan bieżący</p>
+          <p className="text-xs text-muted-foreground">Stan łączny</p>
           <p className="font-semibold tabular-nums">
             {formatDecimal(reagent.stock)} {reagent.unit}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Zapas dostępny</p>
+          <p
+            className={cn(
+              "font-semibold tabular-nums",
+              reagent.status === "LOW" && "text-red-700 dark:text-red-400",
+            )}
+          >
+            {formatDecimal(reagent.usableStock)} {reagent.unit}
           </p>
         </div>
         <div>
@@ -64,12 +76,12 @@ function StockFields({ reagent }: { reagent: ReagentView }) {
               : `${formatDate(reagent.lastCount.countedOn)} · ${formatDecimal(reagent.lastCount.quantity)} ${reagent.unit}`}
           </p>
         </div>
-        <div className="grid gap-1 sm:col-span-3">
+        <div className="grid gap-1 sm:col-span-2">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Stan względem progu</span>
+            <span>Zapas dostępny względem progu</span>
             <span className="tabular-nums">{level}%</span>
           </div>
-          <Progress value={level} aria-label="Stan względem progu minimalnego" />
+          <Progress value={level} aria-label="Zapas dostępny względem progu minimalnego" />
         </div>
       </div>
       <div className="flex flex-wrap items-end gap-2">

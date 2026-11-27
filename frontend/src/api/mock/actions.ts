@@ -7,6 +7,7 @@ import type {
   ApiError,
   ApiResult,
   Calibration,
+  CalibrationPlan,
   CalibrationPoint,
   CalibrationResult,
   CheckRecord,
@@ -14,9 +15,11 @@ import type {
   IsoDate,
   Notification,
   Report,
+  ResultReview,
   StockCount,
   TestResult,
 } from "@/api/types";
+import { computeAvailability } from "@/lib/availability";
 
 import {
   activeUser,
@@ -38,7 +41,17 @@ export type CalibrationInput = {
   adjustments: string;
   result: CalibrationResult;
   note: string;
+  reviewPeriodFrom: IsoDate | null;
+  reviewPeriodTo: IsoDate | null;
   points: CalibrationPoint[];
+};
+
+export type CalibrationPlanInput = {
+  planId?: string | null;
+  equipmentId: string;
+  dispatchDate: IsoDate;
+  returnDate: IsoDate;
+  note: string;
 };
 
 export type CheckInput = {
@@ -54,6 +67,7 @@ export type StockCountInput = {
 
 export type TestResultInput = {
   parameterId: string;
+  equipmentId: string | null;
   sampleLabel: string;
   value: string;
   repeatOfId: string | null;
@@ -183,6 +197,22 @@ export function recordCalibration(db: MockDb, input: CalibrationInput): ApiResul
   if (input.result !== "OK" && input.result !== "NOK") {
     return failure("VALIDATION_ERROR", "Zaznacz wynik wzorcowania: OK albo NIE OK.");
   }
+  const reviewPeriodFrom = input.result === "NOK" ? input.reviewPeriodFrom : null;
+  const reviewPeriodTo = input.result === "NOK" ? input.reviewPeriodTo : null;
+  if (input.result === "NOK") {
+    if (
+      reviewPeriodFrom === null ||
+      reviewPeriodTo === null ||
+      !isIsoDate(reviewPeriodFrom) ||
+      !isIsoDate(reviewPeriodTo) ||
+      reviewPeriodFrom > reviewPeriodTo
+    ) {
+      return failure(
+        "VALIDATION_ERROR",
+        "Dla wyniku NIE OK podaj poprawny okres przeglądu wyników.",
+      );
+    }
+  }
   for (const point of input.points) {
     if (normalizeDecimal(point.error) === null || normalizeDecimal(point.uncertainty) === null) {
       return failure("INVALID_NUMBER", "Błąd i niepewność punktu muszą być liczbami.");
@@ -202,6 +232,8 @@ export function recordCalibration(db: MockDb, input: CalibrationInput): ApiResul
         ? null
         : addMonths(input.calibratedMonth, equipment.calibrationIntervalMonths),
     note: input.note.trim(),
+    reviewPeriodFrom,
+    reviewPeriodTo,
     points: input.points.map((point) => ({
       ...point,
       error: normalizeDecimal(point.error) ?? point.error,
@@ -209,6 +241,34 @@ export function recordCalibration(db: MockDb, input: CalibrationInput): ApiResul
     })),
   };
   db.calibrations.push(calibration);
+
+  let reviewCount = 0;
+  if (input.result === "NOK" && reviewPeriodFrom !== null && reviewPeriodTo !== null) {
+    for (const result of db.results) {
+      if (
+        result.equipmentId !== equipment.id ||
+        result.sampledAt < reviewPeriodFrom ||
+        result.sampledAt > reviewPeriodTo
+      ) {
+        continue;
+      }
+      const review: ResultReview = {
+        id: newId("review"),
+        calibrationId: calibration.id,
+        equipmentId: equipment.id,
+        testResultId: result.id,
+        periodFrom: reviewPeriodFrom,
+        periodTo: reviewPeriodTo,
+        decision: "PENDING",
+        note: "",
+        decidedBy: null,
+        decidedAt: null,
+      };
+      db.reviews.push(review);
+      reviewCount += 1;
+    }
+  }
+
   resolveNotifications(
     db,
     (notification) =>
@@ -223,6 +283,9 @@ export function recordCalibration(db: MockDb, input: CalibrationInput): ApiResul
       equipment: `${equipment.number}/${db.labs.find((lab) => lab.id === equipment.labId)?.code ?? ""}`,
       certificate: calibration.certificateNo,
       result: calibration.result,
+      review_period:
+        reviewPeriodFrom === null ? null : { from: reviewPeriodFrom, to: reviewPeriodTo },
+      results_to_review: reviewCount,
     }),
   });
   return success(calibration);
@@ -375,7 +438,7 @@ export function recordStockCount(db: MockDb, input: StockCountInput): ApiResult<
       refType: "REAGENT",
       refId: reagent.id,
       title: "Mało odczynnika",
-      body: `${reagent.name}: stan ${stock.stock.replace(".", ",")} ${reagent.unit}, próg ${reagent.minStock.replace(".", ",")}.`,
+      body: `${reagent.name}: zapas dostępny ${stock.usableStock.replace(".", ",")} ${reagent.unit}, próg ${reagent.minStock.replace(".", ",")}.`,
       due: db.today,
       dedupeKey: `low:${reagent.id}:${db.today}`,
     };
@@ -406,6 +469,21 @@ export function addTestResult(db: MockDb, input: TestResultInput): ApiResult<Tes
   if (input.sampleLabel.trim() === "") {
     return failure("VALIDATION_ERROR", "Podaj oznaczenie próbki.");
   }
+  const equipment =
+    input.equipmentId === null
+      ? null
+      : db.equipment.find((candidate) => candidate.id === input.equipmentId);
+  if (input.equipmentId !== null && equipment === undefined) {
+    return failure("NOT_FOUND", "Nie znaleziono urządzenia pomiarowego.");
+  }
+  if (equipment !== undefined && equipment !== null) {
+    if (!userLabIds(db, user).includes(equipment.labId)) {
+      return failure("LAB_OUT_OF_SCOPE", "Pracownia urządzenia jest spoza zakresu użytkownika.");
+    }
+    if (equipment.withdrawnAt !== null) {
+      return failure("EQUIPMENT_WITHDRAWN", "Urządzenie wycofane — nie można nim mierzyć.");
+    }
+  }
   const value = normalizeDecimal(input.value);
   if (value === null) {
     return failure("INVALID_NUMBER", "Nie można odczytać wyniku.");
@@ -434,6 +512,7 @@ export function addTestResult(db: MockDb, input: TestResultInput): ApiResult<Tes
   const result: TestResult = {
     id: newId("r"),
     parameterId: parameter.id,
+    equipmentId: equipment?.id ?? null,
     sampleLabel: input.sampleLabel.trim(),
     value,
     minSnapshot: parameter.minValue,
@@ -454,6 +533,7 @@ export function addTestResult(db: MockDb, input: TestResultInput): ApiResult<Tes
       sample: result.sampleLabel,
       value,
       in_range: inRange,
+      equipment: equipment?.number ?? null,
     }),
   });
 
@@ -535,4 +615,193 @@ export function generateReport(db: MockDb, input: ReportInput): ApiResult<Report
     }
   }
   return success(report);
+}
+
+function labCodeOf(db: MockDb, labId: string): string {
+  return db.labs.find((lab) => lab.id === labId)?.code ?? labId;
+}
+
+export function saveCalibrationPlan(
+  db: MockDb,
+  input: CalibrationPlanInput,
+): ApiResult<CalibrationPlan> {
+  const user = activeUser(db);
+  if (!userHasPermission(db, user, "calibration:write")) {
+    return failure("FORBIDDEN", "Brak uprawnień do planowania wzorcowań.");
+  }
+  const equipment = db.equipment.find((candidate) => candidate.id === input.equipmentId);
+  if (!equipment) {
+    return failure("NOT_FOUND", "Nie znaleziono urządzenia.");
+  }
+  if (!userLabIds(db, user).includes(equipment.labId)) {
+    return failure("LAB_OUT_OF_SCOPE", "Pracownia spoza zakresu użytkownika.");
+  }
+  if (equipment.withdrawnAt !== null) {
+    return failure("VALIDATION_ERROR", "Urządzenie wycofane — nie planuje się jego wysyłki.");
+  }
+  if (equipment.calibrationMode !== "EXTERNAL") {
+    return failure(
+      "VALIDATION_ERROR",
+      "Plan wysyłki dotyczy tylko urządzeń wzorcowanych na zewnątrz.",
+    );
+  }
+  if (
+    !isIsoDate(input.dispatchDate) ||
+    !isIsoDate(input.returnDate) ||
+    input.dispatchDate > input.returnDate
+  ) {
+    return failure("VALIDATION_ERROR", "Podaj poprawny termin wysyłki i zwrotu.");
+  }
+
+  const existing =
+    input.planId === undefined || input.planId === null
+      ? undefined
+      : db.calibrationPlans.find((candidate) => candidate.id === input.planId);
+  if (existing !== undefined && existing.status !== "PENDING") {
+    return failure("VALIDATION_ERROR", "Zatwierdzony plan nie może być zmieniony.");
+  }
+  if (existing !== undefined && existing.equipmentId !== equipment.id) {
+    return failure("VALIDATION_ERROR", "Nie można zmienić urządzenia w istniejącym planie.");
+  }
+
+  const before =
+    existing === undefined
+      ? null
+      : JSON.stringify({
+          dispatch: existing.dispatchDate,
+          return: existing.returnDate,
+          note: existing.note,
+        });
+
+  const plan: CalibrationPlan =
+    existing === undefined
+      ? {
+          id: newId("plan"),
+          equipmentId: equipment.id,
+          labId: equipment.labId,
+          dispatchDate: input.dispatchDate,
+          returnDate: input.returnDate,
+          status: "PENDING",
+          note: input.note.trim(),
+          createdBy: user.id,
+          createdAt: afterNow(),
+          approvedBy: null,
+          approvedAt: null,
+        }
+      : {
+          ...existing,
+          dispatchDate: input.dispatchDate,
+          returnDate: input.returnDate,
+          note: input.note.trim(),
+          status: "PENDING",
+          approvedBy: null,
+          approvedAt: null,
+        };
+
+  if (existing === undefined) {
+    db.calibrationPlans.push(plan);
+  } else {
+    Object.assign(existing, plan);
+  }
+  appendAudit(db, {
+    action: existing === undefined ? "create" : "update",
+    entity: "calibration_plan",
+    entityId: plan.id,
+    before,
+    after: JSON.stringify({
+      equipment: `${equipment.number}/${labCodeOf(db, equipment.labId)}`,
+      dispatch: plan.dispatchDate,
+      return: plan.returnDate,
+      note: plan.note,
+    }),
+  });
+  return success(plan);
+}
+
+export function approveCalibrationPlan(db: MockDb, planId: string): ApiResult<CalibrationPlan> {
+  const user = activeUser(db);
+  if (!userHasPermission(db, user, "calibration:approve")) {
+    return failure("FORBIDDEN", "Brak uprawnień do zatwierdzania planu wzorcowania.");
+  }
+  const plan = db.calibrationPlans.find((candidate) => candidate.id === planId);
+  if (!plan) {
+    return failure("NOT_FOUND", "Nie znaleziono planu wzorcowania.");
+  }
+  if (!userLabIds(db, user).includes(plan.labId)) {
+    return failure("LAB_OUT_OF_SCOPE", "Pracownia spoza zakresu użytkownika.");
+  }
+  if (plan.status !== "PENDING") {
+    return failure("VALIDATION_ERROR", "Plan nie oczekuje na zatwierdzenie.");
+  }
+  const availability = computeAvailability(db.equipment, db.calibrationPlans, plan, (labId) =>
+    labCodeOf(db, labId),
+  );
+  if (availability.warning !== null) {
+    return failure("VALIDATION_ERROR", `${availability.warning} Nie można zatwierdzić planu.`);
+  }
+
+  const before = JSON.stringify({ status: plan.status });
+  plan.status = "APPROVED";
+  plan.approvedBy = user.id;
+  plan.approvedAt = afterNow();
+  appendAudit(db, {
+    action: "update",
+    entity: "calibration_plan",
+    entityId: plan.id,
+    before,
+    after: JSON.stringify({
+      status: plan.status,
+      approved_by: user.fullName,
+      dispatch: plan.dispatchDate,
+      return: plan.returnDate,
+    }),
+    reason: "Zatwierdzenie planu wzorcowania.",
+  });
+  return success(plan);
+}
+
+export function decideResultReview(
+  db: MockDb,
+  reviewId: string,
+  decision: "ACCEPTED" | "REPEAT",
+): ApiResult<ResultReview> {
+  const user = activeUser(db);
+  if (!userHasPermission(db, user, "calibration:write")) {
+    return failure("FORBIDDEN", "Brak uprawnień do weryfikacji wyników.");
+  }
+  const review = db.reviews.find((candidate) => candidate.id === reviewId);
+  if (!review) {
+    return failure("NOT_FOUND", "Nie znaleziono wyniku do weryfikacji.");
+  }
+  if (
+    !userLabIds(db, user).includes(
+      db.equipment.find((equipment) => equipment.id === review.equipmentId)?.labId ?? "",
+    )
+  ) {
+    return failure("LAB_OUT_OF_SCOPE", "Pracownia spoza zakresu użytkownika.");
+  }
+  if (decision !== "ACCEPTED" && decision !== "REPEAT") {
+    return failure("VALIDATION_ERROR", "Wybierz decyzję: zaakceptuj albo powtórz badanie.");
+  }
+  if (review.decision !== "PENDING") {
+    return failure("VALIDATION_ERROR", "Decyzja dla tego wyniku została już zapisana.");
+  }
+
+  const before = JSON.stringify({ decision: review.decision });
+  review.decision = decision;
+  review.decidedBy = user.id;
+  review.decidedAt = afterNow();
+  appendAudit(db, {
+    action: "update",
+    entity: "test_result_review",
+    entityId: review.id,
+    before,
+    after: JSON.stringify({
+      decision,
+      decided_by: user.fullName,
+      sample: db.results.find((result) => result.id === review.testResultId)?.sampleLabel ?? null,
+    }),
+    reason: "Weryfikacja wyników po wzorcowaniu NIE OK.",
+  });
+  return success(review);
 }

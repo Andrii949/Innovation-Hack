@@ -42,6 +42,8 @@ describe("demoClient end-to-end workflows", () => {
       adjustments: "Brak",
       result: "OK",
       note: "",
+      reviewPeriodFrom: null,
+      reviewPeriodTo: null,
       points: [{ point: "105 °C", error: "0,2", uncertainty: "0,1", unit: "°C" }],
     });
     expect(okResult.ok).toBe(true);
@@ -68,6 +70,8 @@ describe("demoClient end-to-end workflows", () => {
       adjustments: "Odchyłka poza limitem",
       result: "NOK",
       note: "Do weryfikacji",
+      reviewPeriodFrom: "2026-09-01",
+      reviewPeriodTo: "2026-11-27",
       points: [{ point: "20 °C", error: "1,5", uncertainty: "0,2", unit: "°C" }],
     });
     expect(nokResult.ok).toBe(true);
@@ -105,6 +109,8 @@ describe("demoClient end-to-end workflows", () => {
       adjustments: "",
       result: "OK",
       note: "",
+      reviewPeriodFrom: null,
+      reviewPeriodTo: null,
       points: [{ point: "20 °C", error: "0,1", uncertainty: "0,1", unit: "°C" }],
     });
     expect(forbiddenCal.ok).toBe(false);
@@ -162,6 +168,7 @@ describe("demoClient end-to-end workflows", () => {
 
     const flagged = addTestResult({
       parameterId: so3!.id,
+      equipmentId: "eq-balance",
       sampleLabel: "CEM-I-01",
       value: "3,35",
       repeatOfId: null,
@@ -175,6 +182,7 @@ describe("demoClient end-to-end workflows", () => {
 
     const blocked = addTestResult({
       parameterId: cl!.id,
+      equipmentId: "eq-balance",
       sampleLabel: "CEM-I-02",
       value: "0,150",
       repeatOfId: null,
@@ -186,6 +194,7 @@ describe("demoClient end-to-end workflows", () => {
 
     const invalid = addTestResult({
       parameterId: so3!.id,
+      equipmentId: "eq-balance",
       sampleLabel: "CEM-I-03",
       value: "1,2,3",
       repeatOfId: null,

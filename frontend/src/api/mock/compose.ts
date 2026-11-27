@@ -6,6 +6,7 @@
 
 import type {
   Calibration,
+  CalibrationPlanView,
   CheckPlanView,
   CheckRecord,
   DueItem,
@@ -14,12 +15,14 @@ import type {
   ReagentView,
   ReportSummary,
   ReportView,
+  ResultReviewView,
   Session,
   Snapshot,
   Status,
   StockCount,
   TestResultView,
 } from "@/api/types";
+import { computeAvailability } from "@/lib/availability";
 
 import { activeUser, userHasPermission, userLabIds } from "./access";
 import { addDecimals, compareDecimals, subtractDecimals } from "./decimal";
@@ -185,10 +188,12 @@ function checkDueItem(db: MockDb, planId: string): DueItem | null {
 
 export type ReagentStock = {
   stock: string;
+  usableStock: string;
   low: boolean;
   lastCount: StockCount | null;
   lastMovementOn: IsoDate | null;
   nearestLot: ReagentView["nearestLot"];
+  recommendedLot: ReagentView["recommendedLot"];
   expiryStatus: Status | null;
   status: Status;
 };
@@ -198,10 +203,12 @@ export function reagentStock(db: MockDb, reagentId: string): ReagentStock {
   if (!reagent) {
     return {
       stock: "0",
+      usableStock: "0",
       low: false,
       lastCount: null,
       lastMovementOn: null,
       nearestLot: null,
+      recommendedLot: null,
       expiryStatus: null,
       status: "NOT_REQUIRED",
     };
@@ -234,17 +241,33 @@ export function reagentStock(db: MockDb, reagentId: string): ReagentStock {
   }
 
   let nearestLot: ReagentView["nearestLot"] = null;
+  let recommendedLot: ReagentView["recommendedLot"] = null;
+  let usableStock = "0";
   for (const lot of db.lots) {
-    if (
-      lot.reagentId === reagentId &&
-      lot.disposedOn === null &&
-      (nearestLot === null || lot.expiryDate < nearestLot.expiryDate)
-    ) {
+    if (lot.reagentId !== reagentId || lot.disposedOn !== null) {
+      continue;
+    }
+    const remaining = lot.remainingQuantity;
+    if (compareDecimals(remaining, "0") <= 0) {
+      continue;
+    }
+    if (nearestLot === null || lot.expiryDate < nearestLot.expiryDate) {
       nearestLot = lot;
+    }
+    if (lot.expiryDate < db.today) {
+      continue;
+    }
+    usableStock = addDecimals(usableStock, remaining);
+    if (recommendedLot === null || lot.expiryDate < recommendedLot.expiryDate) {
+      recommendedLot = lot;
     }
   }
 
-  const low = compareDecimals(stock, reagent.minStock) < 0;
+  if (compareDecimals(usableStock, stock) > 0) {
+    usableStock = stock;
+  }
+
+  const low = compareDecimals(usableStock, reagent.minStock) < 0;
   const expiryStatus = nearestLot
     ? expiryWindow(nearestLot.expiryDate, reagent.expiryLeadMonths, db.today).status
     : null;
@@ -254,7 +277,17 @@ export function reagentStock(db: MockDb, reagentId: string): ReagentStock {
       ? expiryStatus
       : "OK";
 
-  return { stock, low, lastCount, lastMovementOn, nearestLot, expiryStatus, status };
+  return {
+    stock,
+    usableStock,
+    low,
+    lastCount,
+    lastMovementOn,
+    nearestLot,
+    recommendedLot,
+    expiryStatus,
+    status,
+  };
 }
 
 function dueItemsForReagents(db: MockDb): DueItem[] {
@@ -270,7 +303,7 @@ function dueItemsForReagents(db: MockDb): DueItem[] {
         refType: "reagent",
         refId: reagent.id,
         labId: reagent.labId,
-        label: `${reagent.name} · stan ${stock.stock} ${reagent.unit} / próg ${reagent.minStock}`,
+        label: `${reagent.name} · zapas dostępny ${stock.usableStock} ${reagent.unit} / próg ${reagent.minStock}`,
         due: stock.lastMovementOn,
         alertFrom: stock.lastMovementOn,
         validUntil: stock.lastMovementOn,
@@ -431,9 +464,11 @@ function buildReagentViews(db: MockDb, session: Session): ReagentView[] {
       ...reagent,
       labName: labNameOf(db, reagent.labId),
       stock: stock.stock,
+      usableStock: stock.usableStock,
       lastCount: stock.lastCount,
       lastMovementOn: stock.lastMovementOn,
       nearestLot: stock.nearestLot,
+      recommendedLot: stock.recommendedLot,
       expiryStatus: stock.expiryStatus,
       status: stock.status,
       canWriteStock:
@@ -451,14 +486,94 @@ function buildResultViews(db: MockDb): TestResultView[] {
       continue;
     }
     const repeat = db.results.find((candidate) => candidate.repeatOfId === result.id) ?? null;
+    const equipment =
+      result.equipmentId === null
+        ? undefined
+        : db.equipment.find((candidate) => candidate.id === result.equipmentId);
     views.push({
       ...result,
       parameterName: parameter.name,
       unit: parameter.unit,
+      equipmentCode:
+        equipment === undefined ? null : displayCodeOf(db, equipment.labId, equipment.number),
       repeat,
     });
   }
   return views.toSorted((left, right) => right.sampledAt.localeCompare(left.sampledAt));
+}
+
+function buildCalibrationPlanViews(
+  db: MockDb,
+  session: Session,
+  equipment: EquipmentView[],
+): CalibrationPlanView[] {
+  const labCodeFor = (labId: string): string =>
+    db.labs.find((lab) => lab.id === labId)?.code ?? labId;
+  const views: CalibrationPlanView[] = [];
+  for (const plan of db.calibrationPlans) {
+    const equipmentView = equipment.find((item) => item.id === plan.equipmentId);
+    if (equipmentView === undefined) {
+      continue;
+    }
+    const availability = computeAvailability(equipment, db.calibrationPlans, plan, labCodeFor);
+    views.push({
+      ...plan,
+      displayCode: equipmentView.displayCode,
+      equipmentName: equipmentView.name,
+      labName: equipmentView.labName,
+      createdByName: db.users.find((user) => user.id === plan.createdBy)?.fullName ?? "—",
+      approvedByName:
+        plan.approvedBy === null
+          ? null
+          : (db.users.find((user) => user.id === plan.approvedBy)?.fullName ?? "—"),
+      availability,
+      canEdit: session.permissions.includes("calibration:write") && plan.status === "PENDING",
+      canApprove:
+        session.permissions.includes("calibration:approve") &&
+        plan.status === "PENDING" &&
+        availability.warning === null,
+    });
+  }
+  return views.toSorted((left, right) => {
+    if (left.status !== right.status) {
+      return left.status === "PENDING" ? -1 : 1;
+    }
+    return left.dispatchDate.localeCompare(right.dispatchDate);
+  });
+}
+
+function buildReviewViews(db: MockDb, session: Session): ResultReviewView[] {
+  const views: ResultReviewView[] = [];
+  for (const review of db.reviews) {
+    const result = db.results.find((candidate) => candidate.id === review.testResultId);
+    const equipment = db.equipment.find((candidate) => candidate.id === review.equipmentId);
+    const parameter = db.parameters.find((candidate) => candidate.id === result?.parameterId);
+    if (!result || !equipment || !parameter || !session.labIds.includes(equipment.labId)) {
+      continue;
+    }
+    views.push({
+      ...review,
+      equipmentCode: displayCodeOf(db, equipment.labId, equipment.number),
+      equipmentName: equipment.name,
+      parameterName: parameter.name,
+      unit: parameter.unit,
+      sampleLabel: result.sampleLabel,
+      value: result.value,
+      minSnapshot: result.minSnapshot,
+      maxSnapshot: result.maxSnapshot,
+      inRange: result.inRange,
+      sampledAt: result.sampledAt,
+      decidedByName:
+        review.decidedBy === null
+          ? null
+          : (db.users.find((user) => user.id === review.decidedBy)?.fullName ?? "—"),
+    });
+  }
+  const rank = { PENDING: 0, REPEAT: 1, ACCEPTED: 2 } as const;
+  return views.toSorted((left, right) => {
+    const byDecision = rank[left.decision] - rank[right.decision];
+    return byDecision !== 0 ? byDecision : right.sampledAt.localeCompare(left.sampledAt);
+  });
 }
 
 function buildReportViews(db: MockDb): ReportView[] {
@@ -521,6 +636,8 @@ export function buildSnapshot(db: MockDb): Snapshot {
     computeDueItems(db).filter((item) => session.labIds.includes(item.labId)),
   );
   const results = buildResultViews(db);
+  const calibrationPlans = buildCalibrationPlanViews(db, session, equipment);
+  const reviews = buildReviewViews(db, session);
   const canReadAudit = userHasPermission(db, user, "audit:read");
   const canReadReports = userHasPermission(db, user, "report:read");
   const canReadReagents = userHasPermission(db, user, "reagent:read");
@@ -533,8 +650,10 @@ export function buildSnapshot(db: MockDb): Snapshot {
     schedule,
     equipment,
     plans: buildCheckPlanViews(db, equipment),
+    calibrationPlans,
     templates: db.templates,
     results: session.permissions.includes("result:read") ? results : [],
+    reviews: session.permissions.includes("result:read") ? reviews : [],
     parameters: db.parameters.filter((parameter) => parameter.active),
     reagents: canReadReagents ? buildReagentViews(db, session) : [],
     reports: canReadReports ? buildReportViews(db) : [],

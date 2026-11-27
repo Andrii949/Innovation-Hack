@@ -3,6 +3,7 @@
 import type {
   AuditLog,
   Calibration,
+  CalibrationPlan,
   CheckPlan,
   CheckRecord,
   Equipment,
@@ -14,6 +15,7 @@ import type {
   Reagent,
   ReagentLot,
   Report,
+  ResultReview,
   Role,
   StockCount,
   TestParameter,
@@ -41,6 +43,7 @@ export type MockDb = {
   users: UserRecord[];
   equipment: Equipment[];
   calibrations: Calibration[];
+  calibrationPlans: CalibrationPlan[];
   templates: FormTemplate[];
   plans: CheckPlan[];
   checkRecords: CheckRecord[];
@@ -49,6 +52,7 @@ export type MockDb = {
   stockCounts: StockCount[];
   parameters: TestParameter[];
   results: TestResult[];
+  reviews: ResultReview[];
   notifications: Notification[];
   reports: Report[];
   audit: AuditLog[];

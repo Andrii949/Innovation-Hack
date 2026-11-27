@@ -17,13 +17,21 @@ const RESULT_OPTIONS: SelectOption[] = [
   { value: "NOK", label: "NIE OK — niezgodne" },
 ];
 
-export function CalibrationForm({ equipment }: { equipment: EquipmentView }) {
+function monthsAgo(date: string, months: number): string {
+  const shifted = new Date(`${date}T00:00:00Z`);
+  shifted.setUTCMonth(shifted.getUTCMonth() - months);
+  return shifted.toISOString().slice(0, 10);
+}
+
+export function CalibrationForm({ equipment, today }: { equipment: EquipmentView; today: string }) {
   const [month, setMonth] = useState("");
   const [certificateNo, setCertificateNo] = useState("");
   const [vendor, setVendor] = useState("Laboratorium Wzorcujące Warta");
   const [adjustments, setAdjustments] = useState("Brak");
   const [result, setResult] = useState<CalibrationResult>("OK");
   const [note, setNote] = useState("");
+  const [reviewFrom, setReviewFrom] = useState(() => monthsAgo(today, 3));
+  const [reviewTo, setReviewTo] = useState(today);
   const [point, setPoint] = useState("");
   const [error, setError] = useState("");
   const [uncertainty, setUncertainty] = useState("");
@@ -38,6 +46,12 @@ export function CalibrationForm({ equipment }: { equipment: EquipmentView }) {
       });
       return;
     }
+    if (result === "NOK" && (reviewFrom === "" || reviewTo === "" || reviewFrom > reviewTo)) {
+      toast.error("Nieprawidłowy okres przeglądu wyników", {
+        description: "Podaj datę początkową i końcową; początek nie może być po końcu.",
+      });
+      return;
+    }
     const hasPoint = [point, error, uncertainty, unit].some((item) => item.trim() !== "");
     const response = recordCalibration({
       equipmentId: equipment.id,
@@ -47,6 +61,8 @@ export function CalibrationForm({ equipment }: { equipment: EquipmentView }) {
       adjustments,
       result,
       note,
+      reviewPeriodFrom: result === "NOK" ? reviewFrom : null,
+      reviewPeriodTo: result === "NOK" ? reviewTo : null,
       points: hasPoint ? [{ point, error, uncertainty, unit }] : [],
     });
     if (!response.ok) {
@@ -54,7 +70,10 @@ export function CalibrationForm({ equipment }: { equipment: EquipmentView }) {
       return;
     }
     toast.success(`Zapisano wzorcowanie ${formatMonth(parsedMonth)}`, {
-      description: `${equipment.displayCode}: termin i status przeliczone.`,
+      description:
+        result === "NOK"
+          ? "Sprawdź listę „Do weryfikacji” — wyniki z wybranego okresu czekają na decyzję."
+          : `${equipment.displayCode}: termin i status przeliczone.`,
     });
     setCertificateNo("");
     setNote("");
@@ -117,6 +136,37 @@ export function CalibrationForm({ equipment }: { equipment: EquipmentView }) {
               />
             </FormField>
           </div>
+
+          {result === "NOK" && (
+            <div className="grid gap-3 rounded-lg border border-amber-600/30 bg-amber-50 p-3 sm:grid-cols-2 dark:bg-amber-950/30">
+              <p className="text-xs text-amber-900 sm:col-span-2 dark:text-amber-200">
+                Wynik NIE OK: wskaż okres, z którego wcześniejsze wyniki badań mają trafić do
+                weryfikacji. Lista pojawi się w sekcji „Do weryfikacji”.
+              </p>
+              <FormField id={`cal-review-from-${equipment.id}`} label="Okres przeglądu — od">
+                <Input
+                  id={`cal-review-from-${equipment.id}`}
+                  type="date"
+                  value={reviewFrom}
+                  onChange={(event) => {
+                    setReviewFrom(event.target.value);
+                  }}
+                  required
+                />
+              </FormField>
+              <FormField id={`cal-review-to-${equipment.id}`} label="Okres przeglądu — do">
+                <Input
+                  id={`cal-review-to-${equipment.id}`}
+                  type="date"
+                  value={reviewTo}
+                  onChange={(event) => {
+                    setReviewTo(event.target.value);
+                  }}
+                  required
+                />
+              </FormField>
+            </div>
+          )}
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <FormField

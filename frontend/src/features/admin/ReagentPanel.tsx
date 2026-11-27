@@ -32,26 +32,38 @@ export function ReagentPanel({ reagents }: { reagents: ReagentView[] }) {
                     {reagent.kind === "CRM" ? "CRM" : "Odczynnik"} · {reagent.labName}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground tabular-nums">
-                    {formatDate(reagent.lastCount?.countedOn ?? "")} · spis{" "}
-                    {reagent.lastCount === null
-                      ? "brak"
-                      : `${formatDecimal(reagent.lastCount.quantity)} ${reagent.unit}`}
+                    Stan łączny: {formatDecimal(reagent.stock)} {reagent.unit}
                   </p>
-                  {reagent.nearestLot !== null && (
-                    <p className="text-xs text-muted-foreground tabular-nums">
-                      Ważność {formatDate(reagent.nearestLot.expiryDate)} ·{" "}
-                      {reagent.nearestLot.lotNo}
+                  <p
+                    className={cn(
+                      "text-xs font-medium tabular-nums",
+                      reagent.status === "LOW" && "text-red-700 dark:text-red-400",
+                    )}
+                  >
+                    Zapas dostępny: {formatDecimal(reagent.usableStock)} {reagent.unit}
+                  </p>
+                  {reagent.recommendedLot !== null ? (
+                    <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-300">
+                      Użyj tej partii w pierwszej kolejności: {reagent.recommendedLot.lotNo}, ważna
+                      do {formatDate(reagent.recommendedLot.expiryDate)}.
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">
+                      Brak ważnej partii z zapasem.
                     </p>
                   )}
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
+                  <p className="text-sm font-semibold tabular-nums">
+                    {formatDecimal(reagent.stock)} {reagent.unit}
+                  </p>
                   <p
                     className={cn(
                       "text-sm font-semibold tabular-nums",
                       reagent.status === "LOW" && "text-red-700 dark:text-red-400",
                     )}
                   >
-                    {formatDecimal(reagent.stock)} {reagent.unit}
+                    dostępne: {formatDecimal(reagent.usableStock)}
                   </p>
                   <p className="text-[11px] text-muted-foreground tabular-nums">
                     próg {formatDecimal(reagent.minStock)}
@@ -70,10 +82,10 @@ export function ReagentPanel({ reagents }: { reagents: ReagentView[] }) {
             <TableRow>
               <TableHead>Odczynnik</TableHead>
               <TableHead>Pracownia</TableHead>
-              <TableHead className="text-right">Stan</TableHead>
+              <TableHead className="text-right">Stan łączny</TableHead>
+              <TableHead className="text-right">Zapas dostępny</TableHead>
               <TableHead className="text-right">Próg</TableHead>
-              <TableHead>Najbliższa ważność</TableHead>
-              <TableHead>Ostatni spis</TableHead>
+              <TableHead>Partia do użycia</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
@@ -89,39 +101,38 @@ export function ReagentPanel({ reagents }: { reagents: ReagentView[] }) {
                   </div>
                 </TableCell>
                 <TableCell className="whitespace-nowrap">{reagent.labName}</TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {formatDecimal(reagent.stock)} {reagent.unit}
+                </TableCell>
                 <TableCell
                   className={cn(
                     "text-right font-semibold tabular-nums",
                     reagent.status === "LOW" && "text-red-700 dark:text-red-400",
                   )}
                 >
-                  {formatDecimal(reagent.stock)} {reagent.unit}
+                  {formatDecimal(reagent.usableStock)} {reagent.unit}
                 </TableCell>
                 <TableCell className="text-right tabular-nums text-muted-foreground">
                   {formatDecimal(reagent.minStock)} {reagent.unit}
                 </TableCell>
-                <TableCell className="whitespace-nowrap">
-                  {reagent.nearestLot === null ? (
-                    <span className="text-muted-foreground">—</span>
-                  ) : (
-                    <span>
-                      {formatDate(reagent.nearestLot.expiryDate)}
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        ({reagent.nearestLot.lotNo})
-                      </span>
+                <TableCell className="max-w-72 whitespace-normal">
+                  {reagent.recommendedLot === null ? (
+                    <span className="text-xs text-amber-800 dark:text-amber-300">
+                      Brak ważnej partii z zapasem.
                     </span>
-                  )}
-                </TableCell>
-                <TableCell className="whitespace-nowrap">
-                  {reagent.lastCount === null ? (
-                    <span className="text-muted-foreground">Brak</span>
                   ) : (
-                    <span>
-                      {formatDate(reagent.lastCount.countedOn)}
-                      <span className="ml-1 text-xs text-muted-foreground tabular-nums">
-                        {formatDecimal(reagent.lastCount.quantity)} {reagent.unit}
-                      </span>
-                    </span>
+                    <div>
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-600/25 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      >
+                        Użyj tej partii w pierwszej kolejności
+                      </Badge>
+                      <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+                        {reagent.recommendedLot.lotNo} · ważna do{" "}
+                        {formatDate(reagent.recommendedLot.expiryDate)}
+                      </p>
+                    </div>
                   )}
                 </TableCell>
                 <TableCell>
