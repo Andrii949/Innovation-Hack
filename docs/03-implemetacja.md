@@ -9,8 +9,8 @@ wzorcowaniami, sprawdzeniami, odczynnikami i kontrolą zakresu wyników.
 osobny worker liczy terminy i tworzy powiadomienia. Szczegóły: [02-architektura.md](02-architektura.md).
 
 **Stack:** Python 3.12+ (uv), FastAPI, SQLAlchemy 2, Alembic, Pydantic v2, pwdlib[argon2],
-PostgreSQL 16+, React + TypeScript + Vite, MUI, TanStack Query, openapi-typescript +
-openapi-fetch, Capacitor 8.
+PostgreSQL 16+, React + TypeScript + Vite, shadcn/ui (Tailwind CSS 4), TanStack Query,
+openapi-typescript + openapi-fetch, Capacitor 8.
 
 **Spec:** [01-zadanie.md](01-zadanie.md) (wymagania), [02-architektura.md](02-architektura.md)
 (projekt), [04-research.md](04-research.md) (uzasadnienie).
@@ -74,7 +74,7 @@ Priorytety: **P0** — potrzebne do demo; **P1** — pełne 9 funkcji; **P2** �
 
 - Gałąź na zadanie: `feat/t08-equipment-registry`; PR do `main`, 1 review, CI zielone.
 - Commity: `feat(scope): ...`, `fix: ...`, małe i częste.
-- Gotowe = testy zielone, lint czysty, typy frontu wygenerowane ponownie (`npm run gen:api`), jeśli zmieniło się API.
+- Gotowe = testy zielone, lint czysty, typy frontu wygenerowane ponownie (`bun run gen:api`), jeśli zmieniło się API.
 
 ---
 
@@ -651,11 +651,11 @@ def test_existing_key_is_skipped_without_error(db, admin_a, overdue_in_a):  # dw
 - `api` (openapi-fetch) z nagłówkiem `Authorization`; 401 → `/login?next=<bieżąca ścieżka>`
 - trasy: `/login`, `/schedule`, `/equipment`, `/equipment/:id`, `/e/:publicId`, `/reagents`, `/results`, `/notifications`, `/settings/*`, `/audit`, `/labels`; układ: `OfficeLayout` od breakpointu `md`, niżej `LabLayout`
 
-- [ ] **Projekt:** `npm create vite@latest frontend -- --template react-ts`; zależności: react-router-dom, @tanstack/react-query, @mui/material, @mui/x-data-grid, @emotion/react, @emotion/styled, openapi-fetch, react-hook-form, dayjs, qrcode; dev: openapi-typescript, vitest, @testing-library/react; skrypt `gen:api` = `openapi-typescript http://localhost:8000/api/openapi.json -o src/api/schema.d.ts`.
+- [ ] **Projekt:** `bun create vite frontend --template react-ts`; zależności: react-router-dom, @tanstack/react-query, tailwindcss, @tailwindcss/vite, radix-ui, class-variance-authority, cn, lucide-react, tw-animate-css, @fontsource-variable/geist, openapi-fetch, react-hook-form, dayjs, qrcode; dev: openapi-typescript, @testing-library/react, @types/bun; skrypt `gen:api` = `openapi-typescript http://localhost:8000/api/openapi.json -o src/api/schema.d.ts`; komponenty: `bunx shadcn@latest init -b radix -p nova`, potem `bunx shadcn@latest add button input label card alert`. Testy: `bun test` (`bun:test`), pliki `*.test.ts` obok modułów.
 - [ ] **Testy (czerwone):**
 
 ```ts
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { equipmentUrl, parseEquipmentUrl } from "./qr";
 import { formatMonth, parseMonthInput } from "./months";
 import { statusColor, statusLabel } from "./status";
@@ -686,16 +686,16 @@ describe("lib", () => {
 });
 ```
 
-- [ ] **Uruchom:** `npm run test` → FAIL.
-- [ ] **Implementacja:** biblioteki z `src/lib`, `tokenStore`, `api`, logowanie, `AuthGuard`, oba układy; CI dostaje `npm ci && npm run test && npm run build`.
-- [ ] **Sprawdź:** `npm run test` → PASS, `npm run build` → OK; ręcznie: wylogowany otwieram `/e/<id>` → logowanie → wracam na `/e/<id>`.
+- [ ] **Uruchom:** `bun test` → FAIL.
+- [ ] **Implementacja:** biblioteki z `src/lib`, `tokenStore`, `api`, logowanie, `AuthGuard`, oba układy; CI dostaje `bun install --frozen-lockfile && bun test && bun run build`.
+- [ ] **Sprawdź:** `bun test` → PASS, `bun run build` → OK; ręcznie: wylogowany otwieram `/e/<id>` → logowanie → wracam na `/e/<id>`.
 - [ ] **Commit:** `feat(web): app shell, API client, login, layouts`
 
 ### T20 · Harmonogram, grafik, dzwonek — D · P0 · zależy od: T12, T15, T19
 
 **Pliki:** `src/features/schedule/{SchedulePage,MonthGrid}.tsx`, `src/layout/NotificationBell.tsx`, `src/features/notifications/NotificationsPage.tsx`.
 
-- [ ] **Tabela (P0):** DataGrid — Pracownia, Kod, Nazwa, Rodzaj, Termin (`MM/RRRR` dla miesięcy, data dla partii), Status (kolorowy chip); filtry → parametry `/api/schedule`: pracownia, rodzaj, horyzont (1 / 3 / 6 / 12 mies.), „pokaż wszystkie”; klik w wiersz → karta.
+- [ ] **Tabela (P0):** TanStack Table + komponenty shadcn/ui — Pracownia, Kod, Nazwa, Rodzaj, Termin (`MM/RRRR` dla miesięcy, data dla partii), Status (kolorowy chip); filtry → parametry `/api/schedule`: pracownia, rodzaj, horyzont (1 / 3 / 6 / 12 mies.), „pokaż wszystko”; klik w wiersz → karta.
 - [ ] **Grafik miesięczny (P1):** wiersze = pozycje, kolumny = 12 kolejnych miesięcy, kolorowa komórka w miesiącu terminu (kolor wg statusu).
 - [ ] **Dzwonek (P0):** licznik nieprzeczytanych (`GET /api/notifications?unread=true`, odświeżanie co 60 s), lista, „oznacz przeczytane”, klik → pozycja.
 - [ ] **Sprawdź:** na danych demo pierwsze wiersze to `OVERDUE`; filtr pracowni ukrywa inne; po `python -m app.worker --once` dzwonek pokazuje licznik.
@@ -727,11 +727,11 @@ describe("lib", () => {
 
 **Pliki:** `frontend/capacitor.config.ts`, `frontend/android/`, `frontend/ios/`, `src/features/setup/ServerSetupPage.tsx`, rozszerz `src/auth/tokenStore.ts`, `src/platform/server.ts`.
 
-- [ ] **Projekty:** `npm i @capacitor/core @capacitor/cli @capacitor/android @capacitor/ios`; `npx cap init "Inteligentne Laboratorium" pl.innovationhack.lab --web-dir dist`; `npx cap add android`; `npx cap add ios` (na Macu); `.gitignore`: `google-services.json`, `GoogleService-Info.plist`.
+- [ ] **Projekty:** `bun add @capacitor/core @capacitor/android @capacitor/ios`; `bun add -d @capacitor/cli`; `bunx cap init "Inteligentne Laboratorium" pl.innovationhack.lab --web-dir dist`; `bunx cap add android`; `bunx cap add ios` (na Macu); `.gitignore`: `google-services.json`, `GoogleService-Info.plist`.
 - [ ] **Token na telefonie:** `tokenStore` w aplikacji natywnej przez bezpieczny magazyn (np. `capacitor-secure-storage-plugin` — najpierw sprawdzić zgodność z Capacitor 8).
 - [ ] **Adres serwera:** `needsServerSetup()` → `ServerSetupPage` przy pierwszym uruchomieniu: wpisanie adresu albo skan QR konfiguracyjnego; zapis dopiero po odpowiedzi `{"status": "ok"}` z `GET <adres>/api/health`.
 - [ ] **CORS:** logowanie z telefonu przeciw serwerowi testowemu z T27 (POST działa = `capacitor://localhost` / `https://localhost` dopuszczone). Dev po HTTP: zezwolenie na ruch HTTP tylko w buildzie debug.
-- [ ] **Sprawdź:** `npm run build && npx cap sync`; Android: adres serwera → logowanie → harmonogram; iOS: to samo na Macu (Xcode 26+).
+- [ ] **Sprawdź:** `bun run cap:sync`; Android: adres serwera → logowanie → harmonogram; iOS: to samo na Macu (Xcode 26+).
 - [ ] **Commit:** `feat(mobile): capacitor projects, server setup, secure token`
 
 ### T24 · Skan → karta → sprawdzenie — E · P0 · zależy od: T11, T23
@@ -740,7 +740,7 @@ describe("lib", () => {
 
 **Daje:** `scanEquipment(): Promise<string | null>` — `scanBarcode` z `@capacitor/barcode-scanner` (podpowiedź: QR) → `parseEquipmentUrl`.
 
-- [ ] **Skan:** `npm i @capacitor/barcode-scanner @capacitor/camera`; przycisk „Skanuj” w `LabLayout`; kod spoza systemu → komunikat „To nie jest kod urządzenia”.
+- [ ] **Skan:** `bun add @capacitor/barcode-scanner @capacitor/camera`; przycisk „Skanuj” w `LabLayout`; kod spoza systemu → komunikat „To nie jest kod urządzenia”.
 - [ ] **Karta (`/e/:publicId`):** kod, nazwa, status, następny termin, plany z przyciskiem „Wpisz sprawdzenie”, gdy `can_write`; inaczej baner „Brak uprawnień do wpisu dla tego urządzenia”; wycofane → baner „Urządzenie wycofane — wpisy zablokowane”.
 - [ ] **Formularz sprawdzenia:** pola z szablonu (`DynamicField`; liczby z przecinkiem, podpowiedź jednostki i min–max), wymagane pola, opcjonalne zdjęcie (`Camera.getPhoto` → `POST /api/attachments`), zapis → wynik na czerwono przy `out_of_range`.
 - [ ] **Sprawdź na telefonie (lista kontrolna):** skan wydrukowanej etykiety → karta; pracownik bez upoważnienia → baner, brak formularza; pracownik z innej pracowni → komunikat z `LAB_OUT_OF_SCOPE`; urządzenie wycofane → baner; temperatura 23,5 → czerwone, a u admina dzwonek „poza zakresem”.
@@ -759,7 +759,7 @@ describe("lib", () => {
 
 **Pliki:** `src/platform/push.ts`.
 
-- [ ] `npm i @capacitor-firebase/messaging`; pliki Firebase lokalnie (nie w repo); na iOS klucz APNs w projekcie Firebase.
+- [ ] `bun add @capacitor-firebase/messaging`; pliki Firebase lokalnie (nie w repo); na iOS klucz APNs w projekcie Firebase.
 - [ ] Przycisk „Włącz powiadomienia” (prośba o zgodę dopiero po kliknięciu) → token → `POST /api/devices`; push przy otwartej aplikacji → odświeżenie dzwonka.
 - [ ] **Sprawdź:** `python -m app.worker --once` z nową pozycją → push na Androidzie; na iOS z kluczem APNs.
 - [ ] **Commit:** `feat(mobile): push notifications`
@@ -783,7 +783,7 @@ describe("lib", () => {
 - [ ] `calibration.spec.ts` — wzorcowanie OK dla urządzenia po terminie → status „Ważne”.
 - [ ] `results.spec.ts` — SO₃ = 3,35 → czerwone „Poza zakresem”.
 - [ ] `qr-login.spec.ts` — wylogowany otwiera `/e/<id>` → logowanie → karta urządzenia; `?next=https://evil.example` → `/schedule`.
-- [ ] **Uruchom:** `npx playwright test` na stosie z T27 z danymi z T18 → PASS.
+- [ ] **Uruchom:** `bunx playwright test` na stosie z T27 z danymi z T18 → PASS.
 - [ ] Lista kontrolna mobile z T24 przechodzi na 1 Androidzie i 1 iPhonie.
 - [ ] **Commit:** `test(e2e): main flows`
 

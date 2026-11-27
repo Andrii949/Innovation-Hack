@@ -57,7 +57,7 @@ flowchart LR
 
 | Komponent | Technologia | Odpowiada za |
 |---|---|---|
-| Frontend | React + TypeScript + Vite, MUI, TanStack Query | ekrany biura i pracowni — jeden kod |
+| Frontend | React + TypeScript + Vite, shadcn/ui (Tailwind CSS, Radix UI), TanStack Query | ekrany biura i pracowni — jeden kod |
 | Aplikacja mobilna | Capacitor 8 + pluginy: skaner kodów, aparat, push | ten sam frontend na Androidzie i iOS |
 | API | FastAPI, SQLAlchemy 2, Alembic, Pydantic v2 | logika, uprawnienia, historia zmian, pliki |
 | Worker | ten sam kod Pythona, osobny proces | przeliczanie terminów, powiadomienia, wysyłka push i e-mail |
@@ -404,10 +404,14 @@ sequenceDiagram
 |---|---|
 | Routing | React Router |
 | Dane z API, odświeżanie | TanStack Query |
-| Komponenty, tabele | MUI + MUI X DataGrid (wersja MIT) |
+| Komponenty, tabele | shadcn/ui (Radix UI + Tailwind CSS 4) + TanStack Table |
 | Typy i klient API | `openapi-typescript` + `openapi-fetch` (generowane z OpenAPI) |
 | Formularze | React Hook Form |
 | Etykiety z QR | `qrcode` |
+
+**Kolory firmowe** (logo Cementowni Warta): navy `#0C3F76` — primary, przyciski i linki —
+oraz lime `#8DC63F` — akcent, wykresy i obramowania; lime na białym tylko jako tło z ciemnym
+tekstem (biały tekst ma kontrast 2,0:1). Tokeny w `frontend/src/index.css`.
 
 **Capacitor 8** (build iOS wymaga Xcode 26+ na macOS):
 
