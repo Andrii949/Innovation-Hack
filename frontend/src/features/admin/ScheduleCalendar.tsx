@@ -114,10 +114,10 @@ export function ScheduleCalendar({
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="grid gap-3">
         {backlog.length > 0 && (
-          <div className="rounded-lg border border-red-200/80 bg-red-50/70 px-3 py-2 dark:border-red-900/50 dark:bg-red-950/20">
+          <div className="rounded-lg border border-red-500/25 bg-red-500/5 px-3 py-2">
             <div className="flex flex-wrap items-center gap-2">
               <TriangleAlert className="size-3.5 text-red-700 dark:text-red-400" aria-hidden />
-              <p className="font-mono text-[9px] tracking-[0.14em] text-red-800 uppercase dark:text-red-300">
+              <p className="font-mono text-[9px] tracking-[0.14em] text-red-700 uppercase dark:text-red-400">
                 Poza kalendarzem · {backlog.length}
               </p>
               <span className="text-xs text-muted-foreground">po terminie lub bez wpisu</span>
@@ -147,7 +147,7 @@ export function ScheduleCalendar({
           </div>
         )}
 
-        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div className="overflow-hidden rounded-xl border border-border/70 bg-card">
           <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-3 py-2">
             <div className="flex items-center gap-0.5">
               <Tooltip>
@@ -281,7 +281,7 @@ export function ScheduleCalendar({
         </div>
       </div>
 
-      <aside className="min-w-0 overflow-hidden rounded-xl border bg-card self-start shadow-sm">
+      <aside className="min-w-0 self-start overflow-hidden rounded-xl border border-border/70 bg-card">
         <div className="border-b bg-muted/30 px-3 py-2">
           <p className="font-mono text-[9px] tracking-[0.16em] text-muted-foreground uppercase">
             Agenda dnia

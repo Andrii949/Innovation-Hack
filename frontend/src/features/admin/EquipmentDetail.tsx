@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { Snapshot } from "@/api/types";
+import { DataList, DataListItem } from "@/components/DataList";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -125,7 +126,52 @@ export function EquipmentDetail({
                 <div className="mt-5 grid gap-5">
                   <div>
                     <h4 className="mb-2 text-sm font-semibold">Historia wzorcowań</h4>
-                    <div className="rounded-lg border">
+                    <div className="sm:hidden">
+                      <DataList>
+                        {equipment.calibrations.length === 0 && (
+                          <DataListItem className="text-sm text-muted-foreground">
+                            Brak wpisów wzorcowania.
+                          </DataListItem>
+                        )}
+                        {equipment.calibrations.map((calibration) => (
+                          <DataListItem key={calibration.id}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium tabular-nums">
+                                  {formatMonth(calibration.calibratedMonth)} ·{" "}
+                                  {calibration.certificateNo}
+                                </p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  {calibration.vendor}
+                                </p>
+                                <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+                                  {calibration.points.length === 0
+                                    ? "Brak punktów"
+                                    : calibration.points
+                                        .map(
+                                          (point) =>
+                                            `${point.point}: ${formatDecimal(point.error)} ± ${formatDecimal(point.uncertainty)} ${point.unit}`,
+                                        )
+                                        .join(" · ")}
+                                </p>
+                              </div>
+                              <Badge
+                                variant="outline"
+                                className={
+                                  calibration.result === "OK"
+                                    ? "shrink-0 border-emerald-600/25 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                                    : "shrink-0 border-red-600/25 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300"
+                                }
+                              >
+                                {calibration.result === "OK" ? "OK" : "NIE OK"}
+                              </Badge>
+                            </div>
+                          </DataListItem>
+                        ))}
+                      </DataList>
+                    </div>
+
+                    <div className="hidden overflow-hidden rounded-lg border border-border/70 sm:block">
                       <Table>
                         <TableHeader>
                           <TableRow>

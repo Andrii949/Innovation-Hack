@@ -644,8 +644,6 @@
   --brand-lime-bright: #a5d96b;
   --brand-lime-soft: #f0f7e4;
   --brand-clinker: #6f6c66;
-  /* Grain ink for the clinker texture, as an rgb triplet so utilities can vary alpha. */
-  --cement-ink: 12 63 118;
 
   --background: oklch(0.976 0.006 110);
   --foreground: oklch(0.19 0.012 255);
@@ -732,7 +730,6 @@
 }
 
 .dark {
-  --cement-ink: 226 232 240;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -764,47 +761,6 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: #8dc63f;
-}
-
-/* Brand surfaces: clinker grain and kiln hatch, drawn with gradients so the app stays
-   asset-free. The grain follows the surface ink: navy on light, white on the navy header. */
-@utility cement-grain {
-  background-image:
-    radial-gradient(circle at 18% 22%, rgb(var(--cement-ink) / 0.06) 0 0.8px, transparent 1.4px),
-    radial-gradient(circle at 64% 48%, rgb(var(--cement-ink) / 0.05) 0 0.7px, transparent 1.2px),
-    radial-gradient(circle at 36% 82%, rgb(var(--cement-ink) / 0.04) 0 1px, transparent 1.6px);
-  background-size:
-    9px 11px,
-    13px 17px,
-    21px 19px;
-  background-position:
-    0 0,
-    4px 7px,
-    11px 3px;
-}
-
-@utility cement-grain-light {
-  background-image:
-    radial-gradient(circle at 18% 22%, rgb(255 255 255 / 0.09) 0 0.8px, transparent 1.4px),
-    radial-gradient(circle at 64% 48%, rgb(255 255 255 / 0.07) 0 0.7px, transparent 1.2px),
-    radial-gradient(circle at 36% 82%, rgb(255 255 255 / 0.05) 0 1px, transparent 1.6px);
-  background-size:
-    9px 11px,
-    13px 17px,
-    21px 19px;
-  background-position:
-    0 0,
-    4px 7px,
-    11px 3px;
-}
-
-/* Faint 45° drafting hatch, like a plant elevation drawing. */
-@utility kiln-hatch {
-  background-image: repeating-linear-gradient(
-    135deg,
-    color-mix(in oklab, currentColor 8%, transparent) 0 1px,
-    transparent 1px 10px
-  );
 }
 
 @layer base {

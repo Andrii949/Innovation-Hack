@@ -1,9 +1,11 @@
 import { cn } from "cn";
-import { ArrowUpDown, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { EquipmentView } from "@/api/types";
+import { DataList, DataListItem } from "@/components/DataList";
 import { SortHead } from "@/components/SortHead";
+import { type SortOption, SortSelect } from "@/components/SortSelect";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +26,13 @@ const ACCESSORS: Record<Column, (equipment: EquipmentView) => string | number | 
   nextDue: (equipment) => equipment.nextDue?.validUntil ?? null,
   status: (equipment) => statusSeverity(equipment.status),
 };
+
+const SORT_OPTIONS: SortOption<Column>[] = [
+  { column: "code", label: "Kod" },
+  { column: "name", label: "Nazwa" },
+  { column: "nextDue", label: "Najbliższy termin" },
+  { column: "status", label: "Status" },
+];
 
 function nextDueLabel(equipment: EquipmentView): string {
   if (equipment.status === "WITHDRAWN") {
@@ -72,35 +81,69 @@ export function EquipmentSection({
     setSort((current) => nextSort(current, column));
   };
 
+  const emptyText =
+    equipment.length === 0
+      ? "Brak urządzeń w zakresie pracowni."
+      : "Żadne urządzenie nie pasuje do frazy.";
+
   return (
     <div className="grid gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-56 flex-1 sm:max-w-sm">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            type="search"
-            value={query}
-            placeholder="Kod, nazwa, pracownia, nr seryjny…"
-            aria-label="Szukaj urządzenia"
-            className="pl-8"
-            onChange={(event) => {
-              setQuery(event.target.value);
-            }}
-          />
-        </div>
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
+        <Input
+          type="search"
+          value={query}
+          placeholder="Kod, nazwa, pracownia, nr seryjny…"
+          aria-label="Szukaj urządzenia"
+          className="pl-9"
+          onChange={(event) => {
+            setQuery(event.target.value);
+          }}
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <SortSelect sort={sort} options={SORT_OPTIONS} onChange={setSort} />
         <span className="font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase tabular-nums">
           {sorted.length} / {equipment.length}
         </span>
-        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-          <ArrowUpDown className="size-3" aria-hidden />
-          kliknij nagłówek, aby sortować
-        </span>
       </div>
 
-      <div className="rounded-xl border">
+      <div className="sm:hidden">
+        <DataList>
+          {sorted.length === 0 && (
+            <DataListItem className="text-sm text-muted-foreground">{emptyText}</DataListItem>
+          )}
+          {sorted.map((item) => (
+            <DataListItem key={item.id} className="p-0">
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectId(item.id);
+                }}
+                className={cn(
+                  "flex w-full items-start justify-between gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50",
+                  item.status === "WITHDRAWN" && "opacity-60",
+                )}
+              >
+                <div className="min-w-0">
+                  <p className="font-mono text-[11px] text-muted-foreground">{item.displayCode}</p>
+                  <p className="truncate text-sm font-medium">{item.name}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.labName} · {nextDueLabel(item)}
+                  </p>
+                </div>
+                <StatusBadge status={item.status} className="shrink-0" />
+              </button>
+            </DataListItem>
+          ))}
+        </DataList>
+      </div>
+
+      <div className="hidden overflow-hidden rounded-xl border border-border/70 sm:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -121,9 +164,7 @@ export function EquipmentSection({
             {sorted.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
-                  {equipment.length === 0
-                    ? "Brak urządzeń w zakresie pracowni."
-                    : "Żadne urządzenie nie pasuje do frazy."}
+                  {emptyText}
                 </TableCell>
               </TableRow>
             )}

@@ -81,12 +81,7 @@ export default function ServerSetupPage({ onDone }: Props) {
 
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-primary px-4 py-10 text-primary-foreground">
-      <div className="kiln-hatch pointer-events-none absolute inset-0 opacity-40" aria-hidden />
-      <div
-        className="cement-grain-light pointer-events-none absolute inset-0 opacity-80"
-        aria-hidden
-      />
-      <PlantSkyline className="pointer-events-none absolute -right-8 bottom-0 h-44 w-[40rem] text-primary-foreground/15" />
+      <PlantSkyline className="pointer-events-none absolute -right-8 bottom-0 h-44 w-[40rem] text-primary-foreground/10" />
       <div className="relative w-full max-w-md">
         <div className="mb-6 flex items-center gap-3">
           <BrandMark className="size-11" />

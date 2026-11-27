@@ -4,39 +4,17 @@ import type { ReactNode } from "react";
 
 type Tone = "default" | "error" | "warning" | "success";
 
-const TONE = {
-  default: {
-    value: "text-foreground",
-    tile: "bg-muted text-muted-foreground",
-    bar: "bg-primary/30",
-  },
-  error: {
-    value: "text-red-700 dark:text-red-400",
-    tile: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400",
-    bar: "bg-red-500",
-  },
-  warning: {
-    value: "text-amber-700 dark:text-amber-400",
-    tile: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
-    bar: "bg-amber-500",
-  },
-  success: {
-    value: "text-emerald-700 dark:text-emerald-400",
-    tile: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
-    bar: "bg-emerald-500",
-  },
-} as const;
+const TONE: Record<Tone, { value: string; dot: string }> = {
+  default: { value: "text-foreground", dot: "bg-muted-foreground/50" },
+  error: { value: "text-red-700 dark:text-red-400", dot: "bg-red-500" },
+  warning: { value: "text-amber-700 dark:text-amber-400", dot: "bg-amber-500" },
+  success: { value: "text-emerald-700 dark:text-emerald-400", dot: "bg-emerald-500" },
+};
 
 export function MetricStrip({ children }: { children: ReactNode }) {
   return (
-    <section className="relative overflow-hidden rounded-2xl border bg-border shadow-sm">
-      <span
-        className="absolute inset-x-0 top-0 z-10 h-0.5 bg-linear-to-r from-brand-lime via-brand-navy to-brand-lime"
-        aria-hidden
-      />
-      <div className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 xl:grid-cols-4">
-        {children}
-      </div>
+    <section className="overflow-hidden rounded-xl border border-border/70 bg-border">
+      <div className="grid grid-cols-2 gap-px bg-border xl:grid-cols-4">{children}</div>
     </section>
   );
 }
@@ -55,34 +33,32 @@ export function Metric({
   icon?: LucideIcon;
 }) {
   return (
-    <div className="relative bg-card p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <p className="font-mono text-[10px] tracking-[0.16em] text-muted-foreground uppercase">
+    <div className="min-w-0 bg-card px-3 py-3 sm:px-4 sm:py-4">
+      <div className="flex items-start gap-1.5">
+        <span className={cn("mt-1 size-1.5 shrink-0 rounded-full", TONE[tone].dot)} aria-hidden />
+        <p className="line-clamp-2 font-mono text-[9px] leading-tight tracking-[0.1em] text-muted-foreground uppercase sm:text-[10px]">
           {label}
         </p>
         {Icon !== undefined && (
-          <span
-            className={cn("flex size-7 items-center justify-center rounded-md", TONE[tone].tile)}
-          >
-            <Icon className="size-3.5" aria-hidden />
-          </span>
+          <Icon
+            className="mt-0.5 ml-auto hidden size-3.5 shrink-0 text-muted-foreground sm:block"
+            aria-hidden
+          />
         )}
       </div>
       <p
         className={cn(
-          "mt-2 text-3xl leading-none font-semibold tracking-[-0.03em] tabular-nums",
+          "mt-2 text-2xl leading-none font-semibold tracking-[-0.03em] tabular-nums sm:text-3xl",
           TONE[tone].value,
         )}
       >
         {value}
       </p>
       {hint !== undefined && (
-        <p className="mt-1.5 text-xs leading-snug text-muted-foreground">{hint}</p>
+        <p className="mt-1.5 hidden line-clamp-1 text-[11px] leading-snug text-muted-foreground sm:block">
+          {hint}
+        </p>
       )}
-      <span
-        className={cn("absolute inset-x-0 bottom-0 h-0.5 opacity-80", TONE[tone].bar)}
-        aria-hidden
-      />
     </div>
   );
 }

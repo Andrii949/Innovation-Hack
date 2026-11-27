@@ -29,6 +29,15 @@ const KIND_OPTIONS: SelectOption[] = [
   ...DUE_KINDS.map((kind) => ({ value: kind, label: dueKindLabel(kind) })),
 ];
 
+const SECTIONS: SelectOption[] = [
+  { value: "harmonogram", label: "Harmonogram" },
+  { value: "urzadzenia", label: "Urządzenia" },
+  { value: "odczynniki", label: "Odczynniki" },
+  { value: "wyniki", label: "Wyniki" },
+  { value: "raporty", label: "Raporty" },
+  { value: "historia", label: "Historia" },
+];
+
 export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
   const [tab, setTab] = useState("harmonogram");
   const [view, setView] = useState<"calendar" | "table">("calendar");
@@ -130,50 +139,68 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
       <DueHorizon items={snapshot.schedule} today={snapshot.today} />
 
       <Tabs value={tab} onValueChange={setTab} className="min-w-0">
+        <div className="grid gap-1 sm:hidden">
+          <span className="font-mono text-[9px] tracking-[0.14em] text-muted-foreground uppercase">
+            Sekcja
+          </span>
+          <SelectField value={tab} options={SECTIONS} onValueChange={setTab} ariaLabel="Sekcja" />
+        </div>
         <TabsList
           variant="line"
-          className="no-scrollbar h-auto w-full justify-start gap-0 overflow-x-auto border-b"
+          className="no-scrollbar hidden h-auto w-full justify-start gap-0 border-b sm:flex sm:overflow-x-auto"
         >
           <TabsTrigger
-            className="flex-none gap-2 px-3 pb-2 data-active:text-primary data-active:after:bg-chart-2"
+            className="flex-none gap-2 px-2.5 pb-2 text-[13px] sm:px-3 sm:text-sm data-active:text-primary data-active:after:bg-chart-2"
             value="harmonogram"
           >
-            <span className="font-mono text-[10px] text-muted-foreground/70">01</span>
+            <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
+              01
+            </span>
             Harmonogram
           </TabsTrigger>
           <TabsTrigger
-            className="flex-none gap-2 px-3 pb-2 data-active:text-primary data-active:after:bg-chart-2"
+            className="flex-none gap-2 px-2.5 pb-2 text-[13px] sm:px-3 sm:text-sm data-active:text-primary data-active:after:bg-chart-2"
             value="urzadzenia"
           >
-            <span className="font-mono text-[10px] text-muted-foreground/70">02</span>
+            <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
+              02
+            </span>
             Urządzenia
           </TabsTrigger>
           <TabsTrigger
-            className="flex-none gap-2 px-3 pb-2 data-active:text-primary data-active:after:bg-chart-2"
+            className="flex-none gap-2 px-2.5 pb-2 text-[13px] sm:px-3 sm:text-sm data-active:text-primary data-active:after:bg-chart-2"
             value="odczynniki"
           >
-            <span className="font-mono text-[10px] text-muted-foreground/70">03</span>
+            <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
+              03
+            </span>
             Odczynniki
           </TabsTrigger>
           <TabsTrigger
-            className="flex-none gap-2 px-3 pb-2 data-active:text-primary data-active:after:bg-chart-2"
+            className="flex-none gap-2 px-2.5 pb-2 text-[13px] sm:px-3 sm:text-sm data-active:text-primary data-active:after:bg-chart-2"
             value="wyniki"
           >
-            <span className="font-mono text-[10px] text-muted-foreground/70">04</span>
+            <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
+              04
+            </span>
             Wyniki
           </TabsTrigger>
           <TabsTrigger
-            className="flex-none gap-2 px-3 pb-2 data-active:text-primary data-active:after:bg-chart-2"
+            className="flex-none gap-2 px-2.5 pb-2 text-[13px] sm:px-3 sm:text-sm data-active:text-primary data-active:after:bg-chart-2"
             value="raporty"
           >
-            <span className="font-mono text-[10px] text-muted-foreground/70">05</span>
+            <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
+              05
+            </span>
             Raporty
           </TabsTrigger>
           <TabsTrigger
-            className="flex-none gap-2 px-3 pb-2 data-active:text-primary data-active:after:bg-chart-2"
+            className="flex-none gap-2 px-2.5 pb-2 text-[13px] sm:px-3 sm:text-sm data-active:text-primary data-active:after:bg-chart-2"
             value="historia"
           >
-            <span className="font-mono text-[10px] text-muted-foreground/70">06</span>
+            <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
+              06
+            </span>
             Historia
           </TabsTrigger>
         </TabsList>
@@ -183,8 +210,8 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
             title="Harmonogram"
             description="Kalendarz terminów albo lista do szybkiego przeglądu. Jedno źródło: wzorcowania, sprawdzenia, ważność partii, stany i spisy."
           >
-            <div className="mb-3 flex flex-wrap items-end gap-3">
-              <div className="grid gap-1">
+            <div className="mb-3 grid gap-3 sm:flex sm:flex-wrap sm:items-end">
+              <div className="grid flex-1 gap-1 sm:flex-none">
                 <span className="font-mono text-[9px] tracking-[0.14em] text-muted-foreground uppercase">
                   Pracownia
                 </span>
@@ -193,10 +220,10 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
                   onValueChange={setLabFilter}
                   options={labOptions}
                   ariaLabel="Pracownia"
-                  className="w-56"
+                  className="w-full sm:w-56"
                 />
               </div>
-              <div className="grid gap-1">
+              <div className="grid flex-1 gap-1 sm:flex-none">
                 <span className="font-mono text-[9px] tracking-[0.14em] text-muted-foreground uppercase">
                   Rodzaj
                 </span>
@@ -207,7 +234,7 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
                   }}
                   options={KIND_OPTIONS}
                   ariaLabel="Rodzaj"
-                  className="w-48"
+                  className="w-full sm:w-48"
                 />
               </div>
               {view === "table" && (
@@ -224,7 +251,7 @@ export function AdminPage({ snapshot }: { snapshot: Snapshot }) {
                   </Label>
                 </div>
               )}
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
                 <ToggleGroup
                   type="single"
                   value={view}

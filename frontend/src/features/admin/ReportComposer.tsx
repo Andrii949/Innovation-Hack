@@ -47,7 +47,7 @@ export function ReportComposer({ snapshot }: { snapshot: Snapshot }) {
   return (
     <Card
       size="sm"
-      className="gap-0 overflow-hidden rounded-2xl border bg-card py-0 shadow-sm ring-0"
+      className="gap-0 overflow-hidden rounded-xl border border-border/70 bg-card py-0 ring-0"
     >
       <CardHeader className="border-b bg-muted/30 px-4 py-3 sm:px-5">
         <div className="flex items-center gap-2">

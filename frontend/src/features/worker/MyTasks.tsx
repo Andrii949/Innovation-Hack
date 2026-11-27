@@ -2,6 +2,7 @@ import { cn } from "cn";
 import { CircleCheck } from "lucide-react";
 
 import type { CheckPlan, DueItem } from "@/api/types";
+import { DataList, DataListItem } from "@/components/DataList";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,14 +12,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemTitle,
-} from "@/components/ui/item";
 import { dueEquipmentId, dueKey } from "@/lib/due";
 import { formatDue } from "@/lib/format";
 import { dueKindLabel, type StatusColor, statusColor } from "@/lib/status";
@@ -58,15 +51,11 @@ export function MyTasks({
   }
 
   return (
-    <ItemGroup className="gap-0 divide-y">
+    <DataList>
       {items.map((item) => {
         const equipmentId = item.kind === "CHECK" ? dueEquipmentId(item, plans) : null;
         return (
-          <Item
-            key={dueKey(item)}
-            size="sm"
-            className="relative flex-col items-stretch gap-2 py-3 pl-4 sm:flex-row sm:items-center"
-          >
+          <DataListItem key={dueKey(item)} className="relative pl-4">
             <span
               className={cn(
                 "absolute inset-y-2 left-0 w-0.5 rounded-full",
@@ -74,14 +63,16 @@ export function MyTasks({
               )}
               aria-hidden
             />
-            <ItemContent className="min-w-0">
-              <ItemTitle className="text-wrap">{item.label}</ItemTitle>
-              <ItemDescription>
-                {formatDue(item)} · {dueKindLabel(item.kind)}
-              </ItemDescription>
-            </ItemContent>
-            <ItemActions className="w-full justify-between sm:w-auto sm:justify-end">
-              <StatusBadge status={item.status} />
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-wrap">{item.label}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {formatDue(item)} · {dueKindLabel(item.kind)}
+                </p>
+              </div>
+              <StatusBadge status={item.status} className="shrink-0" />
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
               {equipmentId !== null && (
                 <Button
                   type="button"
@@ -106,10 +97,10 @@ export function MyTasks({
                   Wpisz spis
                 </Button>
               )}
-            </ItemActions>
-          </Item>
+            </div>
+          </DataListItem>
         );
       })}
-    </ItemGroup>
+    </DataList>
   );
 }

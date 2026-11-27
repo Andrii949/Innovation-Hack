@@ -65,3 +65,14 @@ jobs:
       - run: bun lint --max-warnings 0
       - run: bun check
       - run: bun run cap:sync
+      - name: Install Chromium for screenshots
+        run: bunx playwright install --with-deps chromium
+      - name: Mobile screenshots (390x844 @2x)
+        run: bun run shots
+      - name: Upload mobile screenshots
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: mobile-screenshots
+          path: frontend/screenshots
+          retention-days: 7
+          if-no-files-found: error
