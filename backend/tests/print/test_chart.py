@@ -42,6 +42,8 @@ def test_chart_has_point_per_result_and_threshold_lines() -> None:
     assert svg.count("<circle") == 3
     assert svg.count('class="threshold"') == 2
     assert svg.count(f'fill="{OUT_OF_THRESHOLD_COLOR}"') == 1
+    assert ">3,20</text>" in svg  # Polish decimal comma on the threshold label
+    assert ">01.11.2026</text>" in svg
 
 
 def test_chart_without_thresholds_has_no_threshold_lines() -> None:

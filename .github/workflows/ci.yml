@@ -36,12 +36,13 @@ jobs:
       - uses: astral-sh/setup-uv@v10.4.0
         with:
           enable-cache: true
-      - name: Install typst 0.15.1 and poppler-utils (PDF & OCR tests)
+      - name: Install typst 0.15.1 and pdftotext (PDF rendering tests)
         run: |
           command -v pdftoppm >/dev/null || (sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils)
           curl -sSfL https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-unknown-linux-musl.tar.xz \
             | tar -xJ -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/typst-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends poppler-utils
       - run: uv sync --locked
       - run: uv run alembic upgrade head
       - run: uv run ruff check .

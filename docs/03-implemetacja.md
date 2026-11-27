@@ -626,11 +626,11 @@ def test_existing_key_is_skipped_without_error(db, admin_a, overdue_in_a):  # dw
 
 **Pliki:** utwórz `backend/app/notifications/push.py`; rozszerz `models.py`, `router.py`, `worker.py`; test `backend/tests/notifications/test_channels.py`.
 
-**Daje:** `DeviceToken`; `POST /api/devices` (`{platform: "android" | "ios" | "web", token}`, upsert po tokenie);
-`PUSH_BODY = "Masz nowe powiadomienia w aplikacji"`; `send_push(tokens: list[str]) -> None` (firebase-admin, FCM HTTP v1);
-worker po `generate_notifications` wysyła jedno push na odbiorcę, gdy reguła ma włączony kanał `PUSH`; token odrzucony przez FCM jako niezarejestrowany usuwa.
+**Daje:** `DeviceToken`; `POST /api/devices` (`{platform: "android" | "ios" | "web", fid}`, upsert po FID — Firebase Installation ID, bo od 2026 FCM wysyła po FID);
+`PUSH_BODY = "Masz nowe powiadomienia w aplikacji"`; `send_push(fids: list[str]) -> list[str]` (firebase-admin, `MulticastMessage(fids=...)`, zwraca FID-y niezarejestrowane);
+`push_pending(db, *, sender=send_push) -> int` — worker po `generate_notifications` wysyła jedno push na urządzenie odbiorcy, gdy reguła ma kanał `PUSH`; `Notification.pushed_at` pilnuje, żeby każde powiadomienie poszło tylko raz; FID odrzucony przez FCM jako niezarejestrowany usuwa.
 
-- [ ] **Testy (czerwone):** `test_register_device_upserts_token`; `test_push_body_has_no_details` (sender podmieniony, treść == `PUSH_BODY`); `test_channels_follow_rule` (`PUSH` wyłączony → brak wywołania); `test_unregistered_token_is_deleted`.
+- [ ] **Testy (czerwone):** `test_register_device_upserts_fid`; `test_push_body_has_no_details` (sender podmieniony, treść == `PUSH_BODY`); `test_channels_follow_rule` (`PUSH` wyłączony → brak wywołania); `test_unregistered_fid_is_deleted`; `test_one_push_per_device_even_with_many_notifications`.
 - [ ] **Uruchom:** `uv run pytest tests/notifications/test_channels.py -q` → FAIL.
 - [ ] **Implementacja:** kanał bez konfiguracji (brak `FCM_CREDENTIALS_FILE`) jest pomijany z jednym wpisem w logu.
 - [ ] **Uruchom:** → PASS.
@@ -772,7 +772,7 @@ describe("lib", () => {
 **Pliki:** `src/platform/push.ts`.
 
 - [ ] `bun add @capacitor-firebase/messaging`; pliki Firebase lokalnie (nie w repo); na iOS klucz APNs w projekcie Firebase.
-- [ ] Przycisk „Włącz powiadomienia” (prośba o zgodę dopiero po kliknięciu) → token → `POST /api/devices`; push przy otwartej aplikacji → odświeżenie dzwonka.
+- [ ] Przycisk „Włącz powiadomienia” (prośba o zgodę dopiero po kliknięciu) → **FID z Firebase Installations** (nie token FCM — od 2026 FCM wysyła po FID) → `POST /api/devices` `{platform, fid}`; push przy otwartej aplikacji → odświeżenie dzwonka.
 - [ ] **Sprawdź:** `python -m app.worker --once` z nową pozycją → push na Androidzie; na iOS z kluczem APNs.
 - [ ] **Commit:** `feat(mobile): push notifications`
 
