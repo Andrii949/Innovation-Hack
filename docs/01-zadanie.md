@@ -145,11 +145,16 @@ terminy; system sam przypomina z wyprzedzeniem ustawionym dla każdej pozycji
 (1–12 miesięcy), a wpisy z pracowni (sprawdzenia, stany odczynników, wyniki) trafiają od
 razu do biura — z kontrolą uprawnień i zakresów.
 
+**Zasada [T]: wszystko jest konfigurowalne.** Szczegóły (częstotliwości, wyprzedzenia, progi,
+kto co wpisuje i kto dostaje powiadomienia, pola formularzy, reakcja na błąd) ustawia się
+w systemie, a nie na sztywno w kodzie. Produkt ma być uniwersalny dla różnych firm, nie tylko
+dla Warty.
+
 ### 3.2 Role [T]
 
 | Rola | Kto | Co robi |
 |---|---|---|
-| **Admin** | specjalista z biura | prowadzi rejestr urządzeń i odczynników, ustawia terminy i wyprzedzenia, wpisuje wyniki wzorcowań, dostaje powiadomienia, widzi harmonogram pracowni (wszystkich czy swojej — pyt. 8) |
+| **Admin** | specjalista z biura | prowadzi rejestr urządzeń i odczynników, ustawia terminy i wyprzedzenia, wpisuje wyniki wzorcowań, dostaje powiadomienia, widzi harmonogram pracowni (zakres widoczności konfigurowalny) |
 | **Pracownik pracowni** | laborant | wpisuje sprawdzenia, stany odczynników i wyniki badań — tylko dla urządzeń, do których jest upoważniony |
 
 ### 3.3 Funkcje
@@ -157,14 +162,14 @@ razu do biura — z kontrolą uprawnień i zakresów.
 | # | Funkcja | Co robi | Źródło | Otwarte |
 |---|---|---|---|---|
 | 1 | Rejestr urządzeń | Spis sprzętu każdej pracowni (inwentaryzacja urządzeń): kod (np. `121/A`), pracownia, częstotliwość wzorcowania, ostatnie i następne wzorcowanie. | [T] [M] | pyt. 6 |
-| 2 | Harmonogram / tabela terminów | Widok jednej pracowni albo wszystkich: co jest i kiedy mija termin (wzorcowanie, sprawdzenie, ważność odczynnika). Zastępuje ręczne harmonogramy. | [T] [M] | pyt. 8 |
-| 3 | Powiadomienia w aplikacji | Przypomnienie przed terminem. Wyprzedzenie ustawiane dla każdej pozycji osobno, w miesiącach: 1–12 (typowo 1 mies. dla wzorcowania, ~6 mies. dla CRM z zagranicy). Także: mało odczynnika, kończy się ważność. | [T] [M] | pyt. 7, 9 |
-| 4 | Wpis wyniku wzorcowania | Po powrocie świadectwa admin wpisuje: firmę, błąd pomiaru, niepewność, opcjonalnie skan świadectwa — i **sam zaznacza OK / nie OK**. Następny termin wynika ze stałej częstotliwości urządzenia. | [T] [M] | pyt. 1, 2, 3 |
+| 2 | Harmonogram / tabela terminów | Widok jednej pracowni albo wszystkich: co jest i kiedy mija termin (wzorcowanie, sprawdzenie, ważność odczynnika). Zastępuje ręczne harmonogramy. | [T] [M] | — |
+| 3 | Powiadomienia w aplikacji | Przypomnienie przed terminem. Wyprzedzenie ustawiane dla każdej pozycji osobno, w miesiącach: 1–12 (typowo 1 mies. dla wzorcowania, ~6 mies. dla CRM z zagranicy). Także: mało odczynnika, kończy się ważność. Odbiorcy i kanał — konfigurowalne. | [T] [M] | — |
+| 4 | Wpis wyniku wzorcowania | Po powrocie świadectwa admin wpisuje: firmę, błąd pomiaru, niepewność, opcjonalnie skan świadectwa — i **sam zaznacza OK / nie OK**. Następny termin = data ze świadectwa + częstotliwość urządzenia; wystarczy miesiąc i rok. Parametry i pola są konfigurowalne. | [T] [M] | pyt. 2 |
 | 5 | Sprawdzenia okresowe | Pracownik zapisuje sprawdzenie (np. temperatura co miesiąc, waga co kwartał) z telefonu zamiast w papierowej karcie; admin widzi to od razu. | [T] [M] | pyt. 4 |
 | 6 | Kody QR na urządzeniach | Skan telefonem służbowym → karta urządzenia (terminy, historia) i szybki wpis sprawdzenia. | [T] [M] | — |
 | 7 | Uprawnienia do urządzeń | Lista osób upoważnionych do urządzenia (jak w karcie ewidencji). Nieupoważniony po skanie widzi „brak uprawnień” i nic nie wpisze. | [T] [M] | — |
-| 8 | Odczynniki i CRM | Pracownik okresowo (raz w tygodniu / miesiącu) wpisuje, ile zostało. Poniżej progu minimalnego → powiadomienie „mało”. Data ważności → powiadomienie z wyprzedzeniem. Bez codziennego wpisywania zużycia. | [T] [M] | pyt. 10, 11 |
-| 9 | Kontrola zakresu wyników (cement) | Przy wpisie wyniku system sprawdza **tylko**, czy wartość mieści się w zakresie z formularza (sekcja 4). Poza zakresem → błąd na czerwono. Nie oceniamy, czy wynik jest „dobry” — tylko zakres. Dane przykładowe. | [T] [M] [Z] | pyt. 12 |
+| 8 | Odczynniki i CRM | Pracownik okresowo (raz w tygodniu / miesiącu) wpisuje, ile zostało. Poniżej progu minimalnego → powiadomienie „mało”. Data ważności → powiadomienie z wyprzedzeniem. Bez codziennego wpisywania zużycia. Częstotliwość, kto wpisuje i próg — konfigurowalne. | [T] [M] | — |
+| 9 | Kontrola zakresu wyników (cement) | Przy wpisie wyniku system sprawdza **tylko**, czy wartość mieści się w zakresie z formularza (sekcja 4). Poza zakresem → błąd na czerwono. Nie oceniamy, czy wynik jest „dobry” — tylko zakres. Reakcja na błąd (blokada / oznaczenie) — konfigurowalna. Dane przykładowe. | [T] [M] [Z] | — |
 
 ### 3.4 Czego nie robimy (na razie)
 
@@ -222,36 +227,41 @@ Uwagi:
 - Wytrzymałość ma dwa zakresy: w kN i w MPa.
 - Uwaga z formularza: „Wyniki < i > zakresu akredytacji, które są objęte systemem,
   Laboratorium weryfikuje na bieżąco potwierdzając ich zgodność z wymaganiami.” Mentorka:
-  zakresy ustalają na podstawie próbek i mogą je poszerzać [M]. Co dokładnie ma się stać
-  po błędzie — pyt. 12.
+  zakresy ustalają na podstawie próbek i mogą je poszerzać [M]. Reakcja po błędzie
+  jest konfigurowalna [T].
 
 ---
 
 ## 5. Pytania do mentorów
 
+Pytania o szczegóły (co ile, kto, jakie pola, jaka reakcja) są zamknięte jedną odpowiedzią
+zespołu [T]: **to jest konfigurowalne**, bo produkt ma być uniwersalny między firmami.
+Przekreślone = zamknięte. Zostają pytania o fakty i o środowisko, których nie ustawimy.
+
 **A. Wzorcowanie, sprawdzenia, inwentaryzacja**
 
-1. Od jakiej daty liczycie następne wzorcowanie: od daty ze świadectwa czy od poprzedniego terminu z harmonogramu? Czy w systemie wystarczy miesiąc i rok, jak na naklejce?
+1. ~~Od jakiej daty liczycie następne wzorcowanie: od daty ze świadectwa czy od poprzedniego terminu z harmonogramu? Czy w systemie wystarczy miesiąc i rok, jak na naklejce?~~
+   **Odpowiedź [T]:** od daty ze świadectwa; wystarczy miesiąc i rok. Parametry są konfigurowalne, szczegóły nie są ważne.
 2. Co się dzieje z urządzeniem, które po wzorcowaniu jest „nie OK” (wycofanie, naprawa, ponowne wzorcowanie)? Jaki status ma mieć w systemie?
-3. Jakie dane ze świadectwa wzorcowania są Wam potrzebne poza błędem pomiaru i niepewnością?
-4. Co pracownik zapisuje przy sprawdzeniu okresowym? Czy możemy zobaczyć pusty wzór karty ewidencji i harmonogramu wzorcowań (bez danych)?
+3. ~~Jakie dane ze świadectwa wzorcowania są Wam potrzebne poza błędem pomiaru i niepewnością?~~ → konfigurowalne.
+4. ~~Co pracownik zapisuje przy sprawdzeniu okresowym?~~ → konfigurowalne. Czy możemy zobaczyć pusty wzór karty ewidencji i harmonogramu wzorcowań (bez danych)? — do przykładowych danych w demo.
 5. Kartka z wyzwaniem mówi o „arkuszach kalkulacyjnych”, a w rozmowie usłyszeliśmy, że nadzór nad sprzętem jest tylko na papierze. Co dziś jest w arkuszach?
-6. Inwentaryzacja urządzeń: chodzi o sam spis sprzętu w pracowni, czy też o okresowe sprawdzenie, że sprzęt fizycznie jest na miejscu? Jak często?
+6. Inwentaryzacja urządzeń: chodzi o sam spis sprzętu w pracowni, czy też o okresowe sprawdzenie, że sprzęt fizycznie jest na miejscu? (~~Jak często?~~ → konfigurowalne.)
 
 **B. Powiadomienia i role**
 
-7. Kto ma dostawać powiadomienia: tylko specjalista, czy też brygadzista danej pracowni? (W rozmowie padło, że brygadzista mógłby odpowiadać za swoją pracownię.)
-8. Każda pracownia ma swojego specjalistę — czy specjalista ma widzieć i zarządzać tylko swoją pracownią, czy wszystkimi?
-9. Czy powiadomienie w aplikacji wystarczy, czy potrzebny jest też e-mail?
+7. ~~Kto ma dostawać powiadomienia: tylko specjalista, czy też brygadzista danej pracowni?~~ → konfigurowalne.
+8. ~~Każda pracownia ma swojego specjalistę — czy specjalista ma widzieć i zarządzać tylko swoją pracownią, czy wszystkimi?~~ → konfigurowalne.
+9. ~~Czy powiadomienie w aplikacji wystarczy, czy potrzebny jest też e-mail?~~ → konfigurowalne.
 
 **C. Odczynniki i CRM**
 
-10. Kto i jak często realnie może wpisywać stan odczynników — każdy laborant czy brygadzista; raz w tygodniu czy raz w miesiącu?
-11. Kto ustala próg minimalny dla odczynnika i od czego on zależy?
+10. ~~Kto i jak często realnie może wpisywać stan odczynników — każdy laborant czy brygadzista; raz w tygodniu czy raz w miesiącu?~~ → konfigurowalne.
+11. ~~Kto ustala próg minimalny dla odczynnika i od czego on zależy?~~ → konfigurowalne.
 
 **D. Wyniki**
 
-12. Wynik poza zakresem: blokujemy zapis do czasu powtórzenia badania, czy zapisujemy go z oznaczeniem „poza zakresem” i wymagamy powtórzenia?
+12. ~~Wynik poza zakresem: blokujemy zapis do czasu powtórzenia badania, czy zapisujemy go z oznaczeniem „poza zakresem” i wymagamy powtórzenia?~~ → konfigurowalne.
 
 **E. Dostęp, bezpieczeństwo, audyt**
 
