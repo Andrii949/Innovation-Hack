@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 from app.auth.deps import current_user
 from app.auth.models import User
 from app.core.clock import get_today
+from app.core.status import Status
 from app.db import get_db
-from app.equipment._core import Status
 from app.equipment.schemas import (
     AuthorizedUserOut,
     AuthorizedUsersUpdate,

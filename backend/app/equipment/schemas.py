@@ -3,7 +3,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from app.equipment._core import Status
+from app.core.status import Status
 
 
 class EquipmentCreate(BaseModel):

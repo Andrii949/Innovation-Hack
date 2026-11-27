@@ -13,8 +13,8 @@ from app.auth.security import hash_password, new_token
 from app.auth.service import ensure_default_roles
 from app.config import get_settings
 from app.core.clock import get_today
+from app.core.dates import next_due_month
 from app.db import get_db
-from app.equipment._core import next_due_month
 from app.equipment.models import Calibration, CalibrationPoint, CheckPlan, Equipment
 from app.equipment.service import new_public_id, parse_month_str
 from app.forms.models import FormTemplate

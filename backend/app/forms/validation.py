@@ -3,7 +3,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from app.equipment._core import RangeResult, check_range, parse_decimal
+from app.core.ranges import RangeResult, check_range, parse_decimal
 
 
 class FieldSpec(BaseModel):

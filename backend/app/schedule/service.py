@@ -7,7 +7,8 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.equipment._core import Status, add_months, due_status, month_window, next_due_month
+from app.core.dates import add_months, due_status, month_window, next_due_month
+from app.core.status import Status
 from app.equipment.models import CheckPlan, Equipment
 from app.equipment.service import format_code, last_calibration, last_check_record
 
