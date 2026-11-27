@@ -17,6 +17,7 @@ from app.config import get_settings
 from app.core.dates import due_status, month_window, next_due_month
 from app.core.ranges import parse_decimal
 from app.core.status import Status
+from app.equipment.catalog import get_catalog_item_or_404
 from app.equipment.models import (
     Calibration,
     CalibrationPoint,
@@ -225,18 +226,48 @@ def create_equipment(db: Session, user: User, data: EquipmentCreate) -> Equipmen
     if lab is None:
         raise AppError(404, "NOT_FOUND", "Nie znaleziono pracowni")
 
-    clean_number = data.number.strip()
-    clean_name = data.name.strip()
-    if not clean_number or not clean_name:
-        raise AppError(422, "VALIDATION_ERROR", "Numer i nazwa urządzenia są wymagane")
+    fields_set = data.model_fields_set
+    preset = get_catalog_item_or_404(db, data.catalog_id) if data.catalog_id is not None else None
 
-    lead = (
-        data.lead_months
-        if data.lead_months is not None
-        else int(get_setting(db, "default_equipment_lead_months"))
+    clean_number = data.number.strip()
+    raw_name = (
+        data.name
+        if ("name" in fields_set and data.name is not None)
+        else (preset.name if preset is not None else None)
     )
+    clean_name = raw_name.strip() if raw_name is not None else ""
+    if not clean_number or not clean_name:
+        raise AppError(
+            422,
+            "VALIDATION_ERROR",
+            "Numer i nazwa urządzenia są wymagane",
+            details=[{"field": "name", "message": "Nazwa urządzenia jest wymagana"}],
+        )
+
+    cal_required = (
+        data.calibration_required
+        if "calibration_required" in fields_set
+        else (preset.calibration_required if preset is not None else data.calibration_required)
+    )
+    cal_interval = (
+        data.calibration_interval_months
+        if "calibration_interval_months" in fields_set
+        else (preset.calibration_interval_months if preset is not None else None)
+    )
+    cal_mode = (
+        data.calibration_mode
+        if "calibration_mode" in fields_set
+        else (preset.calibration_mode if preset is not None else data.calibration_mode)
+    )
+    if data.lead_months is not None:
+        lead = data.lead_months
+    elif preset is not None:
+        lead = preset.lead_months
+    else:
+        lead = int(get_setting(db, "default_equipment_lead_months"))
+
     _validate_equipment_lead(db, lead)
-    _validate_interval(data.calibration_required, data.calibration_interval_months)
+    _validate_interval(cal_required, cal_interval)
 
     duplicate = db.scalars(
         select(Equipment.id).where(
@@ -257,23 +288,30 @@ def create_equipment(db: Session, user: User, data: EquipmentCreate) -> Equipmen
         else None
     )
 
+    def _pick(field_name: str) -> str | None:
+        if field_name in fields_set:
+            return getattr(data, field_name)
+        if preset is not None:
+            return getattr(preset, field_name)
+        return None
+
     eq = Equipment(
         public_id=_unique_public_id(db),
         lab_id=data.lab_id,
         number=clean_number,
         name=clean_name,
-        category=data.category,
-        manufacturer=data.manufacturer,
-        model=data.model,
+        category=_pick("category"),
+        manufacturer=_pick("manufacturer"),
+        model=_pick("model"),
         serial_no=data.serial_no,
-        software_version=data.software_version,
+        software_version=_pick("software_version"),
         location=data.location,
-        calibration_required=data.calibration_required,
-        calibration_interval_months=data.calibration_interval_months,
-        calibration_mode=data.calibration_mode,
+        calibration_required=cal_required,
+        calibration_interval_months=cal_interval if cal_required else None,
+        calibration_mode=cal_mode,
         lead_months=lead,
-        acceptance_criteria=data.acceptance_criteria,
-        notes=data.notes,
+        acceptance_criteria=_pick("acceptance_criteria"),
+        notes=_pick("notes"),
     )
     db.add(eq)
     db.flush()

@@ -9,7 +9,8 @@ from app.core.status import Status
 class EquipmentCreate(BaseModel):
     lab_id: int
     number: str
-    name: str
+    catalog_id: int | None = None
+    name: str | None = None
     category: str | None = None
     manufacturer: str | None = None
     model: str | None = None
@@ -23,6 +24,59 @@ class EquipmentCreate(BaseModel):
     acceptance_criteria: str | None = None
     notes: str | None = None
     last_calibrated_month: str | None = None
+
+
+class EquipmentCatalogOut(BaseModel):
+    id: int
+    slug: str
+    name: str
+    category: str
+    manufacturer: str
+    model: str
+    display_label: str
+    software_version: str | None
+    suggested_lab_code: str | None
+    calibration_required: bool
+    calibration_interval_months: int | None
+    calibration_mode: str
+    lead_months: int
+    acceptance_criteria: str | None
+    notes: str | None
+    active: bool
+
+
+class EquipmentCatalogCreate(BaseModel):
+    name: str
+    category: str
+    manufacturer: str
+    model: str
+    software_version: str | None = None
+    suggested_lab_code: str | None = None
+    calibration_required: bool = True
+    calibration_interval_months: int | None = 12
+    calibration_mode: Literal["EXTERNAL", "ON_SITE"] = "EXTERNAL"
+    lead_months: int = 1
+    acceptance_criteria: str | None = None
+    notes: str | None = None
+    search_aliases: str | None = None
+    active: bool = True
+
+
+class EquipmentCatalogUpdate(BaseModel):
+    name: str | None = None
+    category: str | None = None
+    manufacturer: str | None = None
+    model: str | None = None
+    software_version: str | None = None
+    suggested_lab_code: str | None = None
+    calibration_required: bool | None = None
+    calibration_interval_months: int | None = None
+    calibration_mode: Literal["EXTERNAL", "ON_SITE"] | None = None
+    lead_months: int | None = None
+    acceptance_criteria: str | None = None
+    notes: str | None = None
+    search_aliases: str | None = None
+    active: bool | None = None
 
 
 class EquipmentUpdate(BaseModel):

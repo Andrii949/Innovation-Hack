@@ -12,6 +12,7 @@ from app.equipment.models import (
     CheckRecord,
     Equipment,
     EquipmentAuthorization,
+    EquipmentCatalogItem,
 )
 from app.files.models import Attachment
 from app.forms.models import FormTemplate
@@ -34,6 +35,7 @@ _REGISTERED_MODELS = (
     FormTemplate,
     Equipment,
     EquipmentAuthorization,
+    EquipmentCatalogItem,
     Calibration,
     CalibrationPoint,
     CheckPlan,

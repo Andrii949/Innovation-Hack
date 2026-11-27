@@ -24,6 +24,7 @@ from app.auth.security import hash_password, verify_password
 from app.auth.service import ensure_default_roles
 from app.core.dates import add_months, next_due_month
 from app.db import SessionLocal
+from app.equipment.catalog import ensure_default_equipment_catalog
 from app.equipment.models import (
     Calibration,
     CalibrationPoint,
@@ -661,6 +662,7 @@ def seed(db: Session, *, today: date) -> None:
     seeded_equipment: dict[str, Equipment] = {}
 
     with audit_context(user_id=admin.id, reason="Dane startowe i demo"):
+        ensure_default_equipment_catalog(db)
         for spec in _EQUIPMENT_SPECS:
             lab = labs_by_code[spec.lab_code]
             eq = db.scalars(
