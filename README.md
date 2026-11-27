@@ -8,7 +8,7 @@ Hackathon: digitalizing the supervision of a laboratory's measuring equipment.
 |---|---|
 | [docs/01-zadanie.md](docs/01-zadanie.md) | The challenge statement (verbatim), the refined problem, our idea, cement ranges, questions for mentors |
 | [docs/02-architektura.md](docs/02-architektura.md) | Architecture: decisions, data model, due dates and statuses, permissions, API, flows, web + mobile (Capacitor) |
-| [docs/03-implemetacja.md](docs/03-implemetacja.md) | Implementation plan: team tracks, schedule, 30 tasks with tests |
+| [docs/03-implemetacja.md](docs/03-implemetacja.md) | Implementation plan: team tracks, schedule, 31 tasks with tests |
 | [docs/04-research.md](docs/04-research.md) | Research: PN-EN ISO/IEC 17025 requirements, existing products, what we adopt |
 
 Convention: the README is an index, content lives in `docs/`, numbered `NN-topic.md`.
