@@ -1,0 +1,26 @@
+material,name,unit,min_value,max_value,method,accredited
+Cement,wytrzymałość zapraw na ściskanie (kN),kN,4.00,250.00,"badania niszczące, PN-EN 196-1:2016-07",true
+Cement,wytrzymałość zapraw na ściskanie (MPa),MPa,2.5,156.3,"badania niszczące, PN-EN 196-1:2016-07",true
+Cement,wytrzymałość zapraw na zginanie (kN),kN,0.10,10.00,"badania niszczące, PN-EN 196-1:2016-07",true
+Cement,wytrzymałość zapraw na zginanie (MPa),MPa,0.2,23.4,"badania niszczące, PN-EN 196-1:2016-07",true
+Cement,konsystencja zaczynów normowych,—,,,"aparat Vicat'a, PN-EN 196-3:2016-12",true
+Cement,czas wiązania zaczynów normowych,min,10,1000,"aparat Vicat'a, PN-EN 196-3:2016-12",true
+Cement,stałość objętości zaczynów normowych,mm,0.0,50.0,"pierścienie le Chateliera, PN-EN 196-3:2016-12",true
+"Klinkier portlandzki, cement",straty prażenia,%,0.10,8.20,"wagowa, PN-EN 196-2:2026-04",false
+"Klinkier portlandzki, cement",zawartość SiO₂,%,19.00,31.00,"wagowa, PN-EN 196-2:2026-04",false
+"Klinkier portlandzki, cement",zawartość Al₂O₃,%,3.10,11.00,"miareczkowa, PN-EN 196-2:2026-04",false
+"Klinkier portlandzki, cement",zawartość Fe₂O₃,%,2.20,4.80,"miareczkowa, PN-EN 196-2:2026-04",false
+"Klinkier portlandzki, cement",zawartość SO₃,%,0.10,3.20,"wagowa, PN-EN 196-2:2026-04",false
+"Klinkier portlandzki, cement",zawartość Na₂O,%,0.08,0.50,"fotometria płomieniowa, PN-EN 196-2:2026-04",false
+"Klinkier portlandzki, cement",zawartość K₂O,%,0.10,1.40,"fotometria płomieniowa, PN-EN 196-2:2026-04",false
+"Klinkier portlandzki, cement",zawartość Cl⁻,%,0.005,0.105,"metoda Volharda, PN-EN 196-2:2026-04",false
+"Klinkier portlandzki, cement",pozostałości nierozpuszczalne,%,0.10,19.00,"wagowa, PN-EN 196-2:2026-04",false
+Cement,zawartość CaO,%,43.50,66.00,"miareczkowa, PN-EN 196-2:2026-04",false
+Cement,zawartość MgO,%,0.70,3.00,"miareczkowa, PN-EN 196-2:2026-04",false
+"Klinkier portlandzki, cement",zawartość chromu (VI),%,0.00000,0.00024,"spektrofotometryczna, PN-EN 196-10:2016-07",false
+"Cement, klinkier i inne materiały",zawartość rtęci,mg/kg,0.010,20.0,"absorpcyjna spektrometria atomowa techniką amalgamacji, PB-14.NZ.PA wyd. 2 z 13.03.2024",false
+"Cementy, klinkier portlandzki",gęstość właściwa,g/cm³,2.70,3.20,"piknometr helowy, PN-EN 196-6:2019-01",false
+"Cementy, klinkier portlandzki",powierzchnia właściwa,cm²/g,2800,4900,"przepuszczalność powietrza Blaine'a, PN-EN 196-6:2019-01",false
+Cementy,skurcz,mm/m,0.25,0.65,"Graff-Kaufmanna, PB-03.NZ.PW wyd. 1 z 01.08.2008",false
+Cementy,ciepło hydratacji,J/g,200,400,"kalorymetr semi-adiabatyczny, PN-EN 196-9:2010",false
+Cementy,gęstość nasypowa,g/cm³,1.10,1.40,"wagowa, PN 80-C-04532",false
