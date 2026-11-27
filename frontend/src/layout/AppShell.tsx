@@ -1,9 +1,9 @@
 import { cn } from "cn";
-import { Bell, RotateCcw } from "lucide-react";
-import type { ReactNode } from "react";
+import { Bell, Check, Menu, RotateCcw } from "lucide-react";
+import { type ReactNode, useState } from "react";
 
 import type { Snapshot } from "@/api/types";
-import { BrandMark, PlantSkyline } from "@/components/BrandMark";
+import { BrandMark } from "@/components/BrandMark";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +27,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDateTime } from "@/lib/format";
@@ -39,6 +46,46 @@ type Props = {
   onMarkNotificationsRead: () => void;
 };
 
+function ResetDataDialog({
+  className,
+  label = "Reset",
+  variant = "ghost",
+  size = "sm",
+  onReset,
+}: {
+  className?: string;
+  label?: string;
+  variant?: "ghost" | "outline";
+  size?: "sm" | "default";
+  onReset: () => void;
+}) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button type="button" variant={variant} size={size} className={className}>
+          <RotateCcw aria-hidden />
+          <span>{label}</span>
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Przywrócić dane demonstracyjne?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Wszystkie wpisy wykonane w prototypie (wzorcowania, sprawdzenia, spisy, wyniki) zostaną
+            usunięte, a dane wrócą do stanu początkowego. Tej operacji nie można cofnąć.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Anuluj</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={onReset}>
+            Przywróć dane
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 export function AppShell({
   snapshot,
   children,
@@ -47,155 +94,125 @@ export function AppShell({
   onMarkNotificationsRead,
 }: Props) {
   const unread = snapshot.notifications.filter((notification) => notification.readAt === null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const labs = snapshot.labs.map((lab) => lab.code).join(" · ");
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <header className="sticky top-0 z-30">
-        <div className="h-1 bg-brand-lime" aria-hidden />
-        <div className="relative overflow-hidden border-b border-chart-2/30 bg-primary text-primary-foreground">
-          <div
-            className="cement-grain-light pointer-events-none absolute inset-0 opacity-80"
-            aria-hidden
-          />
-          <div className="kiln-hatch pointer-events-none absolute inset-0 opacity-40" aria-hidden />
-          <div className="relative mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-2.5">
-            <BrandMark className="size-9 sm:size-10" />
-            <div className="min-w-0">
-              <p className="font-mono text-[9px] tracking-[0.2em] whitespace-nowrap text-chart-2 uppercase sm:tracking-[0.26em]">
-                <span className="sm:hidden">Cementownia Warta</span>
-                <span className="hidden sm:inline">Cementownia Warta S.A.</span>
-              </p>
-              <p className="flex items-center gap-2 text-[13px] font-semibold tracking-tight sm:text-sm">
-                <span className="truncate">Laboratorium zakładowe</span>
-                <span className="hidden shrink-0 rounded-sm border border-chart-2/40 bg-chart-2/15 px-1.5 py-px font-mono text-[9px] tracking-[0.1em] text-chart-2 uppercase sm:inline">
-                  17025
-                </span>
-              </p>
-              <p className="hidden text-[11px] leading-tight text-white/65 md:block">
-                Nadzór wyposażenia pomiarowego i wyników badań
-              </p>
-            </div>
+      <header className="sticky top-0 z-30 border-b border-border/70 bg-background">
+        <div className="h-0.5 bg-brand-lime" aria-hidden />
+        <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-2.5 px-3 sm:px-4">
+          <BrandMark className="size-8 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm leading-tight font-semibold tracking-tight">
+              Laboratorium zakładowe
+            </p>
+            <p className="truncate font-mono text-[9px] tracking-[0.16em] text-muted-foreground uppercase">
+              Cementownia Warta
+              <span className="hidden sm:inline"> · PN-EN ISO/IEC 17025</span>
+              <span className="sm:hidden"> · 17025</span>
+            </p>
+          </div>
 
-            <div className="ml-6 hidden h-10 min-w-0 flex-1 items-end text-primary-foreground/30 md:flex [mask-image:linear-gradient(to_right,black,transparent)]">
-              <PlantSkyline className="h-10 w-full" />
-            </div>
+          <Badge
+            variant="outline"
+            className="hidden font-mono text-[9px] tracking-[0.16em] text-muted-foreground uppercase lg:inline-flex"
+          >
+            Prototyp · dane demo
+          </Badge>
 
-            <div className="ml-auto flex items-center gap-2">
-              <Badge
-                variant="outline"
-                className="hidden border-white/20 bg-white/5 font-mono text-[9px] tracking-[0.16em] text-white/70 uppercase sm:inline-flex"
-              >
-                Prototyp · dane demo
-              </Badge>
-
-              <DropdownMenu>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="outline"
-                        className="relative border-white/20 bg-white/5 text-primary-foreground hover:bg-white/10 hover:text-primary-foreground"
-                        aria-label={`Powiadomienia: ${unread.length} nieprzeczytanych`}
-                      >
-                        <Bell aria-hidden />
-                        {unread.length > 0 && (
-                          <Badge className="absolute -top-1.5 -right-1.5 h-4 min-w-4 rounded-full bg-chart-2 px-1 text-[10px] text-primary tabular-nums">
-                            {unread.length}
-                          </Badge>
-                        )}
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {unread.length === 0
-                      ? "Powiadomienia — brak nieprzeczytanych"
-                      : `Powiadomienia — nieprzeczytane: ${unread.length}`}
-                  </TooltipContent>
-                </Tooltip>
-                <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)]">
-                  <DropdownMenuLabel>Powiadomienia</DropdownMenuLabel>
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem
-                      disabled={unread.length === 0}
-                      onSelect={onMarkNotificationsRead}
-                    >
-                      Oznacz przeczytane
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  {snapshot.notifications.length === 0 ? (
-                    <DropdownMenuItem disabled>Brak powiadomień dla tej roli.</DropdownMenuItem>
-                  ) : (
-                    <ScrollArea className="max-h-80">
-                      <DropdownMenuGroup className="pr-2">
-                        {snapshot.notifications.map((notification) => (
-                          <DropdownMenuItem
-                            key={notification.id}
-                            className={cn(
-                              "flex-col items-start gap-0.5 whitespace-normal",
-                              notification.readAt === null ? "bg-accent/60" : "opacity-70",
-                            )}
-                            onSelect={(event) => {
-                              event.preventDefault();
-                            }}
-                          >
-                            <span className="font-medium">{notification.title}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {notification.body}
-                            </span>
-                            <span className="font-mono text-[10px] text-muted-foreground">
-                              {formatDateTime(notification.createdAt)}
-                            </span>
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuGroup>
-                    </ScrollArea>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
                   <Button
                     type="button"
-                    size="sm"
+                    size="icon-sm"
                     variant="ghost"
-                    className="text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground"
+                    className="relative"
+                    aria-label={`Powiadomienia: ${unread.length} nieprzeczytanych`}
                   >
-                    <RotateCcw aria-hidden />
-                    <span className="hidden sm:inline">Reset</span>
+                    <Bell aria-hidden />
+                    {unread.length > 0 && (
+                      <span
+                        className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-destructive ring-2 ring-background"
+                        aria-hidden
+                      />
+                    )}
                   </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Przywrócić dane demonstracyjne?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Wszystkie wpisy wykonane w prototypie (wzorcowania, sprawdzenia, spisy,
-                      wyniki) zostaną usunięte, a dane wrócą do stanu początkowego. Tej operacji nie
-                      można cofnąć.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Anuluj</AlertDialogCancel>
-                    <AlertDialogAction variant="destructive" onClick={onReset}>
-                      Przywróć dane
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          </div>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>
+                {unread.length === 0
+                  ? "Powiadomienia — brak nieprzeczytanych"
+                  : `Powiadomienia — nieprzeczytane: ${unread.length}`}
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)]">
+              <DropdownMenuLabel className="flex items-center justify-between gap-2">
+                Powiadomienia
+                <span className="font-mono text-[10px] font-normal text-muted-foreground">
+                  {unread.length} nowych
+                </span>
+              </DropdownMenuLabel>
+              <DropdownMenuGroup>
+                <DropdownMenuItem disabled={unread.length === 0} onSelect={onMarkNotificationsRead}>
+                  Oznacz przeczytane
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              {snapshot.notifications.length === 0 ? (
+                <DropdownMenuItem disabled>Brak powiadomień dla tej roli.</DropdownMenuItem>
+              ) : (
+                <ScrollArea className="max-h-80">
+                  <DropdownMenuGroup className="pr-2">
+                    {snapshot.notifications.map((notification) => (
+                      <DropdownMenuItem
+                        key={notification.id}
+                        className={cn(
+                          "flex-col items-start gap-0.5 whitespace-normal",
+                          notification.readAt === null ? "bg-accent/60" : "opacity-70",
+                        )}
+                        onSelect={(event) => {
+                          event.preventDefault();
+                        }}
+                      >
+                        <span className="font-medium">{notification.title}</span>
+                        <span className="text-xs text-muted-foreground">{notification.body}</span>
+                        <span className="font-mono text-[10px] text-muted-foreground">
+                          {formatDateTime(notification.createdAt)}
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
+                </ScrollArea>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <ResetDataDialog
+            className="hidden text-muted-foreground md:inline-flex"
+            onReset={onReset}
+          />
+
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Menu sesji"
+            className="md:hidden"
+            onClick={() => {
+              setMenuOpen(true);
+            }}
+          >
+            <Menu aria-hidden />
+          </Button>
         </div>
 
-        <div className="border-b bg-card">
+        <div className="hidden border-t border-border/60 bg-muted/30 md:block">
           <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-0.5 bg-chart-2" aria-hidden />
-              <span className="font-mono text-[9px] tracking-[0.18em] text-muted-foreground uppercase">
-                Podgląd roli
-              </span>
+            <span className="font-mono text-[9px] tracking-[0.18em] text-muted-foreground uppercase">
+              Podgląd roli
             </span>
             <ToggleGroup
               type="single"
@@ -217,37 +234,82 @@ export function AppShell({
                   aria-label={role.name}
                   className="shrink-0 px-2.5 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                 >
-                  <span className="font-mono text-[10px] tracking-[0.06em] sm:hidden">
-                    {role.code}
-                  </span>
-                  <span className="hidden sm:inline">{role.name}</span>
+                  {role.name}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
             <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="hidden h-3 w-px bg-border sm:block" aria-hidden />
               {snapshot.session.user.fullName}
+              <span className="hidden h-3 w-px bg-border sm:block" aria-hidden />
+              <span className="hidden font-mono text-[10px] tracking-[0.1em] uppercase sm:inline">
+                {labs}
+              </span>
             </span>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">{children}</main>
+      <main className="mx-auto w-full max-w-7xl flex-1 px-3 py-4 sm:px-4 sm:py-6">{children}</main>
 
-      <footer className="border-t bg-card/60">
-        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-5 gap-y-1 px-4 py-3 text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-1.5 font-medium text-foreground/80">
-            <span className="size-1.5 bg-chart-2" aria-hidden />
-            Cementownia Warta S.A. · Laboratorium zakładowe
-          </span>
-          <span className="hidden sm:inline">
-            PN-EN ISO/IEC 17025 · uprawnienia i statusy wylicza API.
-          </span>
+      <footer className="border-t border-border/60">
+        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-4 gap-y-1 px-3 py-3 text-[11px] text-muted-foreground sm:px-4">
+          <span>Cementownia Warta S.A. · Laboratorium zakładowe</span>
           <span className="ml-auto font-mono text-[10px] tracking-[0.12em] uppercase">
-            {snapshot.labs.map((lab) => lab.code).join(" · ")} / 17025
+            {labs} / 17025
           </span>
         </div>
       </footer>
+
+      <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+        <SheetContent side="bottom" className="max-h-[85dvh] gap-0 rounded-t-2xl p-0">
+          <SheetHeader className="border-b border-border/60 px-4 py-3 pr-12">
+            <SheetTitle>Podgląd roli</SheetTitle>
+            <SheetDescription>
+              Persona demo — uprawnienia i widoki zmieniają się od razu.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="grid gap-1 overflow-y-auto p-3">
+            {snapshot.demoRoles.map((role) => {
+              const active = role.code === snapshot.session.role.code;
+              return (
+                <button
+                  key={role.code}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => {
+                    onRoleChange(role.code);
+                    setMenuOpen(false);
+                  }}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl border px-3 py-3 text-left transition-colors",
+                    active ? "border-primary/30 bg-accent" : "border-border/60 hover:bg-muted/60",
+                  )}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium">{role.name}</span>
+                    <span className="block font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">
+                      {role.code}
+                    </span>
+                  </span>
+                  {active && <Check className="size-4 shrink-0 text-primary" aria-hidden />}
+                </button>
+              );
+            })}
+          </div>
+          <div className="grid gap-2 border-t border-border/60 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <p className="text-xs text-muted-foreground">
+              {snapshot.session.user.fullName} · {labs}
+            </p>
+            <ResetDataDialog
+              variant="outline"
+              size="default"
+              className="w-full justify-center"
+              label="Przywróć dane demonstracyjne"
+              onReset={onReset}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

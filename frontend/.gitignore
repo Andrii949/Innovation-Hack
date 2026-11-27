@@ -6,3 +6,6 @@ dist/
 # Firebase config for push (T26): project-specific, never committed.
 google-services.json
 GoogleService-Info.plist
+
+# Mobile screenshots of the demo target (CI artifact, not source).
+screenshots/

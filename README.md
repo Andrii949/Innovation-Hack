@@ -62,6 +62,7 @@ Frontend — `frontend/` (bun, React + TypeScript + Vite):
 | `bun check` | type checking |
 | `bun run build` | production build into `dist/` |
 | `bun run cap:sync` | build + copy the bundle into `android/` and `ios/` |
+| `bun run shots` | build, then capture the mobile target (390×844 @2x) into `frontend/screenshots/`; CI uploads them as `mobile-screenshots` |
 | `bun run cap:open:android` / `cap:open:ios` | open the native project in Android Studio / Xcode |
 
 Mobile (Capacitor 8, projects in `frontend/android` and `frontend/ios`):

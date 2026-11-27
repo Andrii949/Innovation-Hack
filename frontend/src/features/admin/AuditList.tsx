@@ -2,6 +2,7 @@ import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
 import type { AuditLog } from "@/api/types";
+import { DataList, DataListItem } from "@/components/DataList";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -34,7 +35,7 @@ const ENTITY_LABELS: Record<string, string> = {
 
 function ChangeDetails({ after }: { after: string | null }) {
   if (after === null) {
-    return <span className="text-muted-foreground">—</span>;
+    return null;
   }
 
   return (
@@ -57,41 +58,66 @@ function ChangeDetails({ after }: { after: string | null }) {
   );
 }
 
+function changeLabel(entry: AuditLog): string {
+  const entity = ENTITY_LABELS[entry.entity] ?? entry.entity;
+  return `${ACTION_LABELS[entry.action]} · ${entity}`;
+}
+
 export function AuditList({ audit, limit = 6 }: { audit: AuditLog[]; limit?: number }) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? audit : audit.slice(0, limit);
 
   return (
     <div className="grid gap-2">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Kiedy</TableHead>
-            <TableHead>Kto</TableHead>
-            <TableHead>Zmiana</TableHead>
-            <TableHead>Po</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+      <div className="sm:hidden">
+        <DataList>
           {visible.map((entry) => (
-            <TableRow key={entry.id} className="align-top">
-              <TableCell className="whitespace-nowrap tabular-nums">
-                {formatDateTime(entry.at)}
-              </TableCell>
-              <TableCell className="whitespace-nowrap">{entry.userName}</TableCell>
-              <TableCell className="whitespace-nowrap">
-                {ACTION_LABELS[entry.action]} · {ENTITY_LABELS[entry.entity] ?? entry.entity}
-                {entry.reason !== null && (
-                  <span className="block text-xs text-muted-foreground">{entry.reason}</span>
-                )}
-              </TableCell>
-              <TableCell className="max-w-[28rem]">
-                <ChangeDetails after={entry.after} />
-              </TableCell>
-            </TableRow>
+            <DataListItem key={entry.id}>
+              <p className="text-sm font-medium">{changeLabel(entry)}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {formatDateTime(entry.at)} · {entry.userName}
+              </p>
+              {entry.reason !== null && (
+                <p className="mt-1 text-xs text-muted-foreground">{entry.reason}</p>
+              )}
+              <ChangeDetails after={entry.after} />
+            </DataListItem>
           ))}
-        </TableBody>
-      </Table>
+        </DataList>
+      </div>
+
+      <div className="hidden sm:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Kiedy</TableHead>
+              <TableHead>Kto</TableHead>
+              <TableHead>Zmiana</TableHead>
+              <TableHead>Po</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {visible.map((entry) => (
+              <TableRow key={entry.id} className="align-top">
+                <TableCell className="whitespace-nowrap tabular-nums">
+                  {formatDateTime(entry.at)}
+                </TableCell>
+                <TableCell className="whitespace-nowrap">{entry.userName}</TableCell>
+                <TableCell className="whitespace-nowrap">
+                  {changeLabel(entry)}
+                  {entry.reason !== null && (
+                    <span className="block text-xs text-muted-foreground">{entry.reason}</span>
+                  )}
+                </TableCell>
+                <TableCell className="max-w-[28rem]">
+                  <ChangeDetails after={entry.after} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
       {audit.length > limit && (
         <Button
           type="button"

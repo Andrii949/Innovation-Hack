@@ -40,7 +40,10 @@ export function ReportsInbox({ snapshot }: { snapshot: Snapshot }) {
   return (
     <div className="grid gap-3">
       {snapshot.reports.map((report) => (
-        <article key={report.id} className="overflow-hidden rounded-xl border bg-card shadow-sm">
+        <article
+          key={report.id}
+          className="overflow-hidden rounded-xl border border-border/70 bg-card"
+        >
           <header className="flex flex-wrap items-start justify-between gap-3 border-b bg-muted/30 px-3 py-2.5">
             <div>
               <p className="font-mono text-[9px] tracking-[0.16em] text-muted-foreground uppercase">

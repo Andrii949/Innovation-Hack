@@ -7,9 +7,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 type Tone = "error" | "warning" | "default";
 
 const BAR_CLASS: Record<Tone, string> = {
-  error: "bg-red-500",
-  warning: "bg-amber-500",
-  default: "bg-primary",
+  error: "bg-red-500/85",
+  warning: "bg-amber-500/85",
+  default: "bg-foreground/15",
 };
 
 function shiftMonth(ym: string, delta: number): string {
@@ -70,7 +70,7 @@ export function DueHorizon({ items, today }: { items: DueItem[]; today: string }
   const overdueTotal = items.filter((item) => item.status === "OVERDUE").length;
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+    <section className="overflow-hidden rounded-xl border border-border/70 bg-card">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b bg-muted/30 px-4 py-2.5">
         <p className="font-mono text-[9px] tracking-[0.18em] text-muted-foreground uppercase">
           Horyzont terminów · 6 miesięcy

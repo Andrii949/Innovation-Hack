@@ -134,34 +134,42 @@ export function ManagerPage({ snapshot }: { snapshot: Snapshot }) {
       <Tabs defaultValue="raporty" className="min-w-0">
         <TabsList
           variant="line"
-          className="no-scrollbar h-auto w-full justify-start gap-0 overflow-x-auto border-b"
+          className="no-scrollbar h-auto w-full flex-wrap justify-start gap-0 sm:flex-nowrap sm:overflow-x-auto sm:border-b"
         >
           <TabsTrigger
-            className="flex-none gap-2 px-3 pb-2 data-active:text-primary data-active:after:bg-chart-2"
+            className="flex-none gap-2 px-2 pb-2 text-xs sm:px-3 sm:text-sm data-active:text-primary data-active:after:bg-chart-2"
             value="raporty"
           >
-            <span className="font-mono text-[10px] text-muted-foreground/70">01</span>
+            <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
+              01
+            </span>
             Raporty
           </TabsTrigger>
           <TabsTrigger
-            className="flex-none gap-2 px-3 pb-2 data-active:text-primary data-active:after:bg-chart-2"
+            className="flex-none gap-2 px-2 pb-2 text-xs sm:px-3 sm:text-sm data-active:text-primary data-active:after:bg-chart-2"
             value="wykres"
           >
-            <span className="font-mono text-[10px] text-muted-foreground/70">02</span>
+            <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
+              02
+            </span>
             Wykres próbek
           </TabsTrigger>
           <TabsTrigger
-            className="flex-none gap-2 px-3 pb-2 data-active:text-primary data-active:after:bg-chart-2"
+            className="flex-none gap-2 px-2 pb-2 text-xs sm:px-3 sm:text-sm data-active:text-primary data-active:after:bg-chart-2"
             value="weryfikacja"
           >
-            <span className="font-mono text-[10px] text-muted-foreground/70">03</span>
+            <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
+              03
+            </span>
             Weryfikacja
           </TabsTrigger>
           <TabsTrigger
-            className="flex-none gap-2 px-3 pb-2 data-active:text-primary data-active:after:bg-chart-2"
+            className="flex-none gap-2 px-2 pb-2 text-xs sm:px-3 sm:text-sm data-active:text-primary data-active:after:bg-chart-2"
             value="pracownie"
           >
-            <span className="font-mono text-[10px] text-muted-foreground/70">04</span>
+            <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
+              04
+            </span>
             Pracownie
           </TabsTrigger>
         </TabsList>
@@ -225,34 +233,72 @@ export function ManagerPage({ snapshot }: { snapshot: Snapshot }) {
             title="Stan pracowni"
             description="Terminy i stany z jednego harmonogramu; liczby są liczone przez API na bieżąco."
           >
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Pracownia</TableHead>
-                  <TableHead className="text-right">Urządzenia</TableHead>
-                  <TableHead className="text-right">Po terminie</TableHead>
-                  <TableHead className="text-right">Blisko terminu</TableHead>
-                  <TableHead className="text-right">Mało odczynnika</TableHead>
-                  <TableHead className="text-right">Spis zaległy</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {labRows.map((row) => (
-                  <TableRow key={row.lab.id}>
-                    <TableCell className="font-medium">
-                      {row.lab.code} — {row.lab.name}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{row.equipment}</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {row.overdue}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{row.dueSoon}</TableCell>
-                    <TableCell className="text-right tabular-nums">{row.low}</TableCell>
-                    <TableCell className="text-right tabular-nums">{row.stockCount}</TableCell>
+            <div className="grid gap-2 sm:hidden">
+              {labRows.map((row) => (
+                <div key={row.lab.id} className="rounded-xl border border-border/70 p-3">
+                  <p className="text-sm font-medium">
+                    {row.lab.code} — {row.lab.name}
+                  </p>
+                  <dl className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <dt className="text-muted-foreground">Urządzenia</dt>
+                      <dd className="font-medium tabular-nums">{row.equipment}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Po terminie</dt>
+                      <dd
+                        className={
+                          row.overdue > 0
+                            ? "font-semibold tabular-nums text-red-700 dark:text-red-400"
+                            : "font-medium tabular-nums"
+                        }
+                      >
+                        {row.overdue}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Blisko terminu</dt>
+                      <dd className="font-medium tabular-nums">{row.dueSoon}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Mało odczynnika</dt>
+                      <dd className="font-medium tabular-nums">{row.low}</dd>
+                    </div>
+                  </dl>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden sm:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Pracownia</TableHead>
+                    <TableHead className="text-right">Urządzenia</TableHead>
+                    <TableHead className="text-right">Po terminie</TableHead>
+                    <TableHead className="text-right">Blisko terminu</TableHead>
+                    <TableHead className="text-right">Mało odczynnika</TableHead>
+                    <TableHead className="text-right">Spis zaległy</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {labRows.map((row) => (
+                    <TableRow key={row.lab.id}>
+                      <TableCell className="font-medium">
+                        {row.lab.code} — {row.lab.name}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{row.equipment}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {row.overdue}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{row.dueSoon}</TableCell>
+                      <TableCell className="text-right tabular-nums">{row.low}</TableCell>
+                      <TableCell className="text-right tabular-nums">{row.stockCount}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </Panel>
         </TabsContent>
       </Tabs>
