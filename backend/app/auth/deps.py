@@ -24,14 +24,19 @@ def extract_bearer_token(authorization: str | None) -> str:
     return token.strip()
 
 
-def current_user(
+def _resolve_authenticated_user(
     db: Annotated[Session, Depends(get_db)],
     now: Annotated[datetime, Depends(get_now)],
     authorization: Annotated[str | None, Header()] = None,
-    x_audit_reason: Annotated[str | None, Header()] = None,
 ) -> User:
     raw_token = extract_bearer_token(authorization)
-    user = resolve_token(db, raw_token, now)
+    return resolve_token(db, raw_token, now)
+
+
+async def current_user(
+    user: Annotated[User, Depends(_resolve_authenticated_user)],
+    x_audit_reason: Annotated[str | None, Header()] = None,
+) -> User:
     set_audit_user(user.id)
     if x_audit_reason:
         set_audit_reason(x_audit_reason)

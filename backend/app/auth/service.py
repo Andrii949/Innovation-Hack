@@ -5,9 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.audit.models import AuditLog
 from app.audit.service import log_event
-from app.auth.models import Role, User, UserSession
-from app.auth.permissions import DEFAULT_ROLES
-from app.auth.security import hash_token, new_token, verify_password
+from app.auth.models import Lab, Role, User, UserSession
+from app.auth.permissions import DEFAULT_ROLES, visible_lab_ids
+from app.auth.security import hash_password, hash_token, new_token, verify_password
 from app.errors import AppError
 from app.settings.service import get_setting
 
@@ -126,3 +126,175 @@ def logout(db: Session, raw_token: str, now: datetime | None = None) -> None:
     if session_row is not None and session_row.revoked_at is None:
         session_row.revoked_at = now or datetime.now(UTC)
         db.commit()
+
+
+def list_labs(db: Session, user: User) -> list[Lab]:
+    allowed = visible_lab_ids(user)
+    stmt = select(Lab).order_by(Lab.code)
+    if allowed is not None:
+        stmt = stmt.where(Lab.id.in_(allowed))
+    return list(db.scalars(stmt).all())
+
+
+def create_lab(db: Session, *, code: str, name: str, active: bool = True) -> Lab:
+    clean_code = code.strip().upper()
+    clean_name = name.strip()
+    if not clean_code or not clean_name:
+        raise AppError(422, "VALIDATION_ERROR", "Kod i nazwa pracowni są wymagane")
+    existing = db.scalars(select(Lab).where(Lab.code == clean_code)).first()
+    if existing is not None:
+        raise AppError(409, "DUPLICATE_LAB_CODE", f"Kod pracowni '{clean_code}' jest już zajęty")
+    lab = Lab(code=clean_code, name=clean_name, active=active)
+    db.add(lab)
+    db.flush()
+    return lab
+
+
+def update_lab(
+    db: Session,
+    lab_id: int,
+    *,
+    code: str | None = None,
+    name: str | None = None,
+    active: bool | None = None,
+) -> Lab:
+    lab = db.get(Lab, lab_id)
+    if lab is None:
+        raise AppError(404, "NOT_FOUND", "Nie znaleziono pracowni")
+    if code is not None:
+        clean_code = code.strip().upper()
+        if not clean_code:
+            raise AppError(422, "VALIDATION_ERROR", "Kod pracowni nie może być pusty")
+        conflict = db.scalars(select(Lab).where(Lab.code == clean_code, Lab.id != lab_id)).first()
+        if conflict is not None:
+            raise AppError(
+                409,
+                "DUPLICATE_LAB_CODE",
+                f"Kod pracowni '{clean_code}' jest już zajęty",
+            )
+        lab.code = clean_code
+    if name is not None:
+        clean_name = name.strip()
+        if not clean_name:
+            raise AppError(422, "VALIDATION_ERROR", "Nazwa pracowni nie może być pusta")
+        lab.name = clean_name
+    if active is not None:
+        lab.active = active
+    db.flush()
+    return lab
+
+
+def _resolve_role(db: Session, *, role_name: str | None, role_id: int | None) -> Role:
+    roles = ensure_default_roles(db)
+    if role_id is not None:
+        role = db.get(Role, role_id)
+        if role is None:
+            raise AppError(422, "VALIDATION_ERROR", "Nieznana rola użytkownika")
+        return role
+    if role_name is not None:
+        if role_name in roles:
+            return roles[role_name]
+        role = db.scalars(select(Role).where(Role.name == role_name)).first()
+        if role is None:
+            raise AppError(422, "VALIDATION_ERROR", f"Nieznana rola: {role_name}")
+        return role
+    raise AppError(422, "VALIDATION_ERROR", "Wymagane podanie roli użytkownika")
+
+
+def _resolve_labs(db: Session, lab_ids: list[int]) -> list[Lab]:
+    if not lab_ids:
+        return []
+    unique_ids = list(dict.fromkeys(lab_ids))
+    labs = list(db.scalars(select(Lab).where(Lab.id.in_(unique_ids))).all())
+    if len(labs) != len(unique_ids):
+        raise AppError(422, "VALIDATION_ERROR", "Nieprawidłowy identyfikator pracowni")
+    return labs
+
+
+def create_user_account(
+    db: Session,
+    *,
+    login_name: str,
+    full_name: str,
+    password: str,
+    role_name: str | None = None,
+    role_id: int | None = None,
+    all_labs: bool = False,
+    lab_ids: list[int] | None = None,
+    active: bool = True,
+) -> User:
+    clean_login = login_name.strip()
+    clean_name = full_name.strip()
+    if not clean_login or not clean_name or not password:
+        raise AppError(422, "VALIDATION_ERROR", "Login, imię i nazwisko oraz hasło są wymagane")
+    existing = db.scalars(select(User).where(User.login == clean_login)).first()
+    if existing is not None:
+        raise AppError(
+            422,
+            "VALIDATION_ERROR",
+            f"Login '{clean_login}' jest już zajęty",
+            details=[{"field": "login", "message": "Login jest już zajęty"}],
+        )
+    role = _resolve_role(db, role_name=role_name, role_id=role_id)
+    labs = _resolve_labs(db, lab_ids or [])
+    user = User(
+        login=clean_login,
+        full_name=clean_name,
+        password_hash=hash_password(password),
+        role_id=role.id,
+        all_labs=all_labs,
+        active=active,
+    )
+    user.labs = labs
+    db.add(user)
+    db.flush()
+    db.refresh(user)
+    return user
+
+
+def update_user_account(
+    db: Session,
+    user_id: int,
+    *,
+    full_name: str | None = None,
+    password: str | None = None,
+    role_name: str | None = None,
+    role_id: int | None = None,
+    all_labs: bool | None = None,
+    lab_ids: list[int] | None = None,
+    active: bool | None = None,
+) -> User:
+    user = db.get(User, user_id)
+    if user is None:
+        raise AppError(404, "NOT_FOUND", "Nie znaleziono użytkownika")
+    if full_name is not None:
+        clean_name = full_name.strip()
+        if not clean_name:
+            raise AppError(422, "VALIDATION_ERROR", "Imię i nazwisko nie może być puste")
+        user.full_name = clean_name
+    if password is not None:
+        if not password:
+            raise AppError(422, "VALIDATION_ERROR", "Hasło nie może być puste")
+        user.password_hash = hash_password(password)
+    if role_name is not None or role_id is not None:
+        role = _resolve_role(db, role_name=role_name, role_id=role_id)
+        user.role_id = role.id
+    if all_labs is not None:
+        user.all_labs = all_labs
+    if lab_ids is not None:
+        user.labs = _resolve_labs(db, lab_ids)
+    if active is not None:
+        user.active = active
+        if not active:
+            now = datetime.now(UTC)
+            open_sessions = db.scalars(
+                select(UserSession).where(
+                    UserSession.user_id == user.id,
+                    UserSession.revoked_at.is_(None),
+                )
+            ).all()
+            for sess in open_sessions:
+                sess.revoked_at = now
+    db.flush()
+    db.refresh(user)
+    return user
