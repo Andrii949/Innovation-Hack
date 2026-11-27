@@ -194,7 +194,7 @@ async function main(): Promise<void> {
     });
 
     await Bun.stdout.write(`Mobile target ${VIEWPORT.width}x${VIEWPORT.height} @2x -> ${OUT}\n`);
-    await page.goto(`${BASE}/`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${BASE}/?demo`, { waitUntil: "domcontentloaded" });
     await settle(page);
     await captureShellStates(page);
     await captureAdmin(page);
