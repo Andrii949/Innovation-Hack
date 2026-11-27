@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { scheduleDetail, scheduleDevice, scheduleDue } from "./overview";
+import { plural, scheduleDetail, scheduleDevice, scheduleDue } from "./overview";
 
 const devices = [
   { id: 1, code: "12/A" },
@@ -53,5 +53,19 @@ describe("scheduleDevice", () => {
     expect(
       scheduleDevice({ ref_type: "reagent", ref_id: 1, label: "Kwas solny" }, devices),
     ).toBeUndefined();
+  });
+});
+
+describe("plural", () => {
+  test("picks the Polish form for the count", () => {
+    const forms = ["urządzenie", "urządzenia", "urządzeń"] as const;
+    expect([1, 3, 5, 12, 22, 25].map((count) => plural(count, ...forms))).toEqual([
+      "urządzenie",
+      "urządzenia",
+      "urządzeń",
+      "urządzeń",
+      "urządzenia",
+      "urządzeń",
+    ]);
   });
 });

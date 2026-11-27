@@ -7,12 +7,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { type AuditEntry, describeAudit } from "@/lib/audit";
 import { formatDate, formatDecimal, formatRange } from "@/lib/format";
 import { formatMonth } from "@/lib/months";
-import { scheduleDetail, scheduleDevice } from "@/lib/overview";
+import { plural, scheduleDetail, scheduleDevice } from "@/lib/overview";
 import { dueKindLabel, isDueKind, isStatus, statusBadgeClass, statusDotClass } from "@/lib/status";
 
 import { statusLabels } from "./Equipment";
 import { ResultChart } from "./Results";
-import { type Columns, Loading, options, Rows, useApi, type WorkspaceProps } from "./shared";
+import {
+  type Columns,
+  Loading,
+  Message,
+  options,
+  Rows,
+  useApi,
+  type WorkspaceProps,
+} from "./shared";
 
 type Device = {
   id: number;
@@ -43,9 +51,11 @@ export function Overview({
   permissions,
   onOpenDevice,
   onNavigate,
+  error,
 }: WorkspaceProps & {
   onOpenDevice: (publicId: string) => void;
   onNavigate: (section: OverviewTarget) => void;
+  error: string;
 }) {
   const can = (permission: string) => permissions.includes(permission);
   const devices = useApi<Device[]>("/equipment", token);
@@ -61,58 +71,168 @@ export function Overview({
   );
   const preferred = textValue((flagged[0] ?? results?.data?.[0])?.parameter_id, "");
 
-  // Two columns on wide screens. Narrower, the columns dissolve (`contents`) and `order` puts the
-  // to-do list right under the board, before the charts.
   return (
-    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
-      <div className="contents xl:grid xl:min-w-0 xl:gap-4">
-        <div className="order-1 min-w-0">
-          {devices?.data && labs?.data ? (
-            <EquipmentBoard devices={devices.data} labs={labs.data} onOpen={onOpenDevice} />
-          ) : (
-            <Loading state={devices ?? labs} />
+    <>
+      <Hero
+        rows={schedule?.data}
+        devices={devices?.data}
+        onOpenDevice={onOpenDevice}
+        onNavigate={onNavigate}
+      />
+      <div className="grid gap-6 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
+        {error && <Message>{error}</Message>}
+        {/* Bento: panels share hairlines instead of floating as separate cards. */}
+        <div className="grid gap-px overflow-hidden rounded-2xl bg-line ring-1 ring-line xl:grid-cols-[minmax(0,1fr)_24rem] [&>*]:min-w-0 [&>*]:bg-white [&_[data-slot=card]]:rounded-none [&_[data-slot=card]]:ring-0">
+          <div>
+            {devices?.data && labs?.data ? (
+              <EquipmentBoard devices={devices.data} labs={labs.data} onOpen={onOpenDevice} />
+            ) : (
+              <Loading state={devices ?? labs} />
+            )}
+          </div>
+          <div>
+            {schedule?.data ? (
+              <Attention
+                rows={schedule.data}
+                devices={devices?.data ?? noDevices}
+                onOpenDevice={onOpenDevice}
+                onNavigate={onNavigate}
+              />
+            ) : (
+              <Loading state={schedule} />
+            )}
+          </div>
+          {parameters?.data && (
+            <div>
+              <ResultChart
+                token={token}
+                parameters={options(parameters.data.filter((row) => row.active === true))}
+                preferred={preferred}
+                revision={0}
+              />
+            </div>
+          )}
+          {audit?.data && (
+            <div>
+              <RecentEntries
+                rows={audit.data}
+                users={users?.data ?? noRecords}
+                onShowAll={() => onNavigate("audit")}
+              />
+            </div>
+          )}
+          {results?.data && (
+            <div className="xl:col-span-2">
+              <OutOfRange rows={flagged} onShowAll={() => onNavigate("results")} />
+            </div>
           )}
         </div>
-        {parameters?.data && (
-          <div className="order-3 min-w-0">
-            <ResultChart
-              token={token}
-              parameters={options(parameters.data.filter((row) => row.active === true))}
-              preferred={preferred}
-              revision={0}
-            />
-          </div>
-        )}
-        {results?.data && (
-          <div className="order-4 min-w-0">
-            <OutOfRange rows={flagged} onShowAll={() => onNavigate("results")} />
-          </div>
-        )}
       </div>
-      <div className="contents xl:grid xl:min-w-0 xl:gap-4">
-        <div className="order-2 min-w-0">
-          {schedule?.data ? (
-            <Attention
-              rows={schedule.data}
-              devices={devices?.data ?? noDevices}
-              onOpenDevice={onOpenDevice}
-              onNavigate={onNavigate}
+    </>
+  );
+}
+
+const longDate = new Intl.DateTimeFormat("pl-PL", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
+/** The state of the lab as one sentence, the next thing to do, and progress towards all in date. */
+function headline(devices: Device[]): string {
+  const count = (status: string) => devices.filter((device) => device.status === status).length;
+  const overdue = count("OVERDUE");
+  const missing = count("NO_DATA");
+  const soon = count("DUE_SOON");
+  if (overdue > 0) {
+    return `${overdue} ${plural(overdue, "urządzenie jest", "urządzenia są", "urządzeń jest")} po terminie wzorcowania.`;
+  }
+  if (missing > 0) {
+    return `${missing} ${plural(missing, "urządzenie nie ma", "urządzenia nie mają", "urządzeń nie ma")} wpisu wzorcowania.`;
+  }
+  if (soon > 0) {
+    return `Wszystko w terminie. ${soon} ${plural(soon, "urządzenie czeka", "urządzenia czekają", "urządzeń czeka")} na wzorcowanie.`;
+  }
+  return "Całe wyposażenie ma ważne wzorcowanie.";
+}
+
+function Hero({
+  rows,
+  devices,
+  onOpenDevice,
+  onNavigate,
+}: {
+  rows?: DueRow[];
+  devices?: Device[];
+  onOpenDevice: (publicId: string) => void;
+  onNavigate: (section: OverviewTarget) => void;
+}) {
+  const supervised = (devices ?? noDevices).filter(
+    ({ status }) => status !== "WITHDRAWN" && status !== "NOT_REQUIRED",
+  );
+  const valid = supervised.filter(({ status }) => status === "OK").length;
+  const share = supervised.length === 0 ? 100 : Math.round((valid / supervised.length) * 100);
+  const next = rows?.[0];
+  const device = next === undefined ? undefined : scheduleDevice(next, devices ?? noDevices);
+  return (
+    <section className="border-b border-line px-4 py-10 sm:px-8 lg:px-12 lg:py-16">
+      <p className="text-sm font-semibold text-brand-lime-ink">
+        Stan na {longDate.format(new Date())}
+      </p>
+      <h1 className="mt-3 max-w-4xl text-4xl font-semibold tracking-tighter text-balance text-brand-navy-deep sm:text-5xl lg:text-6xl">
+        {devices === undefined ? "Wczytywanie stanu laboratorium…" : headline(devices)}
+      </h1>
+      {devices !== undefined && (
+        <div className="mt-8 grid max-w-4xl gap-8 sm:grid-cols-[minmax(0,1fr)_16rem] sm:items-end">
+          <div>
+            {next === undefined ? (
+              <p className="text-lg/8 text-muted-foreground">
+                Żaden termin nie wymaga teraz działania.
+              </p>
+            ) : (
+              <p className="text-lg/8 text-muted-foreground">
+                Najpierw: <span className="font-medium text-brand-navy-deep">{next.label}</span>,{" "}
+                {isDueKind(next.kind) ? dueKindLabel(next.kind).toLowerCase() : next.kind},{" "}
+                {scheduleDetail(next)}.
+              </p>
+            )}
+            <div className="mt-6 flex flex-wrap gap-3">
+              {next !== undefined && (
+                <Button
+                  size="lg"
+                  onClick={() => {
+                    if (device === undefined) {
+                      onNavigate(next.ref_type.startsWith("reagent") ? "reagents" : "schedule");
+                    } else {
+                      onOpenDevice(device.public_id);
+                    }
+                  }}
+                >
+                  {device === undefined ? "Przejdź do terminu" : `Otwórz kartę ${device.code}`}
+                </Button>
+              )}
+              <Button size="lg" variant="outline" onClick={() => onNavigate("schedule")}>
+                Cały harmonogram
+              </Button>
+            </div>
+          </div>
+          <div>
+            <p className="flex items-baseline justify-between text-sm text-muted-foreground">
+              Ważne wzorcowanie
+              <span className="font-mono text-brand-navy-deep tabular-nums">
+                {valid}/{supervised.length}
+              </span>
+            </p>
+            <progress
+              aria-label="Urządzenia z ważnym wzorcowaniem"
+              value={share}
+              max={100}
+              className="mt-2 block h-1.5 w-full appearance-none overflow-hidden rounded-full bg-line [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-brand-lime [&::-webkit-progress-bar]:bg-line [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-brand-lime"
             />
-          ) : (
-            <Loading state={schedule} />
-          )}
+          </div>
         </div>
-        {audit?.data && (
-          <div className="order-5 min-w-0">
-            <RecentEntries
-              rows={audit.data}
-              users={users?.data ?? noRecords}
-              onShowAll={() => onNavigate("audit")}
-            />
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+    </section>
   );
 }
 
@@ -146,10 +266,6 @@ function EquipmentBoard({
   for (const device of devices) {
     counts.set(device.status, (counts.get(device.status) ?? 0) + 1);
   }
-  const supervised = devices.filter(
-    ({ status }) => status !== "WITHDRAWN" && status !== "NOT_REQUIRED",
-  );
-  const current = supervised.filter(({ status }) => status === "OK").length;
   const groups = labs
     .map((lab) => ({ lab, items: devices.filter((device) => device.lab_id === lab.id) }))
     .filter(({ items }) => items.length > 0);
@@ -162,12 +278,6 @@ function EquipmentBoard({
             Jedno pole to jedno urządzenie. Kliknij pole, aby otworzyć kartę.
           </CardDescription>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Ważne wzorcowanie:{" "}
-          <strong className="text-base font-bold text-brand-navy-ink tabular-nums">
-            {current} z {supervised.length}
-          </strong>
-        </p>
       </CardHeader>
       <CardContent className="grid gap-5">
         <fieldset className="flex flex-wrap gap-2" aria-label="Wyróżnij urządzenia w stanie">
@@ -213,7 +323,7 @@ function EquipmentBoard({
                       title={`${device.code} ${device.name}: ${state}`}
                       aria-label={`${device.code} ${device.name}: ${state}`}
                       className={cn(
-                        "flex h-16 w-full flex-col justify-between rounded-sm border px-2 py-1.5 text-left transition-opacity outline-none focus-visible:ring-3 focus-visible:ring-ring/60",
+                        "flex h-16 w-full flex-col justify-between rounded-lg border px-2.5 py-1.5 text-left transition-[opacity,transform,box-shadow] duration-150 outline-none hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/60 active:translate-y-0 motion-reduce:transform-none",
                         tileTone[device.status] ?? tileTone.NOT_REQUIRED,
                         focus !== undefined && focus !== device.status && "opacity-20",
                       )}

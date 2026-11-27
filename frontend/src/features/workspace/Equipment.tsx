@@ -53,7 +53,7 @@ export function Status({ value }: { value: unknown }) {
     <span
       data-status={key}
       className={cn(
-        "inline-flex w-fit items-center gap-1.5 rounded-sm border px-1.5 py-0.5 text-xs font-semibold whitespace-nowrap",
+        "inline-flex w-fit items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap",
         known ? statusBadgeClass(key) : "border-border bg-muted text-muted-foreground",
       )}
     >

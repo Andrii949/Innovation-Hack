@@ -5,7 +5,6 @@ import {
   ChartLine,
   Check,
   ChevronDown,
-  ChevronRight,
   ClipboardList,
   FileText,
   FlaskConical,
@@ -27,7 +26,6 @@ import {
 } from "@/api/workspaceClient";
 import { BrandMark, PlantSkyline } from "@/components/BrandMark";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -118,12 +116,22 @@ const sections = [
 ] as const;
 type Section = (typeof sections)[number]["key"] | "notifications";
 const groups = ["", "Wyposażenie", "Badania", "System"] as const;
-const headerHeight = "top-13";
-const longDate = new Intl.DateTimeFormat("pl-PL", {
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-});
+const headerHeight = "top-14";
+
+const sectionLeads: Record<Section, string> = {
+  overview: "",
+  schedule:
+    "Wszystkie terminy w jednym miejscu: wzorcowania, sprawdzenia, ważność partii i spisy odczynników.",
+  equipment:
+    "Rejestr wyposażenia pomiarowego. Karta urządzenia zbiera świadectwa, sprawdzenia i historię.",
+  plans: "Wysyłki urządzeń do firm wzorcujących i zatwierdzenia kierownika laboratorium.",
+  results: "Wyniki badań cementu z kontrolą zakresu wpisu i progami weryfikacji.",
+  reagents: "Stany odczynników i materiałów odniesienia, partie i daty ważności.",
+  reports: "Raporty dla kierownika: wyniki, wykresy i weryfikacja danych w PDF.",
+  settings: "Pracownie, użytkownicy, szablony sprawdzeń i reguły powiadomień.",
+  audit: "Każdy zapis i każda zmiana z autorem i czasem, zgodnie z PN-EN ISO/IEC 17025.",
+  notifications: "Przypomnienia o terminach, przekroczeniach i gotowych raportach.",
+};
 
 function initials(name: string) {
   const words = name.split(/\s+/).filter(Boolean);
@@ -264,7 +272,7 @@ export function Workspace() {
   useEffect(() => {
     // On phones the sections scroll sideways; bring the current one into view.
     document
-      .querySelector(`nav [data-section="${activeSection}"]`)
+      .querySelector(`[data-strip] [data-section="${activeSection}"]`)
       ?.scrollIntoView({ block: "nearest", inline: "center" });
   }, [activeSection]);
   function navigate(next: Section) {
@@ -282,29 +290,27 @@ export function Workspace() {
     setSection("equipment");
   }
   const current = sections.find(({ key }) => key === activeSection);
-  const TitleIcon = current?.icon ?? Bell;
   const unreadCount = unread?.data?.length ?? 0;
 
   return (
-    <div className="min-h-dvh bg-background">
-      <header className="sticky top-0 z-30 bg-card shadow-[0_1px_0_rgb(0_0_0/0.08)] supports-[backdrop-filter]:bg-white/75 supports-[backdrop-filter]:backdrop-blur-xl supports-[backdrop-filter]:backdrop-saturate-150">
-        <div className="flex h-13 items-center gap-3 px-3 sm:px-5">
+    <div className="hatch min-h-dvh">
+      <header className="sticky top-0 z-30 border-b border-line bg-white/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-[88rem] items-center gap-3 px-4 sm:px-6">
           <a
             href="/"
             className="flex min-w-0 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <BrandMark className="size-7" />
-            <span className="truncate text-[15px] font-semibold tracking-[-0.01em] text-foreground">
+            <span className="truncate text-[15px] font-semibold tracking-tight text-brand-navy-deep">
               Laboratorium
             </span>
-            <span aria-hidden className="hidden h-4 w-px shrink-0 bg-foreground/15 sm:block" />
-            <span className="hidden truncate text-[15px] tracking-[-0.01em] text-muted-foreground sm:block">
+            <span className="hidden truncate text-[15px] tracking-tight text-muted-foreground sm:block">
               Cementownia Warta
             </span>
           </a>
           {reviewPassword && (
-            <span className="hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground ring-1 ring-foreground/15 ring-inset md:inline">
-              Dane testowe
+            <span className="hidden shrink-0 rounded-full px-2 py-0.5 font-mono text-[11px] text-muted-foreground ring-1 ring-line ring-inset md:inline">
+              dane testowe
             </span>
           )}
           <div className="ml-auto flex items-center gap-1">
@@ -346,7 +352,7 @@ export function Workspace() {
                       size="sm"
                       disabled={busy}
                       aria-label="Wybierz rolę"
-                      className="h-8 rounded-full bg-foreground/[0.04] px-3 text-[13px] hover:bg-foreground/[0.08]"
+                      className="h-8 rounded-full px-3 text-[13px] ring-1 ring-line ring-inset hover:bg-foreground/[0.04]"
                     >
                       Wybierz rolę
                       <ChevronDown />
@@ -413,161 +419,223 @@ export function Workspace() {
           </div>
         </div>
       </header>
-      {!session ? (
-        <main className="grid min-h-[calc(100dvh-3.25rem)] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-          <section className="relative hidden flex-col justify-between overflow-hidden bg-brand-navy-deep px-12 pt-16 text-white lg:flex">
-            <div className="max-w-lg">
-              <h1 className="text-4xl leading-tight font-bold">
-                Nadzór nad wyposażeniem laboratorium
-              </h1>
-              <p className="mt-4 max-w-md text-[15px] leading-relaxed text-white/75">
-                Rejestr urządzeń, terminy wzorcowań i sprawdzeń, odczynniki oraz wyniki badań
-                cementu. Każda zmiana zostaje w historii.
-              </p>
-            </div>
-            <PlantSkyline className="mt-12 w-full text-brand-lime/40" />
-          </section>
-          <div className="flex items-start justify-center px-4 py-10 sm:items-center sm:px-8">
-            <div className="w-full max-w-sm">
-              {session === undefined ? (
-                <Loading />
-              ) : (
-                <LoginForm busy={busy} error={error} login={login} equipment={publicId !== null} />
-              )}
-            </div>
-          </div>
-        </main>
-      ) : (
-        <div className="lg:flex">
-          {/* The column paints the sidebar to the page bottom; the nav inside stays in view. */}
-          <div className="contents lg:block lg:w-60 lg:shrink-0 lg:border-r lg:bg-card">
-            <nav
-              aria-label="Sekcje laboratorium"
-              className={cn(
-                "no-scrollbar sticky z-20 flex overflow-x-auto border-b border-foreground/8 bg-card px-1 lg:max-h-[calc(100dvh-3.25rem)] lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:px-3 lg:py-5",
-                // Phones: a fade pinned to the right edge hints that more sections scroll in.
-                "max-lg:after:pointer-events-none max-lg:after:sticky max-lg:after:right-0 max-lg:after:w-10 max-lg:after:shrink-0 max-lg:after:bg-linear-to-l max-lg:after:from-card max-lg:after:content-['']",
-                headerHeight,
-              )}
-            >
-              {groups.map((group) => {
-                const items = permitted.filter((item) => item.group === group);
-                if (items.length === 0) {
-                  return null;
-                }
-                return (
-                  <div key={group || "start"} className="flex lg:mb-5 lg:flex-col lg:gap-0.5">
-                    {group && (
-                      <p className="hidden px-3 pb-1.5 text-xs font-semibold text-muted-foreground lg:block">
-                        {group}
-                      </p>
-                    )}
-                    {items.map(({ key, icon: Icon, label }) => (
-                      <button
-                        key={key}
-                        type="button"
-                        data-section={key}
-                        aria-current={activeSection === key ? "page" : undefined}
-                        onClick={() => navigate(key)}
-                        className={cn(
-                          "flex shrink-0 items-center gap-2.5 border-b-[3px] border-transparent px-3 py-3 text-sm whitespace-nowrap text-foreground/75 transition-colors outline-none hover:text-brand-navy focus-visible:ring-3 focus-visible:ring-ring/50 lg:rounded-sm lg:border-b-0 lg:border-l-[3px] lg:py-2",
-                          activeSection === key
-                            ? "border-brand-lime font-semibold text-brand-navy lg:bg-brand-lime-soft"
-                            : "lg:hover:bg-background",
-                        )}
-                      >
-                        <Icon className="size-4 shrink-0" aria-hidden />
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                );
-              })}
-            </nav>
-          </div>
-          <main className="min-w-0 flex-1 px-3 py-5 sm:px-6 lg:px-8 lg:py-6">
-            <div className="mx-auto grid max-w-[96rem] gap-4">
-              <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
-                <div className="min-w-0">
-                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                    Laboratorium
-                    {current?.group && (
-                      <>
-                        <ChevronRight className="size-3" aria-hidden />
-                        {current.group}
-                      </>
-                    )}
-                  </p>
-                  <h1 className="mt-1 flex items-center gap-2.5 text-[1.375rem] leading-tight font-bold text-brand-navy">
-                    <TitleIcon className="size-5 shrink-0 text-brand-lime-ink" aria-hidden />
-                    {current?.label ?? "Powiadomienia"}
-                  </h1>
-                </div>
-                {activeSection === "overview" && (
-                  <p className="text-sm text-muted-foreground">
-                    Stan na {longDate.format(new Date())}
-                  </p>
+      <div className="mx-auto min-h-[calc(100dvh-3.5rem)] max-w-[88rem] border-x border-line bg-white">
+        {!session ? (
+          <main className="grid lg:min-h-[calc(100dvh-3.5rem)] lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+            <section className="flex flex-col justify-between border-b border-line px-6 pt-12 sm:px-10 lg:border-r lg:border-b-0 lg:px-14 lg:pt-24">
+              <div>
+                <p className="text-sm font-semibold text-brand-lime-ink">Cementownia Warta S.A.</p>
+                <h1 className="mt-4 max-w-xl text-4xl font-semibold tracking-tighter text-balance text-brand-navy-deep sm:text-5xl lg:text-6xl">
+                  Nadzór nad wyposażeniem laboratorium.
+                </h1>
+                <p className="mt-6 max-w-lg text-lg/8 text-muted-foreground">
+                  Rejestr urządzeń, terminy wzorcowań i sprawdzeń, odczynniki oraz wyniki badań
+                  cementu w jednym miejscu. Każda zmiana zostaje w historii.
+                </p>
+              </div>
+              <PlantSkyline className="mt-16 w-full max-w-2xl text-brand-navy/25" />
+            </section>
+            <div className="flex items-start justify-center px-6 py-12 sm:px-10 lg:items-center">
+              <div className="w-full max-w-sm">
+                {session === undefined ? (
+                  <Loading />
+                ) : (
+                  <LoginForm
+                    busy={busy}
+                    error={error}
+                    login={login}
+                    equipment={publicId !== null}
+                  />
                 )}
               </div>
-              {error && <Message>{error}</Message>}
-              {activeSection === "overview" && (
-                <Overview
-                  token={session.token}
-                  permissions={session.user.permissions}
-                  onOpenDevice={openDevice}
-                  onNavigate={navigate}
-                />
-              )}
-              {activeSection === "schedule" && (
-                <Schedule token={session.token} permissions={session.user.permissions} />
-              )}
-              {activeSection === "equipment" && (
-                <Equipment
-                  key={session.token}
-                  token={session.token}
-                  permissions={session.user.permissions}
-                  publicId={publicId}
-                  onPublicId={openPublic}
-                  onResults={(id) => {
-                    setEquipmentId(id);
-                    navigate("results");
-                  }}
-                />
-              )}
-              {activeSection === "plans" && (
-                <CalibrationPlans token={session.token} permissions={session.user.permissions} />
-              )}
-              {activeSection === "results" && (
-                <Results
-                  key={session.token}
-                  token={session.token}
-                  permissions={session.user.permissions}
-                  equipmentId={equipmentId}
-                />
-              )}
-              {activeSection === "reagents" && (
-                <Reagents token={session.token} permissions={session.user.permissions} />
-              )}
-              {activeSection === "reports" && (
-                <Reports token={session.token} permissions={session.user.permissions} />
-              )}
-              {activeSection === "settings" && (
-                <Administration token={session.token} permissions={session.user.permissions} />
-              )}
-              {activeSection === "audit" && (
-                <Audit token={session.token} permissions={session.user.permissions} />
-              )}
-              {activeSection === "notifications" && (
-                <Notifications
-                  token={session.token}
-                  permissions={session.user.permissions}
-                  after={() => setNotificationRevision((value) => value + 1)}
-                />
-              )}
             </div>
           </main>
-        </div>
-      )}
+        ) : (
+          <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
+            <aside className="hidden lg:block lg:border-r lg:border-line">
+              <nav
+                aria-label="Sekcje laboratorium"
+                className="sticky top-14 max-h-[calc(100dvh-3.5rem)] overflow-y-auto px-6 py-10"
+              >
+                {groups.map((group) => {
+                  const items = permitted.filter((item) => item.group === group);
+                  if (items.length === 0) {
+                    return null;
+                  }
+                  if (group === "") {
+                    return (
+                      <ul key="start" className="mb-10 grid gap-3">
+                        {items.map(({ key, icon: Icon, label }) => (
+                          <li key={key}>
+                            <button
+                              type="button"
+                              aria-current={activeSection === key ? "page" : undefined}
+                              onClick={() => navigate(key)}
+                              className={cn(
+                                "group flex items-center gap-3 rounded-md text-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                                activeSection === key
+                                  ? "text-brand-navy"
+                                  : "text-foreground/80 hover:text-foreground",
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "grid size-7 place-items-center rounded-md ring-1 ring-inset",
+                                  activeSection === key
+                                    ? "bg-brand-navy text-brand-lime ring-brand-navy"
+                                    : "text-muted-foreground ring-line group-hover:text-foreground",
+                                )}
+                              >
+                                <Icon className="size-4" aria-hidden />
+                              </span>
+                              {label}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    );
+                  }
+                  return (
+                    <div key={group} className="mb-8">
+                      <h2 className="text-sm font-semibold text-brand-navy-deep">{group}</h2>
+                      <ul className="mt-3 grid gap-2.5 border-l border-line">
+                        {items.map(({ key, label }) => (
+                          <li key={key}>
+                            <button
+                              type="button"
+                              aria-current={activeSection === key ? "page" : undefined}
+                              onClick={() => navigate(key)}
+                              className={cn(
+                                "-ml-px block w-full border-l pl-4 text-left text-sm transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                                activeSection === key
+                                  ? "border-brand-lime font-semibold text-brand-navy"
+                                  : "border-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+                              )}
+                            >
+                              {label}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </nav>
+            </aside>
+            <div className="min-w-0">
+              <nav
+                aria-label="Sekcje laboratorium"
+                data-strip
+                className={cn(
+                  "no-scrollbar sticky z-20 flex overflow-x-auto border-b border-line bg-white px-2 lg:hidden",
+                  // A fade pinned to the right edge hints that more sections scroll in.
+                  "after:pointer-events-none after:sticky after:right-0 after:w-10 after:shrink-0 after:bg-linear-to-l after:from-white after:content-['']",
+                  headerHeight,
+                )}
+              >
+                {permitted.map(({ key, label }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    data-section={key}
+                    aria-current={activeSection === key ? "page" : undefined}
+                    onClick={() => navigate(key)}
+                    className={cn(
+                      "shrink-0 border-b-2 border-transparent px-3 py-3 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                      activeSection === key && "border-brand-lime font-semibold text-brand-navy",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </nav>
+              <main
+                key={activeSection}
+                className="duration-300 animate-in fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none"
+              >
+                {activeSection === "overview" ? (
+                  <Overview
+                    token={session.token}
+                    permissions={session.user.permissions}
+                    onOpenDevice={openDevice}
+                    onNavigate={navigate}
+                    error={error}
+                  />
+                ) : (
+                  <>
+                    <div className="border-b border-line px-4 py-10 sm:px-8 lg:px-12 lg:py-14">
+                      <p className="text-sm font-semibold text-brand-lime-ink">
+                        {current?.group || "Konto"}
+                      </p>
+                      <h1 className="mt-2 text-3xl font-semibold tracking-tight text-brand-navy-deep sm:text-4xl">
+                        {current?.label ?? "Powiadomienia"}
+                      </h1>
+                      <p className="mt-3 max-w-2xl text-base/7 text-muted-foreground">
+                        {activeSection === undefined ? "" : sectionLeads[activeSection]}
+                      </p>
+                    </div>
+                    <div className="grid gap-6 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
+                      {error && <Message>{error}</Message>}
+                      {activeSection === "schedule" && (
+                        <Schedule token={session.token} permissions={session.user.permissions} />
+                      )}
+                      {activeSection === "equipment" && (
+                        <Equipment
+                          key={session.token}
+                          token={session.token}
+                          permissions={session.user.permissions}
+                          publicId={publicId}
+                          onPublicId={openPublic}
+                          onResults={(id) => {
+                            setEquipmentId(id);
+                            navigate("results");
+                          }}
+                        />
+                      )}
+                      {activeSection === "plans" && (
+                        <CalibrationPlans
+                          token={session.token}
+                          permissions={session.user.permissions}
+                        />
+                      )}
+                      {activeSection === "results" && (
+                        <Results
+                          key={session.token}
+                          token={session.token}
+                          permissions={session.user.permissions}
+                          equipmentId={equipmentId}
+                        />
+                      )}
+                      {activeSection === "reagents" && (
+                        <Reagents token={session.token} permissions={session.user.permissions} />
+                      )}
+                      {activeSection === "reports" && (
+                        <Reports token={session.token} permissions={session.user.permissions} />
+                      )}
+                      {activeSection === "settings" && (
+                        <Administration
+                          token={session.token}
+                          permissions={session.user.permissions}
+                        />
+                      )}
+                      {activeSection === "audit" && (
+                        <Audit token={session.token} permissions={session.user.permissions} />
+                      )}
+                      {activeSection === "notifications" && (
+                        <Notifications
+                          token={session.token}
+                          permissions={session.user.permissions}
+                          after={() => setNotificationRevision((value) => value + 1)}
+                        />
+                      )}
+                    </div>
+                  </>
+                )}
+              </main>
+            </div>
+          </div>
+        )}
+      </div>
       <Toaster position="bottom-center" richColors />
     </div>
   );
@@ -590,40 +658,34 @@ function LoginForm({
     void login(textValue(values.get("login"), "").trim(), textValue(values.get("password"), ""));
   }
   return (
-    <Card className="border-t-4 border-t-brand-lime">
-      <CardHeader>
-        <CardTitle className="text-xl text-brand-navy">Zaloguj się</CardTitle>
-        <CardDescription>
-          {equipment
-            ? "Po zalogowaniu otworzymy kartę z etykiety."
-            : "Zaloguj się na konto laboratorium."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form className="grid gap-4" onSubmit={submit}>
-          <Control label="Login" htmlFor="workspace-login">
-            <Input id="workspace-login" name="login" autoComplete="username" required />
-          </Control>
-          <Control label="Hasło" htmlFor="workspace-password">
-            <Input
-              id="workspace-password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-            />
-          </Control>
-          {error && <Message>{error}</Message>}
-          <Button type="submit" disabled={busy}>
-            {busy ? "Logowanie…" : "Zaloguj się"}
-          </Button>
-        </form>
-        {reviewPassword && (
-          <p className="mt-4 text-xs text-muted-foreground">
-            Do przeglądu aplikacji wybierz rolę w prawym górnym rogu.
-          </p>
-        )}
-      </CardContent>
-    </Card>
+    <div>
+      <h2 className="text-2xl font-semibold tracking-tight text-brand-navy-deep">Zaloguj się</h2>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {equipment ? "Po zalogowaniu otworzymy kartę z etykiety." : "Użyj konta laboratorium."}
+      </p>
+      <form className="mt-8 grid gap-5" onSubmit={submit}>
+        <Control label="Login" htmlFor="workspace-login">
+          <Input id="workspace-login" name="login" autoComplete="username" required />
+        </Control>
+        <Control label="Hasło" htmlFor="workspace-password">
+          <Input
+            id="workspace-password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            required
+          />
+        </Control>
+        {error && <Message>{error}</Message>}
+        <Button type="submit" size="lg" disabled={busy} className="mt-1">
+          {busy ? "Logowanie…" : "Zaloguj się"}
+        </Button>
+      </form>
+      {reviewPassword && (
+        <p className="mt-6 text-xs text-muted-foreground">
+          Do przeglądu wybierz konto testowe w prawym górnym rogu.
+        </p>
+      )}
+    </div>
   );
 }
