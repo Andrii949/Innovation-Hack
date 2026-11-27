@@ -37,6 +37,17 @@ def _cached_hash(password: str) -> str:
     return _PASSWORD_HASH_CACHE[password]
 
 
+@pytest.fixture(autouse=True)
+def _record_requirement_markers(
+    request: pytest.FixtureRequest,
+    record_property: Callable[[str, object], None],
+) -> None:
+    for marker in request.node.iter_markers("req"):
+        for req_id in marker.args:
+            if isinstance(req_id, str) and req_id:
+                record_property("req", req_id)
+
+
 @pytest.fixture(scope="session")
 def engine() -> Iterator[Engine]:
     test_engine = create_engine(get_settings().database_url, pool_pre_ping=True)
