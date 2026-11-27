@@ -14,6 +14,7 @@ from app.equipment.router import router as equipment_router
 from app.errors import register_error_handlers
 from app.files.router import router as files_router
 from app.forms.router import router as forms_router
+from app.schedule.router import router as schedule_router
 from app.settings.router import router as settings_router
 
 api = APIRouter(prefix="/api")
@@ -24,6 +25,7 @@ api.include_router(files_router)
 api.include_router(forms_router)
 api.include_router(equipment_router)
 api.include_router(check_plans_router)
+api.include_router(schedule_router)
 
 
 @api.get("/health")
