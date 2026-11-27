@@ -36,6 +36,11 @@ jobs:
       - uses: astral-sh/setup-uv@v10.4.0
         with:
           enable-cache: true
+      - name: Install typst 0.15.1 (PDF rendering tests)
+        run: |
+          curl -sSfL https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-unknown-linux-musl.tar.xz \
+            | tar -xJ -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/typst-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
       - run: uv sync --locked
       - run: uv run alembic upgrade head
       - run: uv run ruff check .
