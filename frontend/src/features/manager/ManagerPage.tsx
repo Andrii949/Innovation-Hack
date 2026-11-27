@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CalibrationPlanPanel } from "@/features/admin/CalibrationPlanPanel";
 import { ResultsTable } from "@/features/results/ResultsTable";
 import { formatRange } from "@/lib/format";
 
@@ -68,6 +69,7 @@ export function ManagerPage({ snapshot }: { snapshot: Snapshot }) {
   const pendingVerification = outOfRange.filter((result) => result.repeat === null);
   const overdue = snapshot.schedule.filter((item) => item.status === "OVERDUE");
   const checksOverdue = overdue.filter((item) => item.kind === "CHECK");
+  const plansPending = snapshot.calibrationPlans.filter((plan) => plan.status === "PENDING");
 
   const labRows = snapshot.labs.map((lab) => {
     const labSchedule = snapshot.schedule.filter((item) => item.labId === lab.id);
@@ -98,6 +100,11 @@ export function ManagerPage({ snapshot }: { snapshot: Snapshot }) {
           tone={pendingReports.length > 0 ? "alert" : "default"}
         />
         <PageMeta label="Pracownie" value={snapshot.labs.map((lab) => lab.code).join(" / ")} />
+        <PageMeta
+          label="Plany do zatwierdzenia"
+          value={plansPending.length}
+          tone={plansPending.length > 0 ? "alert" : "default"}
+        />
       </PageHeader>
 
       <MetricStrip>
@@ -147,10 +154,19 @@ export function ManagerPage({ snapshot }: { snapshot: Snapshot }) {
           </TabsTrigger>
           <TabsTrigger
             className="flex-none gap-2 px-2 pb-2 text-xs sm:px-3 sm:text-sm data-active:text-primary data-active:after:bg-chart-2"
-            value="wykres"
+            value="plany"
           >
             <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
               02
+            </span>
+            Plan wzorcowania
+          </TabsTrigger>
+          <TabsTrigger
+            className="flex-none gap-2 px-2 pb-2 text-xs sm:px-3 sm:text-sm data-active:text-primary data-active:after:bg-chart-2"
+            value="wykres"
+          >
+            <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
+              03
             </span>
             Wykres próbek
           </TabsTrigger>
@@ -159,7 +175,7 @@ export function ManagerPage({ snapshot }: { snapshot: Snapshot }) {
             value="weryfikacja"
           >
             <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
-              03
+              04
             </span>
             Weryfikacja
           </TabsTrigger>
@@ -168,7 +184,7 @@ export function ManagerPage({ snapshot }: { snapshot: Snapshot }) {
             value="pracownie"
           >
             <span className="hidden font-mono text-[10px] text-muted-foreground/70 sm:inline">
-              04
+              05
             </span>
             Pracownie
           </TabsTrigger>
@@ -180,6 +196,15 @@ export function ManagerPage({ snapshot }: { snapshot: Snapshot }) {
             description="Biuro generuje raport z harmonogramu, spisów i wyników; kierownik dostaje powiadomienie i otwiera raport."
           >
             <ReportsInbox snapshot={snapshot} />
+          </Panel>
+        </TabsContent>
+
+        <TabsContent value="plany">
+          <Panel
+            title="Zatwierdzanie planu wzorcowania"
+            description="Kierownik zatwierdza wysyłkę tylko wtedy, gdy w pracowni zostaje wymagana liczba urządzeń zamiennych."
+          >
+            <CalibrationPlanPanel snapshot={snapshot} />
           </Panel>
         </TabsContent>
 

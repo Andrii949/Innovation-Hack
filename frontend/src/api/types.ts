@@ -49,6 +49,7 @@ export type Permission =
   | "equipment:read"
   | "equipment:write"
   | "calibration:write"
+  | "calibration:approve"
   | "check:write"
   | "schedule:read"
   | "reagent:read"
@@ -120,7 +121,58 @@ export type Calibration = {
   /** Copied at creation for the record; deadlines themselves are derived. */
   nextDueMonth: IsoMonth | null;
   note: string;
+  /** Set when a NOK assessment triggers a review of earlier test results. */
+  reviewPeriodFrom?: IsoDate | null;
+  reviewPeriodTo?: IsoDate | null;
   points: CalibrationPoint[];
+};
+
+export type CalibrationPlanStatus = "PENDING" | "APPROVED";
+
+/** Planned dispatch to an external calibration provider and the expected return. */
+export type CalibrationPlan = {
+  id: string;
+  equipmentId: string;
+  labId: string;
+  dispatchDate: IsoDate;
+  returnDate: IsoDate;
+  status: CalibrationPlanStatus;
+  note: string;
+  createdBy: string;
+  createdAt: IsoDateTime;
+  approvedBy: string | null;
+  approvedAt: IsoDateTime | null;
+};
+
+export type CalibrationPlanConflict = {
+  planId: string;
+  equipmentId: string;
+  displayCode: string;
+  name: string;
+  dispatchDate: IsoDate;
+  returnDate: IsoDate;
+};
+
+/** Interchangeability check for one planned absence; days are inclusive. */
+export type CalibrationPlanAvailability = {
+  groupLabel: string;
+  minimum: number;
+  /** Fewest interchangeable devices available on any day of the planned period. */
+  available: number;
+  daysWithout: number;
+  conflicts: CalibrationPlanConflict[];
+  warning: string | null;
+};
+
+export type CalibrationPlanView = CalibrationPlan & {
+  displayCode: string;
+  equipmentName: string;
+  labName: string;
+  createdByName: string;
+  approvedByName: string | null;
+  availability: CalibrationPlanAvailability;
+  canEdit: boolean;
+  canApprove: boolean;
 };
 
 export type Equipment = {
@@ -143,6 +195,10 @@ export type Equipment = {
   withdrawnAt: IsoDate | null;
   withdrawnReason: string | null;
   notes: string;
+  /** Devices sharing this key in one lab can replace each other. */
+  availabilityGroup?: string | null;
+  /** Minimum devices of the group that must stay available. */
+  minimumAvailable?: number;
 };
 
 /** `Equipment` as returned by the API for the current session. */
@@ -224,6 +280,8 @@ export type ReagentLot = {
   lotNo: string;
   expiryDate: IsoDate;
   quantity: DecimalString;
+  /** Actual amount left in the lot; used for usable stock and lot recommendation. */
+  remainingQuantity: DecimalString;
   receivedOn: IsoDate;
   disposedOn: IsoDate | null;
 };
@@ -239,10 +297,15 @@ export type StockCount = {
 /** `Reagent` with server-derived stock, expiry and status. */
 export type ReagentView = Reagent & {
   labName: string;
+  /** Total stock physically present, including expired lots. */
   stock: DecimalString;
+  /** Stock from lots that are still valid on the demo date. */
+  usableStock: DecimalString;
   lastCount: StockCount | null;
   lastMovementOn: IsoDate | null;
   nearestLot: ReagentLot | null;
+  /** Earliest-expiring valid lot with stock left. */
+  recommendedLot: ReagentLot | null;
   expiryStatus: Status | null;
   status: Status;
   canWriteStock: boolean;
@@ -266,6 +329,8 @@ export type TestParameter = {
 export type TestResult = {
   id: string;
   parameterId: string;
+  /** Device used for the measurement; null for records predating the link. */
+  equipmentId: string | null;
   sampleLabel: string;
   value: DecimalString;
   minSnapshot: DecimalString | null;
@@ -279,7 +344,39 @@ export type TestResult = {
 export type TestResultView = TestResult & {
   parameterName: string;
   unit: string;
+  /** Display code of the device used, e.g. 121/A. */
+  equipmentCode: string | null;
   repeat: TestResult | null;
+};
+
+export type ReviewDecision = "PENDING" | "ACCEPTED" | "REPEAT";
+
+/** One earlier result called back after a NOK calibration assessment. */
+export type ResultReview = {
+  id: string;
+  calibrationId: string;
+  equipmentId: string;
+  testResultId: string;
+  periodFrom: IsoDate;
+  periodTo: IsoDate;
+  decision: ReviewDecision;
+  note: string;
+  decidedBy: string | null;
+  decidedAt: IsoDateTime | null;
+};
+
+export type ResultReviewView = ResultReview & {
+  equipmentCode: string;
+  equipmentName: string;
+  parameterName: string;
+  unit: string;
+  sampleLabel: string;
+  value: DecimalString;
+  minSnapshot: DecimalString | null;
+  maxSnapshot: DecimalString | null;
+  inRange: boolean;
+  sampledAt: IsoDate;
+  decidedByName: string | null;
 };
 
 export type Notification = {
@@ -387,8 +484,10 @@ export type Snapshot = {
   schedule: DueItem[];
   equipment: EquipmentView[];
   plans: CheckPlanView[];
+  calibrationPlans: CalibrationPlanView[];
   templates: FormTemplate[];
   results: TestResultView[];
+  reviews: ResultReviewView[];
   parameters: TestParameter[];
   reagents: ReagentView[];
   reports: ReportView[];

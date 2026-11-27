@@ -15,6 +15,9 @@ import { formatDate, formatDecimal, formatRange } from "@/lib/format";
 
 export function ResultEntryForm({ snapshot }: { snapshot: Snapshot }) {
   const [parameterId, setParameterId] = useState(snapshot.parameters[0]?.id ?? "");
+  const [equipmentId, setEquipmentId] = useState(
+    snapshot.equipment.find((item) => item.withdrawnAt === null)?.id ?? "",
+  );
   const [sampleLabel, setSampleLabel] = useState("");
   const [value, setValue] = useState("");
   const [repeatOfId, setRepeatOfId] = useState("none");
@@ -32,6 +35,18 @@ export function ResultEntryForm({ snapshot }: { snapshot: Snapshot }) {
         hint: candidate.material,
       })),
     [snapshot.parameters],
+  );
+
+  const equipmentOptions = useMemo<ComboboxOption[]>(
+    () =>
+      snapshot.equipment
+        .filter((candidate) => candidate.withdrawnAt === null)
+        .map((candidate) => ({
+          value: candidate.id,
+          label: `${candidate.displayCode} · ${candidate.name}`,
+          hint: `${candidate.labName} · ${candidate.model}`,
+        })),
+    [snapshot.equipment],
   );
 
   const pendingRepeats = useMemo(
@@ -61,6 +76,7 @@ export function ResultEntryForm({ snapshot }: { snapshot: Snapshot }) {
     }
     const response = addTestResult({
       parameterId: parameter.id,
+      equipmentId: equipmentId === "" ? null : equipmentId,
       sampleLabel,
       value,
       repeatOfId: repeatOfId === "none" ? null : repeatOfId,
@@ -109,6 +125,22 @@ export function ResultEntryForm({ snapshot }: { snapshot: Snapshot }) {
               onChange={(event) => {
                 setSampleLabel(event.target.value);
               }}
+            />
+          </FormField>
+          <FormField
+            id="result-equipment"
+            label="Urządzenie pomiarowe"
+            hint="Ślad weryfikacji po wzorcowaniu NIE OK."
+          >
+            <ComboboxField
+              id="result-equipment"
+              value={equipmentId}
+              options={equipmentOptions}
+              onValueChange={setEquipmentId}
+              placeholder="Wybierz urządzenie"
+              searchPlaceholder="Kod, nazwa lub model…"
+              emptyText="Brak urządzeń w zakresie pracowni."
+              ariaLabel="Urządzenie pomiarowe"
             />
           </FormField>
           <FormField

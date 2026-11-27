@@ -7,8 +7,10 @@
 import type {
   ApiResult,
   Calibration,
+  CalibrationPlan,
   CheckRecord,
   Report,
+  ResultReview,
   Snapshot,
   StockCount,
   TestResult,
@@ -16,14 +18,18 @@ import type {
 
 import {
   addTestResult as mockAddTestResult,
+  approveCalibrationPlan as mockApproveCalibrationPlan,
   type CalibrationInput,
+  type CalibrationPlanInput,
   type CheckInput,
+  decideResultReview as mockDecideResultReview,
   generateReport as mockGenerateReport,
   markNotificationsRead as mockMarkNotificationsRead,
   recordCalibration as mockRecordCalibration,
   recordCheck as mockRecordCheck,
   recordStockCount as mockRecordStockCount,
   type ReportInput,
+  saveCalibrationPlan as mockSaveCalibrationPlan,
   signInAs,
   type StockCountInput,
   type TestResultInput,
@@ -83,6 +89,21 @@ export function markAllNotificationsRead(): number {
 
 export function recordCalibration(input: CalibrationInput): ApiResult<Calibration> {
   return commit(() => mockRecordCalibration(db, input));
+}
+
+export function saveCalibrationPlan(input: CalibrationPlanInput): ApiResult<CalibrationPlan> {
+  return commit(() => mockSaveCalibrationPlan(db, input));
+}
+
+export function approveCalibrationPlan(planId: string): ApiResult<CalibrationPlan> {
+  return commit(() => mockApproveCalibrationPlan(db, planId));
+}
+
+export function decideResultReview(
+  reviewId: string,
+  decision: "ACCEPTED" | "REPEAT",
+): ApiResult<ResultReview> {
+  return commit(() => mockDecideResultReview(db, reviewId, decision));
 }
 
 export function recordCheck(input: CheckInput): ApiResult<CheckRecord> {

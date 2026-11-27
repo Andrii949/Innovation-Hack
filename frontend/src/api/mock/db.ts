@@ -3,7 +3,7 @@
 import { createDb } from "./seed";
 import type { MockDb } from "./types";
 
-const STORAGE_KEY = "lab.demo.v2";
+const STORAGE_KEY = "lab.demo.v3";
 
 function isMockDb(value: unknown): value is MockDb {
   return (

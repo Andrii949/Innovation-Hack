@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useMemo } from "react";
 
 import type { Snapshot } from "@/api/types";
 import { DataList, DataListItem } from "@/components/DataList";
@@ -20,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ReviewQueue } from "@/features/results/ReviewQueue";
 import { formatDate, formatDecimal } from "@/lib/format";
 import { formatMonth } from "@/lib/months";
 
@@ -52,8 +54,18 @@ export function EquipmentDetail({
   onClose: () => void;
 }) {
   const equipment = snapshot.equipment.find((candidate) => candidate.id === equipmentId) ?? null;
-  const plans =
-    equipment === null ? [] : snapshot.plans.filter((plan) => plan.equipmentId === equipment.id);
+  const plans = useMemo(
+    () =>
+      equipment === null ? [] : snapshot.plans.filter((plan) => plan.equipmentId === equipment.id),
+    [equipment, snapshot.plans],
+  );
+  const reviews = useMemo(
+    () =>
+      equipment === null
+        ? []
+        : snapshot.reviews.filter((review) => review.equipmentId === equipment.id),
+    [equipment, snapshot.reviews],
+  );
 
   return (
     <Sheet
@@ -232,6 +244,15 @@ export function EquipmentDetail({
                     </div>
                   </div>
 
+                  {reviews.length > 0 && (
+                    <div>
+                      <h4 className="mb-2 text-sm font-semibold">
+                        Do weryfikacji po wzorcowaniu NIE OK
+                      </h4>
+                      <ReviewQueue reviews={reviews} />
+                    </div>
+                  )}
+
                   <div>
                     <h4 className="mb-2 text-sm font-semibold">Plany sprawdzeń</h4>
                     <div className="grid gap-2">
@@ -268,7 +289,7 @@ export function EquipmentDetail({
 
                 {equipment.canWriteCalibration ? (
                   <div className="mt-5">
-                    <CalibrationForm equipment={equipment} />
+                    <CalibrationForm equipment={equipment} today={snapshot.today} />
                   </div>
                 ) : (
                   <p className="mt-4 text-xs text-muted-foreground">
