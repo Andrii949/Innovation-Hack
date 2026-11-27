@@ -11,6 +11,9 @@ case "$mode" in
     python -m app.core.db_security
     DATABASE_URL="${MIGRATION_DATABASE_URL:-$DATABASE_URL}" alembic upgrade head
     python -m app.core.db_security
+    if [ "${AUTO_SEED:-false}" = "true" ]; then
+      python -m app.seed
+    fi
     exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" "$@"
     ;;
   worker)
