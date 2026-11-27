@@ -276,3 +276,11 @@ Przekreślone = zamknięte. Zostają pytania o fakty i o środowisko, których n
 
 16. Czy możecie podać kilka przykładowych pozycji do demo: urządzenia z kodami (jaką literę mają pracownie wytrzymałościowa i paliw, skoro analityczna to A?) oraz kilka odczynników i CRM?
 17. Do organizatorów: co ma pokazać „uniwersalność” rozwiązania (uwaga pana Krzysztofa)?
+
+**G. Liczby do KPI i kosztów** (zastępują założenia [Z] w [05-kryteria.md](05-kryteria.md) §a4, §a5)
+
+18. Ile dokładnie urządzeń jest w każdej pracowni i jaki jest typowy interwał wzorcowania?
+19. Ile czasu zajmuje dziś comiesięczny przegląd harmonogramów i jak często ktoś idzie do segregatora po zapis?
+20. Ile razy w ostatnim roku termin został przeoczony albo zabrakło odczynnika — i co to kosztowało (wzorcowanie awaryjne, powtórzone badania)?
+21. Jaka jest infrastruktura IT (serwer lub maszyna wirtualna, kto utrzymuje) i ile osób używałoby systemu?
+22. Do organizatorów: ile trwa prezentacja i Q&A?

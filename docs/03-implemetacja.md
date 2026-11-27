@@ -9,18 +9,19 @@ wzorcowaniami, sprawdzeniami, odczynnikami i kontrolą zakresu wyników.
 osobny worker liczy terminy i tworzy powiadomienia. Szczegóły: [02-architektura.md](02-architektura.md).
 
 **Stack:** Python 3.12+ (uv), FastAPI, SQLAlchemy 2, Alembic, Pydantic v2, pwdlib[argon2],
-PostgreSQL 16+, React + TypeScript + Vite, shadcn/ui (Tailwind CSS 4), TanStack Query,
+PostgreSQL 17, React + TypeScript + Vite, shadcn/ui (Tailwind CSS 4), TanStack Query,
 openapi-typescript + openapi-fetch, Capacitor 8.
 
 **Spec:** [01-zadanie.md](01-zadanie.md) (wymagania), [02-architektura.md](02-architektura.md)
-(projekt), [04-research.md](04-research.md) (uzasadnienie).
+(projekt), [04-research.md](04-research.md) (uzasadnienie), [05-kryteria.md](05-kryteria.md)
+(kryteria jury — co musi być gotowe na ocenę).
 
 ---
 
 ## Ograniczenia globalne
 
 - Kod, nazwy, commity — po angielsku; interfejs i komunikaty błędów — po polsku.
-- Python ≥ 3.12, zarządzany przez `uv`; Node w wersji LTS; Capacitor 8 (build iOS: Xcode 26+ na macOS).
+- Python 3.12 (`uv`), JS/TS przez `bun` canary — bez `npm`, `npx`, `pip` (AGENTS.md); Capacitor 8 (build iOS: Xcode 26+ na macOS).
 - Wyprzedzenie `lead_months`: urządzenia i partie 1–12 (domyślnie 1), plany sprawdzeń 0–12 (domyślnie 0); granice w ustawieniach.
 - Terminy wzorcowań i sprawdzeń w miesiącach; „ważne do” = ostatni dzień miesiąca terminu; „alert od” = 1. dzień miesiąca (termin − wyprzedzenie).
 - Liczby pomiarowe: `Decimal` w Pythonie, `Numeric()` bez skali w bazie, tekst w JSON; na wejściu przecinek albo kropka.
@@ -28,7 +29,7 @@ openapi-typescript + openapi-fetch, Capacitor 8.
 - Błędy API: `{"error": "<KOD>", "message": "<tekst>"}` — kody z 02 §7.
 - Każdy zapis przechodzi przez historię zmian; zapisów technicznych nie usuwamy.
 - CORS: `capacitor://localhost`, `https://localhost`, adres webowy, `http://localhost:5173`.
-- Komendy backendu uruchamiamy w `backend/`: testy `uv run pytest -q`, lint `uvx ruff@0.17.3 check --select F,E9`.
+- Komendy backendu uruchamiamy w `backend/`: `uv run ruff check .`, `uv run ruff format --check .`, `uv run ty check`, `uv run pytest`; frontendu w `frontend/`: `bun fmt --check`, `bun lint --max-warnings 0`, `bun check`, `bun test` (bramki jakości z AGENTS.md).
 - „Dziś” w testach: `TODAY = date(2026, 11, 27)` (stała w `tests/conftest.py`).
 - Dane testowe i demo są syntetyczne; hasła z zmiennych środowiskowych, nigdy w repo.
 
@@ -46,16 +47,16 @@ Pięć sytuacji, których spec nie opisuje wprost, a które najłatwiej zepsują
 
 ## Zespół i ścieżki
 
-| Ścieżka | Zakres | Zadania |
-|---|---|---|
-| A — Platforma (backend) | szkielet, historia zmian, logowanie, uprawnienia, ustawienia, pliki | T01, T04–T07, T16 |
-| B — Urządzenia (backend) | terminy, rejestr, upoważnienia, wzorcowania, sprawdzenia, harmonogram, wydruk karty (PDF) | T02, T08–T12, T31 |
-| C — Odczynniki, wyniki, powiadomienia (backend) | liczby i zakresy, odczynniki, wyniki, powiadomienia, worker, kanały | T03, T13–T15, T17 |
-| D — Biuro (web) | szkielet frontu, harmonogram, urządzenia, ustawienia | T19–T22 |
-| E — Pracownia (mobile) | Capacitor, skan, sprawdzenia, spis, push | T23–T26 |
-| F — Jakość i demo | dane demo, Docker, testy e2e, raport walidacji, scenariusz | T18, T27–T30 |
+| Osoba | Ścieżka | Zakres | Zadania |
+|---|---|---|---|
+| **Timur** | A + B — rdzeń i urządzenia (backend) | szkielet, historia zmian, logowanie, uprawnienia, ustawienia, pliki, rejestr, upoważnienia, wzorcowania, sprawdzenia, harmonogram | T01, T04–T12, T16 |
+| **Andrii** | C — odczynniki, cement, wykresy, PDF (backend) | daty i liczby, odczynniki, wyniki z kontrolą zakresu, powiadomienia i worker, kanały, wydruki PDF, wykresy, raport dla kierownika | T02, T03, T13–T15, T17, T31–T33 |
+| **Jakub** | D — cały frontend (React UI) | wszystkie ekrany w jednym stylu, także ekrany telefonu w T24–T25 | T19–T22, T34, ekrany T24–T25 |
+| **Ivan** | E + F — Capacitor, QR, DevOps, dane, testy | projekty natywne, skaner, aparat, push, Docker, serwer testowy, dane demo, e2e, raport walidacji, skrypt KPI | T18, T23, T26–T29, T35, natywna część T24–T25 |
+| **Misza** | Product, QA, pitch | kryteria (05), koszty i KPI z mentorami, testy akceptacyjne z listą kontrolną, scenariusz demo, prezentacja, Q&A | T30, T36 |
 
-Przy 5 osobach ścieżkę F dzielą A (T27) i D (T18, T28–T30).
+Ekrany robi tylko Jakub (jeden styl, bez konfliktów w `frontend/src`); Ivan dostarcza
+funkcje natywne (`src/platform/*`, `scanEquipment()`, aparat, push), które ekrany wywołują.
 
 ## Harmonogram
 
@@ -64,11 +65,12 @@ Przy 5 osobach ścieżkę F dzielą A (T27) i D (T18, T28–T30).
 | 0 | Start | T01 na `main`, kontrakt schematów, front i Capacitor założone, ustalone: kto ma Maca |
 | 1–2 | **M1** — przekrój pionowy w przeglądarce | dodaję urządzenie, wpisuję wzorcowanie, widzę status w harmonogramie |
 | 3–4 | **M2** — telefon | Android: skan QR → karta → sprawdzenie; dzwonek powiadomień u admina |
-| 5 | **M3** — komplet funkcji | odczynniki, wyniki z kontrolą zakresu, ustawienia, historia zmian |
-| 6 | **M4** — utwardzenie | e2e zielone, build iOS, push (jeśli czas), dane demo; wieczorem zamrożenie funkcji |
-| 7 | Demo | scenariusz T30 przechodzi 2× bez błędu |
+| 5 | **M3** — komplet funkcji | odczynniki, wyniki z kontrolą zakresu, wykresy i raport dla kierownika, ustawienia, historia zmian; liczby KPI i kosztów od mentorów (T36) |
+| 6 | **M4** — utwardzenie | e2e zielone, build iOS, push (jeśli czas), dane demo, skrypt KPI (T35); wieczorem zamrożenie funkcji i slajdy |
+| 7 | Demo | scenariusz T30 przechodzi 2× bez błędu; próba Q&A |
 
-Priorytety: **P0** — potrzebne do demo; **P1** — pełne 9 funkcji; **P2** — jeśli zostanie czas.
+Priorytety: **P0** — potrzebne do demo; **P1** — pełne 11 funkcji i materiały do kryteriów
+(05); **P2** — jeśli zostanie czas.
 
 ## Zasady pracy
 
@@ -84,7 +86,7 @@ Priorytety: **P0** — potrzebne do demo; **P1** — pełne 9 funkcji; **P2** �
 backend/
   pyproject.toml  alembic/  Dockerfile
   app/
-    main.py  config.py  db.py  errors.py  worker.py  seed.py
+    main.py  config.py  db.py  errors.py  worker.py  seed.py  kpi.py
     core/          clock.py  status.py  dates.py  ranges.py
     settings/      models.py  service.py  router.py
     audit/         models.py  context.py  listener.py  service.py  router.py
@@ -96,7 +98,8 @@ backend/
     results/       models.py  schemas.py  service.py  router.py
     schedule/      service.py  router.py
     notifications/ models.py  service.py  push.py  email.py  router.py
-    print/         render.py  service.py  router.py  templates/  fonts/
+    print/         render.py  chart.py  service.py  router.py  templates/  fonts/
+    reports/       models.py  schemas.py  service.py  router.py
   scripts/validation_report.py
   tests/           (te same podfoldery co app/) conftest.py
 frontend/
@@ -106,10 +109,10 @@ frontend/
     api/       client.ts  schema.d.ts (generowany)
     auth/      tokenStore.ts  LoginPage.tsx  AuthGuard.tsx
     platform/  server.ts
-    layout/    OfficeLayout.tsx  LabLayout.tsx  NotificationBell.tsx
+    layout/    OfficeLayout.tsx  LabLayout.tsx  ManagerLayout.tsx  NotificationBell.tsx
     lib/       qr.ts  months.ts  status.ts  navigation.ts  (+ *.test.ts)
     features/  schedule/  equipment/  checks/  scan/  reagents/  results/
-               notifications/  settings/  audit/  setup/
+               notifications/  settings/  audit/  setup/  reports/
   android/  ios/   (generowane przez Capacitor, w repo)
   e2e/
 infra/
@@ -151,11 +154,11 @@ DEFAULT_SETTINGS = {
 - [ ] **Uruchom:** `docker compose -f infra/docker-compose.yml up -d db`, potem `uv run pytest -q` → FAIL.
 - [ ] **Implementacja:** sesja testowa `Session(bind=connection, join_transaction_mode="create_savepoint")` na połączeniu z otwartą transakcją, wycofywaną po teście; schemat przez `alembic upgrade head` raz na sesję testów.
 - [ ] **Kontrakt (dzień 0, razem z B i C):** schematy Pydantic bez logiki — `EquipmentOut`, `CalibrationCreate`, `CheckRecordCreate`, `DueItem`, `NotificationOut`, `TestResultCreate` (pola z 02 §3.2); endpointy GET zwracają `[]`. Frontend generuje z tego typy od pierwszego dnia.
-- [ ] **CI:** usługa `postgres`, `uv run pytest -q`, `uvx ruff@0.17.3 check --select F,E9`.
+- [ ] **CI:** usługa `postgres`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run ty check`, `uv run pytest`.
 - [ ] **Uruchom:** `uv run pytest -q` → PASS.
 - [ ] **Commit:** `feat(backend): app skeleton, test db, settings defaults, CI`
 
-### T02 · Miesiące, terminy, statusy — B · P0 · zależy od: T01
+### T02 · Miesiące, terminy, statusy — C · P0 · zależy od: T01
 
 **Pliki:** utwórz `backend/app/core/{status,dates}.py`; test `backend/tests/core/test_dates.py`.
 
@@ -282,7 +285,7 @@ def test_open_bounds():  # konsystencja zaczynów: brak zakresu
 
 **Daje:**
 - modele: `Lab(name, code, active)`, `Role(name, permissions: list[str])`, `User` (tabela `app_user`: `login`, `full_name`, `password_hash`, `role_id`, `all_labs`, `active`, `labs` przez `user_lab`), `UserSession` (tabela `user_session`: `user_id`, `token_hash`, `expires_at`, `revoked_at`, `device_info`)
-- `Permission(StrEnum)` z wartościami z 02 §5 (`"equipment:read"`, …) i `DEFAULT_ROLES: dict[str, frozenset[Permission]]` — `"admin"`: wszystkie; `"worker"`: `EQUIPMENT_READ`, `SCHEDULE_READ`, `REAGENT_READ`, `RESULT_READ`, `CHECK_WRITE`, `STOCK_WRITE`, `RESULT_WRITE`
+- `Permission(StrEnum)` z wartościami z 02 §5 (`"equipment:read"`, …) i `DEFAULT_ROLES: dict[str, frozenset[Permission]]` — `"admin"`: wszystkie; `"manager"` (kierownik): `EQUIPMENT_READ`, `SCHEDULE_READ`, `REAGENT_READ`, `RESULT_READ`, `REPORT_READ`, `AUDIT_READ`; `"worker"`: `EQUIPMENT_READ`, `SCHEDULE_READ`, `REAGENT_READ`, `RESULT_READ`, `CHECK_WRITE`, `STOCK_WRITE`, `RESULT_WRITE`
 - `hash_password(password: str) -> str`, `verify_password(password: str, password_hash: str) -> bool` (pwdlib, Argon2); `new_token() -> tuple[str, str]` (surowy token 32 bajty url-safe, skrót sha256 hex)
 - `login(db, *, login: str, password: str, device_info: str | None, now: datetime) -> tuple[str, User]`, `resolve_token(db, raw_token: str, now: datetime) -> User`, `logout(db, raw_token: str) -> None`
 - zależność `current_user` (ustawia też `set_audit_user`); `POST /api/auth/login` (`{login, password, device_info?}` → `{token, user}`), `POST /api/auth/logout`, `GET /api/me`
@@ -634,7 +637,7 @@ def test_existing_key_is_skipped_without_error(db, admin_a, overdue_in_a):  # dw
 - [ ] **CSV:** z tabeli w 01 §4; wytrzymałości rozbite na 2 wiersze (kN i MPa) → **25 wierszy**; konsystencja z pustym min/max; kropka dziesiętna; `accredited` = `true` dla „A”.
 - [ ] **Testy (czerwone):** `test_seed_is_idempotent` (dwa uruchomienia → te same liczności); `test_seed_covers_demo_statuses` (przy `TODAY` są urządzenia `OK`, `DUE_SOON`, `OVERDUE`, `WITHDRAWN`, co najmniej jeden odczynnik `LOW` i partia `DUE_SOON`); `test_cement_csv_has_25_rows_and_so3_range`.
 - [ ] **Uruchom:** `uv run pytest tests/test_seed.py -q` → FAIL.
-- [ ] **Implementacja:** pracownie `A` Analityczna, `W` Wytrzymałościowa, `P` Paliw (W i P to założenie — pyt. 16 w 01); użytkownicy `admin` (wszystkie pracownie) i `laborant` (A), hasła z `SEED_ADMIN_PASSWORD`, `SEED_WORKER_PASSWORD`; ok. 15 urządzeń o nazwach z rozmowy i z formularza zakresu (waga analityczna, termohigrometr, termometr szklany, wzorzec masy 500 g, piec, aparat Vicata, pierścienie Le Chateliera, piknometr helowy, aparat Blaine'a, prasa do badań wytrzymałości, kalorymetr); miesiące wzorcowań liczone od `today`, tak aby wyszły wszystkie statusy; plany: temperatura co 1 mies., sprawdzenie wagi co 3 mies.; odczynniki: kwas solny, chlorek baru, CRM cementu.
+- [ ] **Implementacja:** pracownie `A` Analityczna, `W` Wytrzymałościowa, `P` Paliw (W i P to założenie — pyt. 16 w 01); użytkownicy `admin` (wszystkie pracownie), `kierownik` (rola `manager`, wszystkie pracownie) i `laborant` (A), hasła z `SEED_ADMIN_PASSWORD`, `SEED_MANAGER_PASSWORD`, `SEED_WORKER_PASSWORD`; wyniki SO₃ i Cl⁻ z ostatnich 3 miesięcy (kilka poza zakresem) do wykresów i raportu (T32–T33); ok. 15 urządzeń o nazwach z rozmowy i z formularza zakresu (waga analityczna, termohigrometr, termometr szklany, wzorzec masy 500 g, piec, aparat Vicata, pierścienie Le Chateliera, piknometr helowy, aparat Blaine'a, prasa do badań wytrzymałości, kalorymetr); miesiące wzorcowań liczone od `today`, tak aby wyszły wszystkie statusy; plany: temperatura co 1 mies., sprawdzenie wagi co 3 mies.; odczynniki: kwas solny, chlorek baru, CRM cementu.
 - [ ] **Uruchom:** → PASS.
 - [ ] **Commit:** `feat(seed): demo data and cement parameters`
 
@@ -793,7 +796,7 @@ describe("lib", () => {
 
 - [ ] Marker `@pytest.mark.req("F4", "17025-6.4.13e")` na testach; autouse fixture zapisuje marker przez `record_property`, więc trafia do JUnit XML.
 - [ ] `validation_report.py report.xml` → Markdown: wymaganie → testy → wynik.
-- [ ] **Sprawdź:** `uv run pytest --junitxml=report.xml && uv run python scripts/validation_report.py report.xml > validation-report.md` → każda funkcja F1–F9 ma co najmniej jeden zielony test.
+- [ ] **Sprawdź:** `uv run pytest --junitxml=report.xml && uv run python scripts/validation_report.py report.xml > validation-report.md` → każda funkcja F1–F11 ma co najmniej jeden zielony test.
 - [ ] **Commit:** `feat(validation): requirement-to-test report`
 
 ### T30 · Scenariusz demo i prezentacja — F · P0 · zależy od: wszystkich P0
@@ -807,13 +810,17 @@ describe("lib", () => {
   6. Specjalistka wpisuje wzorcowanie (punkty, niepewność, skan, OK) → zielony status, nowy termin.
   7. Odczynniki: „mało” po spisie z telefonu; CRM z terminem ważności.
   8. Wynik SO₃ = 3,35 → czerwony, poza 0,10–3,20 %.
-  9. Uniwersalność: zmiana ustawienia → wpis w historii zmian (17025 7.11.2).
-  10. Co dalej: pytania do mentorów, rzeczy z 02 §14.
+  9. Wykres SO₃ z progiem → raport PDF → kierownik dostaje go w dzwonku (F10, F11).
+  10. Uniwersalność: zmiana ustawienia → wpis w historii zmian (17025 7.11.2).
+  11. Koszty i KPI: slajdy z 05 §a4 i §a5 (liczby z T35 i T36).
+  12. Co dalej: pilotaż w jednej pracowni, rzeczy z 02 §14.
+- [ ] **Prezentacja:** struktura i podział mówców z 05 §e — każdy z pięciu mówi swoją część; czas wg pyt. 22.
+- [ ] **Q&A:** ściąga z 05 §e; próba z pytaniami zadawanymi przez Miszę.
 - [ ] **Zapas:** nagranie wideo całego scenariusza (dzień 6) i zrzuty ekranu.
-- [ ] **Sprawdź:** dzień 7 — 2 pełne przebiegi bez błędu.
+- [ ] **Sprawdź:** dzień 7 — 2 pełne przebiegi bez błędu; każda luka z 05 „Luki do zamknięcia” zamknięta albo świadomie pominięta.
 - [ ] **Commit:** `docs(demo): demo script`
 
-### T31 · Karta urządzenia jako PDF (Typst) — B · P1 · zależy od: T08–T11, T16, T27
+### T31 · Karta urządzenia jako PDF (Typst) — C · P1 · zależy od: T08–T11, T16, T27
 
 **Pliki:** `backend/app/print/{render,service,router}.py`,
 `backend/app/print/templates/equipment-history.typ`, `backend/app/print/fonts/`,
@@ -826,3 +833,64 @@ describe("lib", () => {
 - [ ] **Testy (czerwone):** 200 + `%PDF` na początku + `pdftotext` zawiera kod i ostatni termin; 403 dla pracowni spoza zakresu; 404 dla nieistniejącego ID; zepsuty szablon → 500 `RENDER_FAILED` (monkeypatch `render`).
 - [ ] **Sprawdź:** `curl -s localhost:8000/api/equipment/1/history.pdf -H "Authorization: Bearer $TOKEN" | pdftotext - - | head`; wydruk historii na 3 strony — nagłówek tabeli powtarza się na każdej stronie.
 - [ ] **Commit:** `feat(print): equipment history PDF via typst`
+
+### T32 · Seria wyników i weryfikacja względem progu (F10) — C · P1 · zależy od: T14
+
+**Pliki:** rozszerz `backend/app/results/{models,schemas,service,router}.py`, migracja (`verify_min`, `verify_max`); test `backend/tests/results/test_series.py`.
+
+**Daje:**
+- `Series` (Pydantic): `parameter` (`name`, `unit`), `threshold_min: str | None`, `threshold_max: str | None`, `points: list[{at, sample_label, value, status: RangeResult}]`, `count: int`, `out_of_threshold: int`
+- `result_series(db, *, parameter_id: int, date_from: date, date_to: date) -> Series` — próg = `verify_min`/`verify_max`, a gdy puste — `min_value`/`max_value`; punkty rosnąco po `created_at`, daty włącznie
+- `GET /api/test-results/series?parameter_id=&from=&to=` (`result:read`)
+
+- [ ] **Testy (czerwone):** `test_series_uses_range_when_no_verify_threshold` (SO₃ 0,10–3,20: wyniki 1,5 / 3,35 → `out_of_threshold == 1`); `test_verify_threshold_overrides_range` (`verify_max = "2.50"` → 3 punkty powyżej 2,50 liczone); `test_points_sorted_and_period_inclusive`; `test_from_after_to_is_422` (`VALIDATION_ERROR`); `test_worker_without_result_read_is_403` — rola bez `RESULT_READ` → `FORBIDDEN`.
+- [ ] **Uruchom:** `uv run pytest tests/results/test_series.py` → FAIL.
+- [ ] **Implementacja:** status punktu przez `check_range` z T03; wartości jako tekst.
+- [ ] **Uruchom:** → PASS.
+- [ ] **Commit:** `feat(results): measurement series with verification threshold`
+
+### T33 · Raport PDF dla kierownika (F11) — C · P1 · zależy od: T31, T32, T15, T16
+
+**Pliki:** utwórz `backend/app/reports/{models,schemas,service,router}.py`, `backend/app/print/chart.py`, `backend/app/print/templates/report.typ`, migracja; testy `backend/tests/print/test_chart.py`, `backend/tests/reports/test_reports.py`.
+
+**Daje:**
+- `chart_svg(series: Series, *, width: int = 640, height: int = 240) -> str` — czysta funkcja: oś czasu, punkty (poza progiem w kolorze błędu), linie progu; pusta seria → SVG z napisem „Brak danych”
+- `Report` (02 §3.2); `ReportCreate`: `period_from`, `period_to`, `parameter_ids: list[int]` (puste = wszystkie z wynikami w okresie)
+- `create_report(db, user, data: ReportCreate) -> Report` — dla każdego parametru `result_series` + `chart_svg`, jeden JSON do `report.typ`, `render(...)` z T31, PDF jako `Attachment(owner_type="report")`, `notify_now(kind=REPORT_READY, ...)` do kierowników
+- `POST /api/reports` (`report:write`), `GET /api/reports`, `GET /api/reports/{id}.pdf` (`report:read`)
+
+- [ ] **Testy (czerwone):** `test_chart_has_point_per_result_and_threshold_lines`; `test_empty_series_chart_says_no_data`; `test_create_report_returns_pdf` (`%PDF`, `pdftotext` zawiera nazwę parametru, okres i „poza progiem: 1”); `test_manager_gets_report_ready_notification`; `test_worker_cannot_create_report` (403 `FORBIDDEN`); `test_manager_downloads_pdf` (200, `application/pdf`); `test_period_from_after_to_is_422`.
+- [ ] **Uruchom:** `uv run pytest tests/print/test_chart.py tests/reports` → FAIL.
+- [ ] **Implementacja:** szablon tylko składa dokument (02 §10 „Druki PDF”): tytuł, okres, dla każdego parametru tabela punktów, wykres (SVG z JSON osadzony jako obraz), podsumowanie weryfikacji; e-mail do kierownika przez kanał z T17, gdy włączony w regule `REPORT_READY`.
+- [ ] **Uruchom:** → PASS; ręcznie: `curl -s -X POST localhost:8000/api/reports -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"period_from":"2026-09-01","period_to":"2026-11-27","parameter_ids":[]}'`.
+- [ ] **Commit:** `feat(reports): manager report PDF with charts`
+
+### T34 · Wykresy, raporty i widok kierownika (web) — D · P1 · zależy od: T19, T32, T33
+
+**Pliki:** `frontend/src/features/results/ChartPage.tsx`, `frontend/src/features/reports/{ReportsPage,ReportForm}.tsx`, `frontend/src/layout/ManagerLayout.tsx`.
+
+- [ ] **Wykres:** wybór parametru i okresu → `GET /api/test-results/series`; komponent `chart` z shadcn/ui (Recharts), linie progu, punkty poza progiem w kolorze błędu, licznik „poza progiem”.
+- [ ] **Raporty:** formularz (okres, parametry) → `POST /api/reports`; lista raportów z linkiem do PDF.
+- [ ] **Kierownik:** układ tylko do odczytu — raporty, wykresy, harmonogram, historia zmian; dzwonek z `REPORT_READY`.
+- [ ] **Sprawdź:** `bun test`, `bun check`; ręcznie na danych z T18: wykres SO₃ pokazuje punkty poza progiem, raport otwiera się u kierownika.
+- [ ] **Commit:** `feat(web): charts, reports and manager view`
+
+### T35 · Skrypt KPI na danych (05 §a5) — F · P1 · zależy od: T15, T18
+
+**Pliki:** utwórz `backend/app/kpi.py`; test `backend/tests/test_kpi.py`.
+
+**Daje:** `simulate(db, *, date_from: date, date_to: date) -> KpiReport` — przechodzi dzień po dniu przez `run_once(today=...)` w transakcji wycofywanej na końcu; liczy: pozycje z terminem w okresie, minimalne i medianę dni między pierwszym powiadomieniem a „ważne do”, pozycje po terminie bez wcześniejszego powiadomienia, powiadomienia na osobę na miesiąc, wyniki poza zakresem wykryte przy wpisie; `python -m app.kpi --from 2026-01-01 --to 2026-12-31` drukuje tabelę Markdown.
+
+- [ ] **Testy (czerwone):** `test_alert_advance_is_lead_plus_due_month` (termin 12/2026, wyprzedzenie 1 → alert 01.11.2026, „ważne do” 31.12.2026 → minimum 60 dni); `test_no_overdue_item_without_prior_alert`; `test_simulation_leaves_database_unchanged`.
+- [ ] **Uruchom:** `uv run pytest tests/test_kpi.py` → FAIL.
+- [ ] **Implementacja:** tylko odczyt wyników `run_once`; żadnych nowych reguł.
+- [ ] **Uruchom:** → PASS; wynik na danych z T18 wklejony do 05 §a5 (T36).
+- [ ] **Commit:** `feat(kpi): simulate alert lead times and coverage`
+
+### T36 · Koszty, KPI i kryteria z mentorami (05) — Misza · P1 · zależy od: T35
+
+- [ ] Zadać pytania 18–22 z 01 §5; odpowiedzi wpisać w 01 i zastąpić założenia [Z] w 05 §a4 i §a5.
+- [ ] Wkleić wynik T35 do 05 §a5; policzyć oszczędność godzin na liczbach od mentorów.
+- [ ] Lista kontrolna akceptacji z tabeli 05 §b przejść na serwerze testowym (dzień 6) — każdą funkcję F1–F11 kliknąć w przeglądarce i na telefonie.
+- [ ] **Sprawdź:** w 05 nie zostało założenie, na które mentorzy odpowiedzieli; tabela „Luki do zamknięcia” aktualna.
+- [ ] **Commit:** `docs(criteria): costs and KPI from mentors`
