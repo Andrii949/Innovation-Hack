@@ -59,12 +59,14 @@ or Jest. Never add ESLint/Prettier config files; Bun reads `frontend/bunfig.toml
 Backend (from `backend/`):
 
 ```bash
+docker compose -f infra/docker-compose.yml up -d db   # PostgreSQL 17 on :5432
 uv sync                             # install runtime + dev dependencies
+uv run alembic upgrade head         # apply migrations (required before pytest)
 uv run uvicorn app.main:app --reload
 uv run ruff check .                 # lint
 uv run ruff format .                # format
 uv run ty check                     # types
-uv run pytest                       # tests
+uv run pytest                       # tests, need the database
 uv add <pkg> / uv add --dev <pkg>   # dependencies
 ```
 

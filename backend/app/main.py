@@ -1,14 +1,7 @@
-import os
-
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Web dev server, Android WebView (https://localhost), iOS WebView (capacitor://localhost).
-DEFAULT_CORS_ORIGINS = (
-    "http://localhost:5173",
-    "https://localhost",
-    "capacitor://localhost",
-)
+from app.config import get_settings
 
 api = APIRouter(prefix="/api")
 
@@ -18,14 +11,8 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-def cors_origins() -> list[str]:
-    raw = os.getenv("CORS_ORIGINS")
-    if raw is None:
-        return list(DEFAULT_CORS_ORIGINS)
-    return [origin.strip() for origin in raw.split(",") if origin.strip()]
-
-
 def create_app() -> FastAPI:
+    settings = get_settings()
     app = FastAPI(
         title="Intelligent Laboratory API",
         version="0.1.0",
@@ -34,7 +21,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cors_origins(),
+        allow_origins=settings.cors_origin_list,
         allow_methods=["*"],
         allow_headers=["*"],
     )

@@ -34,16 +34,22 @@ Lint and format rules are strict where it matters, without taste rules that slow
 
 Agents follow `AGENTS.md` (`CLAUDE.md` is a symlink to it).
 
-Backend — `backend/` (uv, FastAPI; lint/format with `ruff`, types with `ty`):
+Backend — `backend/` (uv, FastAPI + SQLAlchemy 2/psycopg 3/Alembic; lint/format with `ruff`, types with `ty`):
 
 | Command | What it does |
 |---|---|
+| `docker compose -f infra/docker-compose.yml up -d db` | starts PostgreSQL 17 (user/password/db `lab`) |
 | `uv sync` | installs dependencies (runtime + dev) |
+| `uv run alembic upgrade head` | applies migrations |
+| `uv run alembic revision --autogenerate -m "message"` | creates a migration from model changes |
 | `uv run uvicorn app.main:app --reload` | server on `http://localhost:8000/api/health` |
 | `uv run ruff check .` / `uv run ruff format .` | lint and format |
 | `uv run ty check` | type checking |
-| `uv run pytest` | tests |
+| `uv run pytest` | tests (needs the database) |
 | `uv add <package>` / `uv add --dev <package>` | add a dependency |
+
+Configuration comes from environment variables or `backend/.env` (see `backend/.env.example`):
+`DATABASE_URL`, `CORS_ORIGINS`, `PUBLIC_BASE_URL`, `FILES_DIR`, `TIMEZONE`.
 
 Frontend — `frontend/` (bun, React + TypeScript + Vite):
 
