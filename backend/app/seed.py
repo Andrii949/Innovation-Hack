@@ -6,7 +6,6 @@ import argparse
 import csv
 import importlib
 import importlib.util
-import secrets
 import sys
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -350,14 +349,14 @@ def _upsert_user(
 ) -> User:
     import os
 
-    raw_secret = os.environ.get(env_key, "").strip()
+    # Demo accounts default to 1111 for the whole team; SEED_*_PASSWORD overrides it.
+    raw_secret = os.environ.get(env_key, "").strip() or "1111"
     user = db.scalars(select(User).where(User.login == login_name)).first()
     if user is None:
-        initial_secret = raw_secret if raw_secret else secrets.token_urlsafe(24)
         user = User(
             login=login_name,
             full_name=full_name,
-            password_hash=hash_password(initial_secret),
+            password_hash=hash_password(raw_secret),
             role_id=role_id,
             all_labs=all_labs,
             active=True,
@@ -367,7 +366,7 @@ def _upsert_user(
         db.flush()
         return user
 
-    if raw_secret and not verify_password(raw_secret, user.password_hash):
+    if not verify_password(raw_secret, user.password_hash):
         user.password_hash = hash_password(raw_secret)
     target_lab_ids = {lab.id for lab in labs}
     if {lab.id for lab in user.labs} != target_lab_ids:

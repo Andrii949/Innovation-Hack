@@ -1,7 +1,18 @@
-import { ArrowLeft, Download, ExternalLink, QrCode, ScanLine } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Download,
+  ExternalLink,
+  FileCheck2,
+  MapPin,
+  QrCode,
+  ScanLine,
+  Search,
+} from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import type { Status as EquipmentStatus } from "@/api/types";
 import {
   api,
   type ApiRecord,
@@ -10,13 +21,16 @@ import {
   objectValue,
   textValue,
 } from "@/api/workspaceClient";
-import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { formatMonth } from "@/lib/months";
 import { isValidPublicId, parseEquipmentUrl } from "@/lib/qr";
+import { isStatus } from "@/lib/status";
 import { isNfcAvailable } from "@/platform/nfc";
-import { canScanQr, scanEquipment } from "@/platform/scan";
+import { canScanQr } from "@/platform/scan";
 
 import { CalibrationEntry } from "./CalibrationEntry";
 import {
@@ -25,15 +39,19 @@ import {
   type Columns,
   type Field,
   Loading,
-  Message,
   options,
+  revealDetails,
   Rows,
+  StatusIndicator,
+  type StatusTone,
   today,
   useApi,
   type WorkspaceProps,
 } from "./shared";
 
-const statusLabels: Record<string, string> = {
+import "./equipment.css";
+
+const statusLabels: Record<EquipmentStatus, string> = {
   OK: "Aktualne",
   DUE_SOON: "Zbliża się termin",
   OVERDUE: "Po terminie",
@@ -44,15 +62,27 @@ const statusLabels: Record<string, string> = {
   COUNT_DUE: "Spis do wykonania",
 };
 
+const statusTones: Record<EquipmentStatus, StatusTone> = {
+  OK: "ok",
+  DUE_SOON: "warning",
+  OVERDUE: "alarm",
+  NO_DATA: "missing",
+  WITHDRAWN: "neutral",
+  NOT_REQUIRED: "neutral",
+  LOW: "alarm",
+  COUNT_DUE: "warning",
+};
+
+export function equipmentStatusLabel(status: string) {
+  return isStatus(status) ? statusLabels[status] : status;
+}
+
 export function Status({ value }: { value: unknown }) {
   const key = textValue(value);
   return (
-    <Badge
-      variant={key === "OVERDUE" || key === "WITHDRAWN" ? "destructive" : "outline"}
-      className={key === "OK" ? "border-brand-lime bg-brand-lime-soft text-brand-navy" : undefined}
-    >
-      {statusLabels[key] ?? key}
-    </Badge>
+    <StatusIndicator tone={isStatus(key) ? statusTones[key] : "neutral"} status={key}>
+      {equipmentStatusLabel(key)}
+    </StatusIndicator>
   );
 }
 
@@ -74,27 +104,32 @@ export const calibrationFields: Field[] = [
   { key: "calibration_interval_months", label: "Cykl (miesiące)", type: "number", clear: true },
   { key: "calibration_mode", label: "Tryb wzorcowania", type: "options", options: mode },
   { key: "lead_months", label: "Wyprzedzenie przypomnienia (miesiące)", type: "number" },
-  { key: "acceptance_criteria", label: "Kryteria akceptacji", type: "note", clear: true },
-  { key: "notes", label: "Uwagi", type: "note", clear: true },
+  { key: "acceptance_criteria", label: "Kryteria akceptacji", type: "note" },
+  { key: "notes", label: "Uwagi", type: "note" },
 ];
 
 export const modelFields: Field[] = [
   { key: "name", label: "Nazwa" },
-  { key: "category", label: "Kategoria", clear: true },
-  { key: "manufacturer", label: "Producent", clear: true },
-  { key: "model", label: "Model", clear: true },
-  { key: "software_version", label: "Wersja oprogramowania", clear: true },
+  { key: "category", label: "Kategoria" },
+  { key: "manufacturer", label: "Producent" },
+  { key: "model", label: "Model" },
+  { key: "software_version", label: "Wersja oprogramowania" },
 ];
 const deviceFields: Field[] = [
   { key: "number", label: "Numer ewidencyjny", required: true },
   ...modelFields,
-  { key: "serial_no", label: "Numer seryjny", clear: true },
-  { key: "location", label: "Lokalizacja", clear: true },
+  { key: "serial_no", label: "Numer seryjny" },
+  { key: "location", label: "Lokalizacja" },
   ...calibrationFields,
 ];
 const withdrawFields: Field[] = [
   { key: "reason", label: "Uzasadnienie", required: true, type: "note" },
 ];
+
+/** API months ("2026-05") as printed on calibration stickers ("05/2026"). */
+function month(value: unknown) {
+  return typeof value === "string" ? formatMonth(value) : "—";
+}
 
 export function apiSave(path: string, token: string, method: string) {
   return (data: unknown) => api(path, token, method, data);
@@ -134,18 +169,42 @@ export function Equipment({
   token,
   permissions,
   publicId,
+  scannerView = false,
+  onCloseScanner,
+  focusScanner,
+  scanBusy,
+  scanError,
+  onCancelScan,
+  onDismissScanError,
+  onScan,
   onPublicId,
   onResults,
 }: WorkspaceProps & {
   publicId: string | null;
+  scannerView?: boolean;
+  onCloseScanner?: () => void;
+  focusScanner: boolean;
+  scanBusy: boolean;
+  scanError: string;
+  onCancelScan: () => void;
+  onDismissScanError: () => void;
+  onScan: (preferNfc: boolean) => Promise<void>;
   onPublicId: (id: string | null) => void;
   onResults: (id?: number) => void;
 }) {
   const [id, setId] = useState<number>();
   const [query, setQuery] = useState("");
-  const [scanError, setScanError] = useState("");
-  const [scanBusy, setScanBusy] = useState(false);
-  const scanController = useRef<AbortController | null>(null);
+  const [lookupError, setLookupError] = useState("");
+  const scannerInput = useRef<HTMLInputElement>(null);
+  const registrySearch = useRef<HTMLInputElement>(null);
+  const restoringRegistry = useRef(false);
+  const scanInputId = useId();
+  const scanErrorId = useId();
+  useEffect(() => {
+    if (focusScanner) {
+      scannerInput.current?.focus();
+    }
+  }, [focusScanner]);
   const [revision, setRevision] = useState(0);
   const after = () => setRevision((previous) => previous + 1);
   const edit = permissions.includes("equipment:write");
@@ -164,6 +223,15 @@ export function Equipment({
         ? null
         : `/equipment/${id}`;
   const details = useApi<EquipmentCard>(path, token, revision);
+  const backFromDetails = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (path !== null) {
+      backFromDetails.current?.focus({ preventScroll: true });
+    } else if (!scannerView && restoringRegistry.current) {
+      registrySearch.current?.focus({ preventScroll: true });
+      restoringRegistry.current = false;
+    }
+  }, [path, scannerView]);
   const scopedFields = useMemo<Field[]>(
     () => [
       {
@@ -197,44 +265,33 @@ export function Equipment({
     [catalog, scopedFields],
   );
   function lookup(value: string) {
+    onDismissScanError();
     const raw = value.trim();
     const scanned = parseEquipmentUrl(raw) ?? (isValidPublicId(raw) ? raw : null);
     if (scanned === null) {
-      setScanError("Wklej link z etykiety QR / NFC lub wpisz identyfikator urządzenia.");
+      setLookupError("Wklej link z etykiety QR / NFC lub wpisz identyfikator urządzenia.");
       return;
     }
-    setScanError("");
+    setLookupError("");
     onPublicId(scanned);
   }
-  async function scan(preferNfc: boolean) {
-    const controller = new AbortController();
-    scanController.current = controller;
-    setScanBusy(true);
-    setScanError("");
-    try {
-      const outcome = await scanEquipment({ preferNfc, signal: controller.signal });
-      if (outcome.status === "ok") {
-        onPublicId(outcome.publicId);
-      } else if (outcome.status !== "cancelled") {
-        setScanError(outcome.message);
-      }
-    } catch (failure) {
-      setScanError(errorMessage(failure));
-    } finally {
-      scanController.current = null;
-      setScanBusy(false);
-    }
+  function startScan(preferNfc: boolean) {
+    setLookupError("");
+    void onScan(preferNfc);
   }
   if (path !== null) {
     return (
-      <div className="grid gap-4">
+      <div className="workspace-equipment-details">
         <Button
+          ref={backFromDetails}
           type="button"
-          variant="ghost"
-          className="justify-self-start"
+          variant="link"
+          className="justify-self-start px-0!"
           onClick={() => {
+            restoringRegistry.current = true;
             setId(undefined);
             onPublicId(null);
+            onCloseScanner?.();
           }}
         >
           <ArrowLeft />
@@ -257,72 +314,126 @@ export function Equipment({
       </div>
     );
   }
-  return (
-    <div className="grid gap-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <QrCode className="size-5" />
-            Otwórz kartę z etykiety
-          </CardTitle>
-          <CardDescription>
-            Zbliż telefon do tagu NFC albo zeskanuj QR aparatem. Możesz też wkleić link z etykiety.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          <form
-            className="flex flex-wrap items-center gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              lookup(textValue(new FormData(event.currentTarget).get("tag"), ""));
-            }}
-          >
-            <Input
-              name="tag"
-              aria-label="Link lub identyfikator etykiety"
-              placeholder="Wklej link lub identyfikator etykiety"
-              className="min-w-56 flex-1"
-              required
-            />
-            <Button type="submit">Otwórz kartę</Button>
-          </form>
-          <div className="flex flex-wrap gap-2">
-            {isNfcAvailable() && (
-              <Button
-                variant="outline"
-                type="button"
-                disabled={scanBusy}
-                onClick={() => scan(true)}
-              >
-                <ScanLine />
-                Odczytaj NFC
-              </Button>
-            )}
-            {canScanQr() && (
-              <Button
-                variant="outline"
-                type="button"
-                disabled={scanBusy}
-                onClick={() => scan(false)}
-              >
-                <QrCode />
+  const qrAvailable = canScanQr();
+  const nfcAvailable = isNfcAvailable();
+  const activeError = lookupError || scanError;
+  const scanner = (
+    <Card
+      className={scannerView ? "workspace-scan-panel workspace-feature" : "workspace-scan-panel"}
+    >
+      <CardHeader>
+        <QrCode className="workspace-scan-icon" aria-hidden />
+        <CardTitle>
+          <h2>Otwórz kartę z etykiety</h2>
+        </CardTitle>
+        <CardDescription>
+          {qrAvailable || nfcAvailable
+            ? "Odczytaj etykietę urządzenia lub wpisz jej dane ręcznie."
+            : "Wklej link z etykiety QR lub NFC albo wpisz identyfikator urządzenia."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        {(qrAvailable || nfcAvailable || scanBusy) && (
+          <div className="workspace-scan-methods">
+            {qrAvailable && (
+              <Button type="button" disabled={scanBusy} onClick={() => startScan(false)}>
+                <QrCode aria-hidden />
                 Skanuj QR
               </Button>
             )}
-            {scanBusy && (
-              <Button variant="ghost" type="button" onClick={() => scanController.current?.abort()}>
-                Anuluj odczyt
+            {nfcAvailable && (
+              <Button
+                variant={qrAvailable ? "outline" : "default"}
+                type="button"
+                disabled={scanBusy}
+                onClick={() => startScan(true)}
+              >
+                <ScanLine aria-hidden />
+                Odczytaj NFC
               </Button>
             )}
+            {scanBusy && (
+              <>
+                <output className="workspace-scan-progress">Odczytywanie etykiety…</output>
+                <Button variant="outline" type="button" onClick={onCancelScan}>
+                  Anuluj odczyt
+                </Button>
+              </>
+            )}
           </div>
-          {scanError && <Message>{scanError}</Message>}
-        </CardContent>
-      </Card>
-      <Card>
+        )}
+        <form
+          className="workspace-scan-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            lookup(textValue(new FormData(event.currentTarget).get("tag"), ""));
+          }}
+        >
+          <Label htmlFor={scanInputId}>Link lub identyfikator etykiety</Label>
+          <div className="workspace-scan-fields">
+            <Input
+              ref={scannerInput}
+              id={scanInputId}
+              name="tag"
+              placeholder="Wklej link lub wpisz identyfikator"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-invalid={Boolean(lookupError)}
+              aria-describedby={lookupError ? scanErrorId : undefined}
+              required
+              disabled={scanBusy}
+            />
+            <Button
+              type="submit"
+              variant={qrAvailable || nfcAvailable ? "outline" : "default"}
+              disabled={scanBusy}
+            >
+              Otwórz kartę
+              <ArrowRight aria-hidden />
+            </Button>
+          </div>
+        </form>
+        {activeError && (
+          <Alert id={scanErrorId} variant="destructive">
+            <AlertDescription>{activeError}</AlertDescription>
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  if (scannerView) {
+    return (
+      <div className="workspace-scan-page">
+        {scanner}
+        {onCloseScanner && (
+          <Button
+            type="button"
+            variant="link"
+            className="justify-self-start px-0!"
+            onClick={() => {
+              restoringRegistry.current = true;
+              onCloseScanner();
+            }}
+          >
+            <ArrowLeft aria-hidden />
+            Wróć do rejestru
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="workspace-equipment-register">
+      <Card className="min-w-0">
         <CardHeader className="gap-3 sm:flex sm:items-center sm:justify-between">
           <div>
-            <CardTitle>Rejestr urządzeń</CardTitle>
-            <CardDescription>Daty wzorcowania, terminy i karty urządzeń.</CardDescription>
+            <CardTitle>
+              <h2>Rejestr urządzeń</h2>
+            </CardTitle>
+            <CardDescription>Daty wzorcowań i karty urządzeń.</CardDescription>
           </div>
           {edit && (
             <Action
@@ -334,20 +445,38 @@ export function Equipment({
             />
           )}
         </CardHeader>
-        <CardContent className="grid gap-3">
-          <Input
-            aria-label="Szukaj urządzeń"
-            placeholder="Szukaj po nazwie, kodzie lub numerze seryjnym"
-            value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
-          />
+        <CardContent className="grid gap-4">
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-brand-navy"
+              aria-hidden
+            />
+            <Input
+              ref={registrySearch}
+              type="search"
+              aria-label="Szukaj urządzeń"
+              placeholder="Nazwa, kod lub numer seryjny"
+              className="pl-9!"
+              value={query}
+              onChange={(event) => setQuery(event.currentTarget.value)}
+            />
+          </div>
           {collection?.data ? (
             <Rows
               rows={collection.data}
               columns={registerColumns}
               renderAction={(row) => (
-                <Button variant="outline" size="sm" onClick={() => setId(Number(row.id))}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Otwórz kartę · ${textValue(row.name)} · ${textValue(row.code)}`}
+                  onClick={() => {
+                    setId(Number(row.id));
+                    window.scrollTo(0, 0);
+                  }}
+                >
                   Otwórz kartę
+                  <ArrowRight aria-hidden />
                 </Button>
               )}
             />
@@ -355,12 +484,14 @@ export function Equipment({
             <Loading state={collection} />
           )}
           {results && (
-            <Button variant="link" className="justify-self-start" onClick={() => onResults()}>
-              Przejdź do wyników badań
+            <Button variant="link" className="justify-self-start px-0!" onClick={() => onResults()}>
+              Wyniki badań
+              <ArrowRight aria-hidden />
             </Button>
           )}
         </CardContent>
       </Card>
+      {scanner}
     </div>
   );
 }
@@ -383,7 +514,10 @@ function EquipmentDetails({
   const path = `/equipment/${device.id}`;
   const write = permissions.includes("equipment:write");
   const calibrate = permissions.includes("calibration:write");
-  const users = useApi<ApiRecord[]>(write ? "/users" : null, token);
+  const users = useApi<ApiRecord[]>(
+    write && permissions.includes("users:write") ? "/users" : null,
+    token,
+  );
   const authorized = useApi<ApiRecord[]>(
     write ? `${path}/authorized-users` : null,
     token,
@@ -431,15 +565,24 @@ function EquipmentDetails({
   const selectedCalibration = calibrations?.data?.find((entry) => entry.id === history);
   return (
     <>
-      <Card className="border-t-4 border-t-brand-lime">
+      <Card className="workspace-device-panel">
         <CardHeader className="gap-4 sm:flex sm:justify-between">
-          <div>
-            <p className="mb-1 text-xs font-semibold tracking-widest text-muted-foreground">
-              {device.code}
-            </p>
-            <CardTitle className="text-2xl text-brand-navy">{device.name}</CardTitle>
-            <CardDescription>
-              {[device.manufacturer, device.model, device.location].filter(Boolean).join(" · ")}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="text-sm font-bold text-brand-navy tabular-nums">{device.code}</span>
+              <Status value={device.status} />
+            </div>
+            <CardTitle className="workspace-device-title">
+              <h2>{device.name}</h2>
+            </CardTitle>
+            <CardDescription className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+              <span>{[device.manufacturer, device.model].filter(Boolean).join(" ")}</span>
+              {typeof device.location === "string" && (
+                <span className="inline-flex items-center gap-1">
+                  <MapPin className="size-3.5" aria-hidden />
+                  {device.location}
+                </span>
+              )}
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-start gap-2">
@@ -449,7 +592,12 @@ function EquipmentDetails({
                 equipmentId={device.id}
                 name={device.name}
                 after={after}
-              />
+              >
+                <Button type="button">
+                  <FileCheck2 aria-hidden />
+                  Zarejestruj świadectwo
+                </Button>
+              </CalibrationEntry>
             )}
             {device.can_write_result && (
               <Button variant="outline" onClick={() => onResults(device.id)}>
@@ -459,23 +607,23 @@ function EquipmentDetails({
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <dl className="grid grid-cols-2 gap-3 rounded-lg bg-muted p-4 text-sm sm:grid-cols-4">
+          <dl className="workspace-device-facts">
             {[
-              ["last_calibrated_month", "Ostatnie wzorcowanie"],
-              ["next_due_month", "Następne wzorcowanie"],
-              ["serial_no", "Numer seryjny"],
-            ].map(([key = "", label]) => (
-              <div key={key}>
-                <dt className="text-muted-foreground">{label}</dt>
-                <dd className="mt-1 font-semibold">{textValue(device[key])}</dd>
+              ["Następne wzorcowanie", month(device.next_due_month)],
+              ["Ostatnie wzorcowanie", month(device.last_calibrated_month)],
+              [
+                "Cykl wzorcowania",
+                device.calibration_interval_months == null
+                  ? "—"
+                  : `${textValue(device.calibration_interval_months)} mies.`,
+              ],
+              ["Numer seryjny", textValue(device.serial_no)],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>{value}</dd>
               </div>
             ))}
-            <div>
-              <dt className="mb-1 text-muted-foreground">Stan</dt>
-              <dd>
-                <Status value={device.status} />
-              </dd>
-            </div>
           </dl>
           <div className="flex flex-wrap items-center gap-2">
             <DownloadButton
@@ -531,7 +679,9 @@ function EquipmentDetails({
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Świadectwa i historia wzorcowań</CardTitle>
+          <CardTitle>
+            <h2>Świadectwa i historia wzorcowań</h2>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {calibrations?.data ? (
@@ -542,6 +692,8 @@ function EquipmentDetails({
                 <Button
                   variant="outline"
                   size="sm"
+                  aria-expanded={history === row.id}
+                  aria-controls={history === row.id ? "workspace-calibration-points" : undefined}
                   onClick={() => setHistory(history === row.id ? undefined : Number(row.id))}
                 >
                   {history === row.id ? "Zwiń" : "Szczegóły"}
@@ -552,8 +704,18 @@ function EquipmentDetails({
             <Loading state={calibrations} />
           )}
           {selectedCalibration && (
-            <div className="mt-4 rounded-lg border p-3">
-              <h3 className="mb-2 font-semibold">Punkty wzorcowania</h3>
+            <div
+              key={selectedCalibration.id}
+              id="workspace-calibration-points"
+              className="workspace-disclosure"
+            >
+              <h3
+                className="workspace-detail-anchor mb-2 font-semibold"
+                tabIndex={-1}
+                ref={revealDetails}
+              >
+                Punkty wzorcowania
+              </h3>
               <Rows rows={selectedCalibration.points} columns={pointColumns} />
               {selectedCalibration.note != null && (
                 <p className="mt-2 text-sm">{textValue(selectedCalibration.note)}</p>
@@ -576,7 +738,9 @@ function EquipmentDetails({
       <Card>
         <CardHeader className="gap-3 sm:flex sm:items-center sm:justify-between">
           <div>
-            <CardTitle>Sprawdzenia okresowe</CardTitle>
+            <CardTitle>
+              <h2>Sprawdzenia okresowe</h2>
+            </CardTitle>
             <CardDescription>
               Wewnętrzne czynności zgodnie z planem danego urządzenia.
             </CardDescription>
@@ -599,9 +763,11 @@ function EquipmentDetails({
                 <Button
                   variant="outline"
                   size="sm"
+                  aria-expanded={openedPlan === row.id}
+                  aria-controls={openedPlan === row.id ? "workspace-check-history" : undefined}
                   onClick={() => setOpenedPlan(openedPlan === row.id ? undefined : Number(row.id))}
                 >
-                  Historia sprawdzeń
+                  {openedPlan === row.id ? "Zwiń historię" : "Historia sprawdzeń"}
                 </Button>
                 {write && (
                   <Action
@@ -619,7 +785,16 @@ function EquipmentDetails({
             )}
           />
           {openedPlan !== undefined && (
-            <CheckHistory token={token} id={openedPlan} revision={revision} />
+            <div key={openedPlan} id="workspace-check-history" className="workspace-disclosure">
+              <h3
+                className="workspace-detail-anchor mb-2 font-semibold"
+                tabIndex={-1}
+                ref={revealDetails}
+              >
+                Historia sprawdzeń
+              </h3>
+              <CheckHistory token={token} id={openedPlan} revision={revision} />
+            </div>
           )}
         </CardContent>
       </Card>
@@ -683,27 +858,24 @@ function CheckHistory({ token, id, revision }: { token: string; id: number; revi
     return <Loading state={state} />;
   }
   return (
-    <div className="mt-4 rounded-lg border p-3">
-      <h3 className="mb-2 font-semibold">Historia sprawdzeń</h3>
-      <Rows rows={state.data} columns={checkHistoryColumns} />
-    </div>
+    <Rows rows={state.data} columns={checkHistoryColumns} empty="Brak zapisanych sprawdzeń." />
   );
 }
 
 const registerColumns: Columns = [
-  ["code", "Kod"],
   ["name", "Urządzenie"],
-  ["last_calibrated_month", "Ostatnie wzorcowanie"],
-  ["next_due_month", "Następny termin"],
+  ["code", "Kod"],
+  ["last_calibrated_month", "Ostatnie wzorcowanie", month],
+  ["next_due_month", "Następny termin", month],
   ["status", "Status", (value) => <Status value={value} />],
 ];
 
 const calibrationColumns: Columns = [
-  ["calibrated_month", "Miesiąc"],
+  ["calibrated_month", "Miesiąc", month],
   ["vendor", "Firma"],
   ["certificate_no", "Świadectwo"],
   ["result", "Decyzja"],
-  ["next_due_month", "Termin z wpisu"],
+  ["next_due_month", "Termin z wpisu", month],
 ];
 
 const pointColumns: Columns = [
@@ -716,7 +888,7 @@ const pointColumns: Columns = [
 const checkPlanColumns: Columns = [
   ["name", "Czynność"],
   ["last_performed_on", "Ostatnie sprawdzenie"],
-  ["next_due_month", "Następny termin"],
+  ["next_due_month", "Następny termin", month],
   ["status", "Status", (value) => <Status value={value} />],
 ];
 
@@ -733,6 +905,14 @@ const checkHistoryColumns: Columns = [
         )
         .join(" · "),
   ],
-  ["out_of_range", "Ocena", (value) => (value ? "Poza zakresem" : "W zakresie")],
+  [
+    "out_of_range",
+    "Ocena",
+    (value) => (
+      <StatusIndicator tone={value ? "alarm" : "ok"}>
+        {value ? "Poza zakresem" : "W zakresie"}
+      </StatusIndicator>
+    ),
+  ],
   ["note", "Uwagi"],
 ];

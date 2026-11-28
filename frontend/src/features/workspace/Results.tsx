@@ -13,10 +13,10 @@ import {
 import { toast } from "sonner";
 
 import { api, type ApiRecord, errorMessage, objectValue, textValue } from "@/api/workspaceClient";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { formatDate, formatDecimal, formatRange } from "@/lib/format";
 
 import { apiSave, DownloadButton } from "./Equipment";
 import {
@@ -25,11 +25,13 @@ import {
   type Columns,
   Control,
   type Field,
+  FilePicker,
   Loading,
   Message,
   options,
   Rows,
   selectStyle,
+  StatusIndicator,
   today,
   useApi,
   type WorkspaceProps,
@@ -61,12 +63,12 @@ export function Results({
   token,
   permissions,
   equipmentId,
-  onClearEquipment,
-}: WorkspaceProps & { equipmentId?: number; onClearEquipment?: () => void }) {
+}: WorkspaceProps & { equipmentId?: number }) {
   const [revision, setRevision] = useState(0);
   const [filter, setFilter] = useState("");
   const [csv, setCsv] = useState<File>();
   const [importing, setImporting] = useState(false);
+  const [repeatId, setRepeatId] = useState<number>();
   const after = () => setRevision((value) => value + 1);
   const canWrite = permissions.includes("result:write");
   const admin = permissions.includes("settings:write");
@@ -125,10 +127,6 @@ export function Results({
         : resultFields.filter(({ key }) => key !== "equipment_id"),
     [equipmentId, resultFields],
   );
-  const repeatFields = useMemo(
-    () => resultFields.filter(({ key }) => key !== "parameter_id"),
-    [resultFields],
-  );
   const selectedDevice = devices?.data?.find((device) => device.id === equipmentId);
   const resultInitial = useMemo<ApiRecord>(() => ({ parameter_id: filter }), [filter]);
   async function importCsv() {
@@ -167,7 +165,7 @@ export function Results({
       <Card>
         <CardHeader className="gap-3 sm:flex sm:items-center sm:justify-between">
           <div>
-            <CardTitle>Wyniki badań</CardTitle>
+            <CardTitle>Wpisane wyniki</CardTitle>
             <CardDescription>Wyniki próbek i kontrola zakresu wpisu.</CardDescription>
           </div>
           {canWrite && (
@@ -195,38 +193,25 @@ export function Results({
           )}
         </CardHeader>
         <CardContent className="grid gap-3">
-          {equipmentId !== undefined && (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/50 px-3 py-2 text-sm">
-              <span>
-                Filtrowanie po urządzeniu:{" "}
-                <strong>
-                  {selectedDevice
-                    ? `${textValue(selectedDevice.code)} · ${textValue(selectedDevice.name)}`
-                    : `#${equipmentId}`}
-                </strong>
-              </span>
-              {onClearEquipment && (
-                <Button type="button" variant="outline" size="sm" onClick={onClearEquipment}>
-                  Pokaż wszystkie urządzenia
-                </Button>
-              )}
+          <div className="workspace-filter-bar grid gap-3">
+            <div className="w-full max-w-md min-w-0">
+              <Control label="Parametr badania" htmlFor="filter-result-parameter">
+                <select
+                  id="filter-result-parameter"
+                  className={selectStyle}
+                  value={filter}
+                  onChange={(event) => setFilter(event.currentTarget.value)}
+                >
+                  <option value="">Wszystkie parametry</option>
+                  {(parameters?.data ?? []).map((row) => (
+                    <option key={textValue(row.id)} value={textValue(row.id)}>
+                      {textValue(row.name)}
+                    </option>
+                  ))}
+                </select>
+              </Control>
             </div>
-          )}
-          <Control label="Filtruj po parametrze" htmlFor="filter-result-parameter">
-            <select
-              id="filter-result-parameter"
-              className={selectStyle}
-              value={filter}
-              onChange={(event) => setFilter(event.currentTarget.value)}
-            >
-              <option value="">Wszystkie parametry</option>
-              {(parameters?.data ?? []).map((row) => (
-                <option key={textValue(row.id)} value={textValue(row.id)}>
-                  {textValue(row.name)}
-                </option>
-              ))}
-            </select>
-          </Control>
+          </div>
           {data?.data ? (
             <Rows
               rows={data.data}
@@ -236,9 +221,26 @@ export function Results({
                   {canReview && (row.in_range === false || row.review_decision != null) && (
                     <ResultReview token={token} row={row} after={after} />
                   )}
-                  {canWrite && (row.in_range === false || row.review_decision === "REPEAT") && (
-                    <RepeatResult token={token} row={row} fields={repeatFields} after={after} />
-                  )}
+                  {canWrite &&
+                    (row.in_range === false || row.review_decision === "REPEAT") &&
+                    (repeatId === row.id ? (
+                      <Action
+                        label="Wpisz powtórzenie"
+                        fields={resultFields}
+                        initial={row}
+                        save={(payload) =>
+                          api("/test-results", token, "POST", { ...payload, repeat_of_id: row.id })
+                        }
+                        after={() => {
+                          setRepeatId(undefined);
+                          after();
+                        }}
+                      />
+                    ) : (
+                      <Button variant="ghost" size="sm" onClick={() => setRepeatId(Number(row.id))}>
+                        Powtórz
+                      </Button>
+                    ))}
                 </>
               )}
             />
@@ -263,14 +265,13 @@ export function Results({
             />
           </CardHeader>
           <CardContent className="grid gap-4">
-            <div className="flex flex-wrap items-end gap-2">
+            <div className="workspace-filter-bar flex flex-wrap items-end gap-3">
               <Control label="Parametry z pliku CSV (UTF-8)" htmlFor="parameter-csv">
-                <Input
+                <FilePicker
                   id="parameter-csv"
-                  key={csv === undefined ? "empty" : "file"}
-                  type="file"
                   accept=".csv,text/csv"
-                  onChange={(event) => setCsv(event.currentTarget.files?.[0])}
+                  file={csv}
+                  onChange={setCsv}
                 />
               </Control>
               <Button
@@ -341,7 +342,7 @@ function ThresholdDot({ cx, cy, payload }: { cx?: number; cy?: number; payload?:
 
 const thresholdDot = <ThresholdDot />;
 
-function ResultChart({
+export function ResultChart({
   token,
   parameters,
   preferred,
@@ -375,16 +376,26 @@ function ResultChart({
   );
   const lower = data?.data?.threshold_min;
   const upper = data?.data?.threshold_max;
+  // recharts maps a missing ReferenceArea edge to the far side of the plot, so the zones outside
+  // the thresholds get an explicit edge well past every value and are clipped to the plot.
+  const reach =
+    10 *
+    Math.max(
+      1,
+      Math.abs(Number(lower ?? 0)),
+      Math.abs(Number(upper ?? 0)),
+      ...ticks.map(({ measurement }) => Math.abs(measurement)),
+    );
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Wykres pomiarów i progi weryfikacji</CardTitle>
+        <CardTitle>Wyniki względem progów</CardTitle>
         <CardDescription>
-          Linie wyznaczają progi weryfikacji. Pomiary poza progiem mają czerwone znaczniki.
+          Zielone pasmo leży między progami weryfikacji. Pomiary poza progiem są czerwone.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr]">
+        <div className="workspace-filter-bar workspace-chart-filters grid gap-3 sm:grid-cols-[2fr_1fr_1fr]">
           <Control label="Parametr na wykresie" htmlFor="chart-parameter">
             <select
               id="chart-parameter"
@@ -423,19 +434,35 @@ function ResultChart({
           <Loading state={data} />
         ) : (
           <>
-            <div className="flex flex-wrap gap-2 text-sm">
-              <Badge variant="outline">{data.data.count} pomiarów</Badge>
-              <Badge variant={data.data.out_of_threshold > 0 ? "destructive" : "outline"}>
-                {data.data.out_of_threshold} poza progiem
-              </Badge>
-              <Badge variant="outline">Dolny próg: {lower ?? "brak"}</Badge>
-              <Badge variant="outline">Górny próg: {upper ?? "brak"}</Badge>
-            </div>
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-y py-3 sm:grid-cols-3">
+              <div>
+                <dt className="text-xs text-muted-foreground">Pomiary</dt>
+                <dd className="text-base font-semibold">{data.data.count}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Poza progiem</dt>
+                <dd
+                  className={
+                    data.data.out_of_threshold > 0
+                      ? "text-base font-semibold text-status-alarm-ink"
+                      : "text-base font-semibold"
+                  }
+                >
+                  {data.data.out_of_threshold}
+                </dd>
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <dt className="text-xs text-muted-foreground">Progi weryfikacji</dt>
+                <dd className="text-base font-semibold">
+                  {formatRange(lower ?? null, upper ?? null, data.data.parameter.unit)}
+                </dd>
+              </div>
+            </dl>
             {ticks.length === 0 ? (
               <Message>Brak pomiarów w wybranym okresie.</Message>
             ) : (
               <figure
-                className="h-72 min-w-0"
+                className="h-60 min-w-0 sm:h-72"
                 aria-label={`Wykres parametru ${data.data.parameter.name}`}
               >
                 <ResponsiveContainer width="100%" height="100%">
@@ -443,29 +470,52 @@ function ResultChart({
                     <CartesianGrid stroke="var(--border)" vertical={false} />
                     <XAxis
                       dataKey="label"
-                      tickFormatter={(label: string) => label.slice(5, 10)}
+                      tickFormatter={(label: string) =>
+                        `${label.slice(8, 10)}.${label.slice(5, 7)}`
+                      }
                       minTickGap={24}
                       fontSize={12}
+                      stroke="var(--muted-foreground)"
                     />
                     <YAxis
                       unit={` ${data.data.parameter.unit}`}
                       domain={automaticDomain}
                       fontSize={12}
+                      stroke="var(--muted-foreground)"
+                      tickFormatter={(value: number) => formatDecimal(String(value))}
                     />
                     <Tooltip />
                     {lower != null && upper != null && (
                       <ReferenceArea
                         y1={Number(lower)}
                         y2={Number(upper)}
-                        fill="#8dc63f"
-                        fillOpacity={0.14}
+                        fill="var(--status-ok)"
+                        fillOpacity={0.16}
                         ifOverflow="extendDomain"
+                      />
+                    )}
+                    {upper != null && (
+                      <ReferenceArea
+                        y1={Number(upper)}
+                        y2={Number(upper) + reach}
+                        fill="var(--status-alarm)"
+                        fillOpacity={0.06}
+                        ifOverflow="hidden"
+                      />
+                    )}
+                    {lower != null && (
+                      <ReferenceArea
+                        y1={Number(lower) - reach}
+                        y2={Number(lower)}
+                        fill="var(--status-alarm)"
+                        fillOpacity={0.06}
+                        ifOverflow="hidden"
                       />
                     )}
                     {lower != null && (
                       <ReferenceLine
                         y={Number(lower)}
-                        stroke="#60a501"
+                        stroke="var(--brand-lime-ink)"
                         strokeDasharray="5 4"
                         ifOverflow="extendDomain"
                       />
@@ -473,7 +523,7 @@ function ResultChart({
                     {upper != null && (
                       <ReferenceLine
                         y={Number(upper)}
-                        stroke="#60a501"
+                        stroke="var(--brand-lime-ink)"
                         strokeDasharray="5 4"
                         ifOverflow="extendDomain"
                       />
@@ -486,6 +536,7 @@ function ResultChart({
                       stroke="var(--brand-navy)"
                       strokeWidth={2}
                       dot={thresholdDot}
+                      isAnimationActive={false}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -509,46 +560,22 @@ const resultReviewFields: Field[] = [
   { key: "note", label: "Uzasadnienie", required: true, type: "note" },
 ];
 
-function RepeatResult({
-  token,
-  row,
-  fields,
-  after,
-}: {
-  token: string;
-  row: ApiRecord;
-  fields: Field[];
-  after: () => void;
-}) {
-  const initial = useMemo<ApiRecord>(
-    () => ({ equipment_id: row.equipment_id, sample_label: row.sample_label }),
-    [row.equipment_id, row.sample_label],
-  );
-  return (
-    <Action
-      label="Powtórz"
-      description={`Powtórzenie pomiaru dla: ${textValue(row.parameter_name)} (${textValue(row.sample_label)}).`}
-      fields={fields}
-      initial={initial}
-      save={(payload) =>
-        api("/test-results", token, "POST", {
-          ...payload,
-          parameter_id: Number(row.parameter_id),
-          repeat_of_id: Number(row.id),
-        })
-      }
-      after={after}
-    />
-  );
+export function ResultReviewStatus({ value }: { value: unknown }) {
+  switch (value) {
+    case "ACCEPTED":
+      return <StatusIndicator tone="ok">Zaakceptowano</StatusIndicator>;
+    case "REPEAT":
+      return <StatusIndicator tone="alarm">Do powtórzenia</StatusIndicator>;
+    case "PENDING":
+      return <StatusIndicator tone="warning">Do weryfikacji</StatusIndicator>;
+    default:
+      return <StatusIndicator tone="neutral">{textValue(value)}</StatusIndicator>;
+  }
 }
 
 function ResultReview({ token, row, after }: { token: string; row: ApiRecord; after: () => void }) {
   if (row.review_decision === "ACCEPTED" || row.review_decision === "REPEAT") {
-    return (
-      <Badge variant="outline">
-        {row.review_decision === "ACCEPTED" ? "Zaakceptowano" : "Do powtórzenia"}
-      </Badge>
-    );
+    return <ResultReviewStatus value={row.review_decision} />;
   }
   return (
     <Action
@@ -606,6 +633,7 @@ export function Reports({ token, permissions }: WorkspaceProps) {
           <Rows
             rows={reports.data}
             columns={reportColumns}
+            empty="Brak raportów do wyświetlenia."
             renderAction={(row) => (
               <DownloadButton
                 token={token}
@@ -623,22 +651,26 @@ export function Reports({ token, permissions }: WorkspaceProps) {
   );
 }
 
+function localDate(value: unknown) {
+  return typeof value === "string" ? formatDate(value.slice(0, 10)) : textValue(value);
+}
+
 const resultColumns: Columns = [
   ["sample_label", "Próbka"],
   ["parameter_name", "Parametr"],
-  ["value", "Wartość"],
+  ["value", "Wartość", (value) => formatDecimal(textValue(value))],
   ["unit", "Jednostka"],
   ["equipment_code", "Urządzenie"],
   [
     "in_range",
     "Zakres wpisu",
     (value) => (
-      <Badge variant={value ? "outline" : "destructive"}>
+      <StatusIndicator tone={value ? "ok" : "alarm"}>
         {value ? "W zakresie" : "Poza zakresem"}
-      </Badge>
+      </StatusIndicator>
     ),
   ],
-  ["created_at", "Data", (value) => textValue(value).slice(0, 10)],
+  ["created_at", "Data", localDate],
 ];
 
 const parameterColumns: Columns = [
@@ -650,7 +682,7 @@ const parameterColumns: Columns = [
 
 const reportColumns: Columns = [
   ["id", "Nr raportu"],
-  ["period_from", "Okres od"],
-  ["period_to", "Okres do"],
-  ["created_at", "Utworzono", (value) => textValue(value).slice(0, 10)],
+  ["period_from", "Okres od", localDate],
+  ["period_to", "Okres do", localDate],
+  ["created_at", "Utworzono", localDate],
 ];

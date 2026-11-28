@@ -1,10 +1,30 @@
 import { cn } from "cn";
+import { useId } from "react";
+
+export function CorporateBrand() {
+  return (
+    <>
+      <img
+        src={`${import.meta.env.BASE_URL}warta-logo.png`}
+        width={323}
+        height={86}
+        alt="Cementownia Warta"
+      />
+      <span>Lab</span>
+    </>
+  );
+}
+
+/** Superellipse (n = 5): the continuous-corner tile of a phone app icon. */
+const TILE =
+  "M32 16L31.97 22.32L31.88 24.32L31.72 25.76L31.50 26.90L31.22 27.84L30.86 28.65L30.43 29.34L29.93 29.93L29.34 30.43L28.65 30.86L27.84 31.22L26.90 31.50L25.76 31.72L24.32 31.88L22.32 31.97L16 32L9.68 31.97L7.68 31.88L6.24 31.72L5.10 31.50L4.16 31.22L3.35 30.86L2.66 30.43L2.07 29.93L1.57 29.34L1.14 28.65L0.78 27.84L0.50 26.90L0.28 25.76L0.12 24.32L0.03 22.32L0 16L0.03 9.68L0.12 7.68L0.28 6.24L0.50 5.10L0.78 4.16L1.14 3.35L1.57 2.66L2.07 2.07L2.66 1.57L3.35 1.14L4.16 0.78L5.10 0.50L6.24 0.28L7.68 0.12L9.68 0.03L16 0L22.32 0.03L24.32 0.12L25.76 0.28L26.90 0.50L27.84 0.78L28.65 1.14L29.34 1.57L29.93 2.07L30.43 2.66L30.86 3.35L31.22 4.16L31.50 5.10L31.72 6.24L31.88 7.68L31.97 9.68Z";
 
 /**
- * Warta plant mark: lime tile with the plant's preheater tower, rotary kiln and silo. The lime tile
- * keeps the mark legible on the navy header.
+ * Laboratory mark: a concrete test cube, the specimen the lab crushes in its press, lit from above
+ * on a navy Warta tile. The tile's light top edge keeps it apart from a navy background too.
  */
 export function BrandMark({ className }: { className?: string }) {
+  const tile = `brand-tile-${useId().replace(/[^\w-]/g, "")}`;
   return (
     <svg
       viewBox="0 0 32 32"
@@ -12,19 +32,25 @@ export function BrandMark({ className }: { className?: string }) {
       aria-hidden
       focusable="false"
     >
-      <rect width="32" height="32" rx="8" className="fill-brand-lime" />
-      <g className="fill-brand-navy">
-        <path d="M6 24.6V11.4l2.9-2.7 2.9 2.7v13.2z" />
-        <rect x="25" y="16.2" width="3.6" height="8.4" />
-        <rect x="4" y="25.4" width="24" height="1.5" rx="0.75" />
+      <defs>
+        <linearGradient id={tile} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#1b5290" />
+          <stop offset="1" stopColor="#0a2f5c" />
+        </linearGradient>
+      </defs>
+      <path d={TILE} fill={`url(#${tile})`} />
+      <ellipse cx="16" cy="25.1" rx="7" ry="1.3" fill="#000" opacity=".22" />
+      <path d="M16 6.6 23.79 11.1 16 15.6 8.21 11.1Z" fill="#f4f5f6" />
+      <path d="M8.21 11.1 16 15.6V24.6L8.21 20.1Z" fill="#c8ccd1" />
+      <path d="M16 15.6 23.79 11.1V20.1L16 24.6Z" fill="#9aa1a9" />
+      {/* Air voids, visible only at large sizes. */}
+      <g fill="#000" opacity=".18">
+        <circle cx="10.6" cy="15.6" r=".4" />
+        <circle cx="13.3" cy="20.6" r=".32" />
+        <circle cx="19.4" cy="17.3" r=".36" />
+        <circle cx="21.6" cy="15.1" r=".3" />
+        <circle cx="18.6" cy="21.7" r=".32" />
       </g>
-      <path
-        d="M11.6 19.4 24.4 13"
-        className="stroke-brand-navy"
-        strokeWidth="2.9"
-        strokeLinecap="round"
-      />
-      <circle cx="18" cy="16.2" r="1.1" className="fill-brand-lime" />
     </svg>
   );
 }
