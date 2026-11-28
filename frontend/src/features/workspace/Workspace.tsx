@@ -7,15 +7,17 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  Ellipsis,
   FileText,
   FlaskConical,
-  Gauge,
   History,
+  LayoutGrid,
   LogOut,
-  Microscope,
+  PanelTop,
+  ScanLine,
   Settings,
 } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import {
   api,
@@ -25,7 +27,7 @@ import {
   errorMessage,
   textValue,
 } from "@/api/workspaceClient";
-import { BrandMark, PlantSkyline } from "@/components/BrandMark";
+import { CorporateBrand, PlantSkyline } from "@/components/BrandMark";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -37,8 +39,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Toaster } from "@/components/ui/sonner";
 import { parseEquipmentUrl } from "@/lib/qr";
+import { canScanQr, scanEquipment } from "@/platform/scan";
 import { clearToken, getToken, setToken } from "@/platform/tokenStore";
 
 import { Administration, Audit, roleLabel } from "./Administration";
@@ -47,6 +59,9 @@ import { CalibrationPlans, Notifications, Reagents, Schedule } from "./Operation
 import { Overview } from "./Overview";
 import { Reports, Results } from "./Results";
 import { Control, Loading, Message, useApi } from "./shared";
+
+import "@/layout/app-shell.css";
+import "@/layout/workspace-pages.css";
 
 type User = { full_name: string; login: string; role: string; permissions: string[] };
 type Session = { user: User; token: string };
@@ -58,7 +73,13 @@ const demoAccounts = [
   { login: "laborant", role: "worker" },
 ];
 const sections = [
-  { key: "overview", label: "Przegląd", icon: Gauge, group: "", permissions: ["schedule:read"] },
+  {
+    key: "overview",
+    label: "Przegląd",
+    icon: LayoutGrid,
+    group: "",
+    permissions: ["schedule:read"],
+  },
   {
     key: "schedule",
     label: "Harmonogram",
@@ -69,7 +90,7 @@ const sections = [
   {
     key: "equipment",
     label: "Urządzenia",
-    icon: Microscope,
+    icon: PanelTop,
     group: "Wyposażenie",
     permissions: ["equipment:read"],
   },
@@ -117,26 +138,21 @@ const sections = [
   },
 ] as const;
 type Section = (typeof sections)[number]["key"] | "notifications";
-const groups = ["", "Wyposażenie", "Badania", "System"] as const;
-const headerHeight = "top-13";
-const longDate = new Intl.DateTimeFormat("pl-PL", {
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-});
+const desktopSections = ["overview", "schedule", "equipment", "results", "reagents"] as const;
+const mobileSections = ["overview", "schedule", "equipment"] as const;
+const mobileToastOffset = { bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))" };
 
 function initials(name: string) {
   const words = name.split(/\s+/).filter(Boolean);
   return `${words[0]?.[0] ?? ""}${words.length > 1 ? (words.at(-1)?.[0] ?? "") : ""}`.toUpperCase();
 }
 
-/** Contacts-style monogram in concrete greys; the name itself is in the menu and the label. */
 function Monogram({ name, className }: { name: string; className?: string }) {
   return (
     <span
       aria-hidden
       className={cn(
-        "grid shrink-0 place-items-center rounded-full bg-linear-to-b from-brand-concrete-light to-brand-concrete font-semibold text-white",
+        "grid shrink-0 place-items-center rounded-full bg-brand-lime-soft font-bold text-brand-navy",
         className,
       )}
     >
@@ -150,6 +166,11 @@ export function Workspace() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [equipmentId, setEquipmentId] = useState<number>();
+  const [scannerRequest, setScannerRequest] = useState(0);
+  const [scannerView, setScannerView] = useState(false);
+  const [scanError, setScanError] = useState("");
+  const [scanBusy, setScanBusy] = useState(false);
+  const scanController = useRef<AbortController | null>(null);
   const [publicId, setPublicId] = useState(() => parseEquipmentUrl(window.location.pathname));
   const [section, setSection] = useState<Section>(() =>
     publicId === null ? "overview" : "equipment",
@@ -192,11 +213,14 @@ export function Workspace() {
     function syncPath() {
       const id = parseEquipmentUrl(window.location.pathname);
       setPublicId(id);
+      setScannerView(false);
       setSection(id === null ? "overview" : "equipment");
     }
     window.addEventListener("popstate", syncPath);
     return () => window.removeEventListener("popstate", syncPath);
   }, []);
+
+  useEffect(() => () => scanController.current?.abort(), []);
 
   function openPublic(id: string | null) {
     const path = id === null ? "/" : `/e/${id}`;
@@ -224,7 +248,11 @@ export function Workspace() {
       if (previous) {
         await apiVoid("/auth/logout", previous, "POST").catch(() => undefined);
       }
+      scanController.current?.abort();
+      setScanError("");
+      setScannerRequest(0);
       setSession(next);
+      setScannerView(false);
       setEquipmentId(undefined);
       setSection(publicId !== null || next.user.role === "worker" ? "equipment" : "overview");
     } catch (failure) {
@@ -248,6 +276,10 @@ export function Workspace() {
       }
     } finally {
       await clearToken();
+      scanController.current?.abort();
+      setScanError("");
+      setScannerRequest(0);
+      setScannerView(false);
       setSession(null);
       setBusy(false);
     }
@@ -261,14 +293,12 @@ export function Workspace() {
     section === "notifications" || permitted.some(({ key }) => key === section)
       ? section
       : permitted[0]?.key;
-  useEffect(() => {
-    // On phones the sections scroll sideways; bring the current one into view.
-    document
-      .querySelector(`nav [data-section="${activeSection}"]`)
-      ?.scrollIntoView({ block: "nearest", inline: "center" });
-  }, [activeSection]);
   function navigate(next: Section) {
-    if (next !== "equipment" && publicId !== null) {
+    window.scrollTo(0, 0);
+    scanController.current?.abort();
+    setScannerView(false);
+    setScanError("");
+    if (publicId !== null) {
       openPublic(null);
     }
     if (next !== "results") {
@@ -276,156 +306,280 @@ export function Workspace() {
     }
     setSection(next);
   }
+
+  async function scan(preferNfc: boolean) {
+    if (scanController.current !== null) {
+      return;
+    }
+    const controller = new AbortController();
+    scanController.current = controller;
+    setScanBusy(true);
+    setScanError("");
+    try {
+      const outcome = await scanEquipment({ preferNfc, signal: controller.signal });
+      if (controller.signal.aborted) {
+        return;
+      }
+      if (outcome.status === "ok") {
+        openPublic(outcome.publicId);
+      } else if (outcome.status !== "cancelled") {
+        setScanError(outcome.message);
+      }
+    } catch (failure) {
+      if (!controller.signal.aborted) {
+        setScanError(errorMessage(failure));
+      }
+    } finally {
+      scanController.current = null;
+      setScanBusy(false);
+    }
+  }
+
+  function openScanner() {
+    window.scrollTo(0, 0);
+    openPublic(null);
+    setSection("equipment");
+    setEquipmentId(undefined);
+    setScannerView(true);
+    setScanError("");
+    setScannerRequest((request) => request + 1);
+    if (canScanQr()) {
+      void scan(false);
+    }
+  }
+
   function openDevice(id: string) {
+    setScannerView(false);
     openPublic(id);
     setEquipmentId(undefined);
     setSection("equipment");
+    window.scrollTo(0, 0);
   }
   const current = sections.find(({ key }) => key === activeSection);
-  const TitleIcon = current?.icon ?? Bell;
+  const scanningPage = scannerView && publicId === null && activeSection === "equipment";
+  const TitleIcon = scanningPage ? ScanLine : (current?.icon ?? Bell);
   const unreadCount = unread?.data?.length ?? 0;
+  const overview = activeSection === "overview";
+  const hasEquipment = permitted.some(({ key }) => key === "equipment");
+  const desktopEquipment = permitted.filter(({ key }) => key === "equipment" || key === "plans");
+  const desktopMore = permitted.filter(
+    ({ key }) => !desktopSections.some((sectionKey) => key === sectionKey) && key !== "plans",
+  );
+  const mobileMore = permitted.filter(
+    ({ key }) => !mobileSections.some((sectionKey) => key === sectionKey),
+  );
+  const accountItems = (
+    <>
+      {user && (
+        <div className="flex items-center gap-3 px-2 py-2.5">
+          <Monogram name={user.full_name} className="size-10 text-sm" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{user.full_name}</p>
+            <p className="truncate text-xs text-muted-foreground">{roleLabel(user.role)}</p>
+          </div>
+        </div>
+      )}
+      {reviewPassword && (
+        <>
+          {user && <DropdownMenuSeparator />}
+          <DropdownMenuLabel className="px-2 text-xs font-normal text-muted-foreground">
+            Konto testowe
+          </DropdownMenuLabel>
+          {demoAccounts.map((account) => (
+            <DropdownMenuItem
+              key={account.login}
+              className="px-2 py-1.5"
+              disabled={busy}
+              onSelect={() => {
+                if (account.login !== user?.login) {
+                  void login(account.login, reviewPassword);
+                }
+              }}
+            >
+              {roleLabel(account.role)}
+              {account.login === user?.login && (
+                <Check className="ml-auto text-brand-lime-ink" aria-label="Bieżące" />
+              )}
+            </DropdownMenuItem>
+          ))}
+        </>
+      )}
+      {user && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="px-2 py-1.5"
+            disabled={busy}
+            onSelect={() => {
+              void logout();
+            }}
+          >
+            <LogOut />
+            Wyloguj
+          </DropdownMenuItem>
+        </>
+      )}
+    </>
+  );
+
+  function sectionMenuItems(items: typeof permitted) {
+    return items.map(({ key, icon: Icon, label }) => (
+      <DropdownMenuItem key={key} onSelect={() => navigate(key)}>
+        <Icon aria-hidden />
+        {label}
+        {activeSection === key && <Check className="ml-auto" aria-label="Bieżące" />}
+      </DropdownMenuItem>
+    ));
+  }
+
+  function mobileSection(key: (typeof mobileSections)[number], title?: string) {
+    const item = permitted.find((entry) => entry.key === key);
+    if (item === undefined) {
+      return null;
+    }
+    const Icon = item.icon;
+    return (
+      <button
+        type="button"
+        aria-current={activeSection === key && !scanningPage ? "page" : undefined}
+        onClick={() => navigate(key)}
+      >
+        <span className="workspace-nav-icon">
+          <Icon aria-hidden />
+        </span>
+        {title ?? item.label}
+      </button>
+    );
+  }
 
   return (
-    <div className="min-h-dvh bg-background">
-      <header className="sticky top-0 z-30 bg-card shadow-[0_1px_0_rgb(0_0_0/0.08)] supports-[backdrop-filter]:bg-white/75 supports-[backdrop-filter]:backdrop-blur-xl supports-[backdrop-filter]:backdrop-saturate-150">
-        <div className="flex h-13 items-center gap-3 px-3 sm:px-5">
-          <a
-            href="/"
-            className="flex min-w-0 items-center gap-2.5 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <BrandMark className="size-7" />
-            <span className="truncate text-[15px] font-semibold tracking-[-0.01em] text-foreground">
-              Laboratorium
-            </span>
-            <span aria-hidden className="hidden h-4 w-px shrink-0 bg-foreground/15 sm:block" />
-            <span className="hidden truncate text-[15px] tracking-[-0.01em] text-muted-foreground sm:block">
-              Cementownia Warta
-            </span>
+    <div className="workspace">
+      <header className={cn("workspace-header", !user && "workspace-header--signed-out")}>
+        <div className="workspace-container workspace-header-inner">
+          <a href="/" className="workspace-brand">
+            <CorporateBrand />
           </a>
-          {reviewPassword && (
-            <span className="hidden shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground ring-1 ring-foreground/15 ring-inset md:inline">
-              Dane testowe
-            </span>
-          )}
-          <div className="ml-auto flex items-center gap-1">
+          <div className="workspace-utilities">
             {user && (
-              <Button
-                variant="ghost"
-                size="icon"
+              <button
+                type="button"
+                className="workspace-bell"
                 aria-label={`Powiadomienia: ${unreadCount} nowych`}
+                aria-current={activeSection === "notifications" ? "page" : undefined}
                 onClick={() => navigate("notifications")}
-                className="relative rounded-full text-foreground/70 hover:bg-foreground/5 hover:text-foreground"
               >
-                <Bell className="size-[1.125rem]" strokeWidth={1.75} />
-                {unreadCount > 0 && (
-                  <span
-                    aria-hidden
-                    className="absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-status-alarm px-1 text-[10px] leading-none font-semibold text-white tabular-nums ring-2 ring-white"
-                  >
-                    {unreadCount}
-                  </span>
-                )}
-              </Button>
+                <span className="workspace-bell-icon">
+                  <Bell aria-hidden />
+                  {unreadCount > 0 && <span className="workspace-bell-dot" aria-hidden />}
+                </span>
+                <span className="workspace-bell-label">Powiadomienia</span>
+              </button>
             )}
             {(user || reviewPassword) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  {user ? (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={busy}
-                      aria-label={reviewPassword ? "Wybierz rolę" : "Menu konta"}
-                      className="rounded-full hover:bg-foreground/5"
-                    >
-                      <Monogram name={user.full_name} className="size-8 text-xs" />
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={busy}
-                      aria-label="Wybierz rolę"
-                      className="h-8 rounded-full bg-foreground/[0.04] px-3 text-[13px] hover:bg-foreground/[0.08]"
-                    >
-                      Wybierz rolę
-                      <ChevronDown />
-                    </Button>
-                  )}
+                  <button type="button" disabled={busy} className="workspace-account">
+                    {user ? "Konto" : "Wybierz rolę"}
+                    <ChevronDown aria-hidden />
+                  </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  sideOffset={8}
-                  className="w-72 rounded-xl p-1.5 shadow-lg"
-                >
-                  {user && (
-                    <div className="flex items-center gap-3 px-2 py-2.5">
-                      <Monogram name={user.full_name} className="size-10 text-sm" />
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{user.full_name}</p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {roleLabel(user.role)}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  {reviewPassword && (
-                    <>
-                      {user && <DropdownMenuSeparator />}
-                      <DropdownMenuLabel className="px-2 text-xs font-normal text-muted-foreground">
-                        Konto testowe
-                      </DropdownMenuLabel>
-                      {demoAccounts.map((account) => (
-                        <DropdownMenuItem
-                          key={account.login}
-                          className="px-2 py-1.5"
-                          onSelect={() => {
-                            if (account.login !== user?.login) {
-                              void login(account.login, reviewPassword);
-                            }
-                          }}
-                        >
-                          {roleLabel(account.role)}
-                          {account.login === user?.login && (
-                            <Check className="ml-auto text-brand-lime-ink" aria-label="Bieżące" />
-                          )}
-                        </DropdownMenuItem>
-                      ))}
-                    </>
-                  )}
-                  {user && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="px-2 py-1.5"
-                        onSelect={() => {
-                          void logout();
-                        }}
-                      >
-                        <LogOut />
-                        Wyloguj
-                      </DropdownMenuItem>
-                    </>
-                  )}
+                <DropdownMenuContent align="end" sideOffset={8} className="workspace-menu w-64">
+                  {accountItems}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
           </div>
+          {user && (
+            <nav aria-label="Sekcje laboratorium" className="workspace-desktop-nav">
+              {desktopSections.map((key) => {
+                if (key === "equipment" && desktopEquipment.length > 1) {
+                  return (
+                    <DropdownMenu key={key}>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          aria-current={
+                            !scanningPage &&
+                            (activeSection === "equipment" || activeSection === "plans")
+                              ? "page"
+                              : undefined
+                          }
+                        >
+                          Urządzenia
+                          <ChevronDown aria-hidden />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="workspace-menu min-w-48">
+                        {sectionMenuItems(desktopEquipment)}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  );
+                }
+                const item =
+                  key === "equipment"
+                    ? desktopEquipment[0]
+                    : permitted.find((entry) => entry.key === key);
+                if (item === undefined) {
+                  return null;
+                }
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    aria-current={activeSection === item.key && !scanningPage ? "page" : undefined}
+                    onClick={() => navigate(item.key)}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+              {desktopMore.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-current={
+                        desktopMore.some(({ key }) => activeSection === key) ? "page" : undefined
+                      }
+                    >
+                      Więcej
+                      <ChevronDown aria-hidden />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="workspace-menu min-w-48">
+                    {sectionMenuItems(desktopMore)}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </nav>
+          )}
+          {hasEquipment && (
+            <button
+              className="workspace-desktop-scan"
+              aria-current={scanningPage ? "page" : undefined}
+              type="button"
+              disabled={scanBusy}
+              onClick={openScanner}
+            >
+              Skanuj QR
+              <ScanLine aria-hidden />
+            </button>
+          )}
         </div>
       </header>
       {!session ? (
-        <main className="grid min-h-[calc(100dvh-3.25rem)] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-          <section className="relative hidden flex-col justify-between overflow-hidden bg-brand-navy-deep px-12 pt-16 text-white lg:flex">
+        <main className="workspace-login grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <section className="workspace-login-intro hidden flex-col justify-between gap-12 overflow-hidden px-12 pt-16 lg:flex">
             <div className="max-w-lg">
               <h1 className="text-4xl leading-tight font-bold">
                 Nadzór nad wyposażeniem laboratorium
               </h1>
-              <p className="mt-4 max-w-md text-[15px] leading-relaxed text-white/75">
+              <p className="mt-4 max-w-md text-[15px] leading-relaxed text-foreground/75">
                 Rejestr urządzeń, terminy wzorcowań i sprawdzeń, odczynniki oraz wyniki badań
                 cementu. Każda zmiana zostaje w historii.
               </p>
             </div>
-            <PlantSkyline className="mt-12 w-full text-brand-lime/40" />
+            <PlantSkyline className="mt-12 w-full text-brand-navy-deep/35" />
           </section>
           <div className="flex items-start justify-center px-4 py-10 sm:items-center sm:px-8">
             <div className="w-full max-w-sm">
@@ -438,137 +592,207 @@ export function Workspace() {
           </div>
         </main>
       ) : (
-        <div className="lg:flex">
-          {/* The column paints the sidebar to the page bottom; the nav inside stays in view. */}
-          <div className="contents lg:block lg:w-60 lg:shrink-0 lg:border-r lg:bg-card">
-            <nav
-              aria-label="Sekcje laboratorium"
-              className={cn(
-                "no-scrollbar sticky z-20 flex overflow-x-auto border-b border-foreground/8 bg-card px-1 lg:max-h-[calc(100dvh-3.25rem)] lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:px-3 lg:py-5",
-                // Phones: a fade pinned to the right edge hints that more sections scroll in.
-                "max-lg:after:pointer-events-none max-lg:after:sticky max-lg:after:right-0 max-lg:after:w-10 max-lg:after:shrink-0 max-lg:after:bg-linear-to-l max-lg:after:from-card max-lg:after:content-['']",
-                headerHeight,
-              )}
-            >
-              {groups.map((group) => {
-                const items = permitted.filter((item) => item.group === group);
-                if (items.length === 0) {
-                  return null;
-                }
-                return (
-                  <div key={group || "start"} className="flex lg:mb-5 lg:flex-col lg:gap-0.5">
-                    {group && (
-                      <p className="hidden px-3 pb-1.5 text-xs font-semibold text-muted-foreground lg:block">
-                        {group}
-                      </p>
-                    )}
-                    {items.map(({ key, icon: Icon, label }) => (
-                      <button
-                        key={key}
-                        type="button"
-                        data-section={key}
-                        aria-current={activeSection === key ? "page" : undefined}
-                        onClick={() => navigate(key)}
-                        className={cn(
-                          "flex shrink-0 items-center gap-2.5 border-b-[3px] border-transparent px-3 py-3 text-sm whitespace-nowrap text-foreground/75 transition-colors outline-none hover:text-brand-navy focus-visible:ring-3 focus-visible:ring-ring/50 lg:rounded-sm lg:border-b-0 lg:border-l-[3px] lg:py-2",
-                          activeSection === key
-                            ? "border-brand-lime font-semibold text-brand-navy lg:bg-brand-lime-soft"
-                            : "lg:hover:bg-background",
-                        )}
-                      >
-                        <Icon className="size-4 shrink-0" aria-hidden />
-                        {label}
-                      </button>
-                    ))}
+        <>
+          <main className="workspace-main">
+            {overview ? (
+              <>
+                {error && (
+                  <div className="workspace-container pt-4">
+                    <Message>{error}</Message>
                   </div>
-                );
-              })}
-            </nav>
-          </div>
-          <main className="min-w-0 flex-1 px-3 py-5 sm:px-6 lg:px-8 lg:py-6">
-            <div className="mx-auto grid max-w-[96rem] gap-4">
-              <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
-                <div className="min-w-0">
-                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                    Laboratorium
-                    {current?.group && (
-                      <>
-                        <ChevronRight className="size-3" aria-hidden />
-                        {current.group}
-                      </>
-                    )}
-                  </p>
-                  <h1 className="mt-1 flex items-center gap-2.5 text-[1.375rem] leading-tight font-bold text-brand-navy">
-                    <TitleIcon className="size-5 shrink-0 text-brand-lime-ink" aria-hidden />
-                    {current?.label ?? "Powiadomienia"}
-                  </h1>
-                </div>
-                {activeSection === "overview" && (
-                  <p className="text-sm text-muted-foreground">
-                    Stan na {longDate.format(new Date())}
-                  </p>
                 )}
-              </div>
-              {error && <Message>{error}</Message>}
-              {activeSection === "overview" && (
                 <Overview
                   token={session.token}
                   permissions={session.user.permissions}
                   onOpenDevice={openDevice}
                   onNavigate={navigate}
                 />
-              )}
-              {activeSection === "schedule" && (
-                <Schedule token={session.token} permissions={session.user.permissions} />
-              )}
-              {activeSection === "equipment" && (
-                <Equipment
-                  key={session.token}
-                  token={session.token}
-                  permissions={session.user.permissions}
-                  publicId={publicId}
-                  onPublicId={openPublic}
-                  onResults={(id) => {
-                    setEquipmentId(id);
-                    navigate("results");
-                  }}
-                />
-              )}
-              {activeSection === "plans" && (
-                <CalibrationPlans token={session.token} permissions={session.user.permissions} />
-              )}
-              {activeSection === "results" && (
-                <Results
-                  key={session.token}
-                  token={session.token}
-                  permissions={session.user.permissions}
-                  equipmentId={equipmentId}
-                />
-              )}
-              {activeSection === "reagents" && (
-                <Reagents token={session.token} permissions={session.user.permissions} />
-              )}
-              {activeSection === "reports" && (
-                <Reports token={session.token} permissions={session.user.permissions} />
-              )}
-              {activeSection === "settings" && (
-                <Administration token={session.token} permissions={session.user.permissions} />
-              )}
-              {activeSection === "audit" && (
-                <Audit token={session.token} permissions={session.user.permissions} />
-              )}
-              {activeSection === "notifications" && (
-                <Notifications
-                  token={session.token}
-                  permissions={session.user.permissions}
-                  after={() => setNotificationRevision((value) => value + 1)}
-                />
-              )}
-            </div>
+              </>
+            ) : (
+              <>
+                <div className="workspace-page-heading">
+                  <div className="workspace-container workspace-page-heading-inner">
+                    <p>
+                      <TitleIcon aria-hidden />
+                      {current?.group || "Laboratorium"}
+                    </p>
+                    <h1>{scanningPage ? "Skanuj QR" : (current?.label ?? "Powiadomienia")}</h1>
+                  </div>
+                </div>
+                <div className="workspace-container workspace-content">
+                  {error && <Message>{error}</Message>}
+                  {activeSection === "schedule" && (
+                    <Schedule token={session.token} permissions={session.user.permissions} />
+                  )}
+                  {activeSection === "equipment" && (
+                    <Equipment
+                      key={`${session.token}:${scannerRequest}`}
+                      token={session.token}
+                      permissions={session.user.permissions}
+                      publicId={publicId}
+                      focusScanner={scanningPage && !canScanQr()}
+                      scannerView={scanningPage}
+                      onCloseScanner={() => navigate("equipment")}
+                      scanBusy={scanBusy}
+                      scanError={scanError}
+                      onCancelScan={() => scanController.current?.abort()}
+                      onDismissScanError={() => setScanError("")}
+                      onScan={scan}
+                      onPublicId={openPublic}
+                      onResults={(id) => {
+                        setEquipmentId(id);
+                        navigate("results");
+                      }}
+                    />
+                  )}
+                  {activeSection === "plans" && (
+                    <CalibrationPlans
+                      token={session.token}
+                      permissions={session.user.permissions}
+                    />
+                  )}
+                  {activeSection === "results" && (
+                    <Results
+                      key={session.token}
+                      token={session.token}
+                      permissions={session.user.permissions}
+                      equipmentId={equipmentId}
+                    />
+                  )}
+                  {activeSection === "reagents" && (
+                    <Reagents token={session.token} permissions={session.user.permissions} />
+                  )}
+                  {activeSection === "reports" && (
+                    <Reports token={session.token} permissions={session.user.permissions} />
+                  )}
+                  {activeSection === "settings" && (
+                    <Administration token={session.token} permissions={session.user.permissions} />
+                  )}
+                  {activeSection === "audit" && (
+                    <Audit token={session.token} permissions={session.user.permissions} />
+                  )}
+                  {activeSection === "notifications" && (
+                    <Notifications
+                      token={session.token}
+                      permissions={session.user.permissions}
+                      after={() => setNotificationRevision((value) => value + 1)}
+                    />
+                  )}
+                </div>
+              </>
+            )}
           </main>
-        </div>
+          <nav aria-label="Sekcje laboratorium" className="workspace-mobile-nav">
+            {mobileSection("overview")}
+            {mobileSection("schedule", "Terminy")}
+            {hasEquipment && (
+              <button
+                type="button"
+                className="workspace-mobile-scan"
+                aria-current={scanningPage ? "page" : undefined}
+                disabled={scanBusy}
+                onClick={openScanner}
+              >
+                <span className="workspace-nav-icon">
+                  <ScanLine aria-hidden />
+                </span>
+                Skanuj QR
+              </button>
+            )}
+            {mobileSection("equipment")}
+            <Sheet>
+              <SheetTrigger asChild>
+                <button
+                  type="button"
+                  aria-current={
+                    mobileMore.some(({ key }) => activeSection === key) ? "page" : undefined
+                  }
+                >
+                  <span className="workspace-nav-icon">
+                    <Ellipsis aria-hidden />
+                  </span>
+                  Więcej
+                </button>
+              </SheetTrigger>
+              <SheetContent side="bottom" className="workspace-more-sheet">
+                <SheetHeader>
+                  <SheetTitle>Więcej</SheetTitle>
+                  <SheetDescription className="sr-only">
+                    Pozostałe sekcje laboratorium i konto użytkownika
+                  </SheetDescription>
+                </SheetHeader>
+                {mobileMore.length > 0 && (
+                  <div className="workspace-more-links">
+                    {mobileMore.map(({ key, label, icon: Icon }) => (
+                      <SheetClose key={key} asChild>
+                        <button
+                          type="button"
+                          aria-current={activeSection === key ? "page" : undefined}
+                          onClick={() => navigate(key)}
+                        >
+                          <Icon aria-hidden />
+                          <span>{label}</span>
+                          {activeSection === key ? (
+                            <Check aria-hidden />
+                          ) : (
+                            <ChevronRight aria-hidden />
+                          )}
+                        </button>
+                      </SheetClose>
+                    ))}
+                  </div>
+                )}
+                <section className="workspace-more-account">
+                  <h3>Konto</h3>
+                  {user && (
+                    <div className="workspace-account-identity">
+                      <Monogram name={user.full_name} className="size-9 text-xs" />
+                      <div>
+                        <p>{user.full_name}</p>
+                        <p>{roleLabel(user.role)}</p>
+                      </div>
+                    </div>
+                  )}
+                  {reviewPassword && (
+                    <div className="workspace-more-links">
+                      {demoAccounts.map((account) => (
+                        <SheetClose key={account.login} asChild>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              if (account.login !== user?.login) {
+                                void login(account.login, reviewPassword);
+                              }
+                            }}
+                          >
+                            <span>{roleLabel(account.role)}</span>
+                            {account.login === user?.login && <Check aria-label="Bieżące" />}
+                          </button>
+                        </SheetClose>
+                      ))}
+                    </div>
+                  )}
+                  <SheetClose asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => {
+                        void logout();
+                      }}
+                    >
+                      <LogOut aria-hidden />
+                      Wyloguj
+                    </Button>
+                  </SheetClose>
+                </section>
+              </SheetContent>
+            </Sheet>
+          </nav>
+        </>
       )}
-      <Toaster position="bottom-center" richColors />
+      <Toaster position="bottom-center" mobileOffset={mobileToastOffset} richColors />
     </div>
   );
 }
@@ -590,7 +814,7 @@ function LoginForm({
     void login(textValue(values.get("login"), "").trim(), textValue(values.get("password"), ""));
   }
   return (
-    <Card className="border-t-4 border-t-brand-lime">
+    <Card className="workspace-login-card">
       <CardHeader>
         <CardTitle className="text-xl text-brand-navy">Zaloguj się</CardTitle>
         <CardDescription>

@@ -1,5 +1,6 @@
 import { cn } from "cn";
-import { type FormEvent, type ReactNode, useEffect, useId, useState } from "react";
+import { Upload } from "lucide-react";
+import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { api, type ApiRecord, errorMessage, textValue } from "@/api/workspaceClient";
@@ -88,6 +89,24 @@ export function useApi<T>(
     : undefined;
 }
 
+export type StatusTone = "ok" | "warning" | "alarm" | "neutral" | "missing";
+
+export function StatusIndicator({
+  children,
+  tone,
+  status,
+}: {
+  children: string;
+  tone: StatusTone;
+  status?: string;
+}) {
+  return (
+    <span className="workspace-status" data-tone={tone} data-status={status}>
+      {children}
+    </span>
+  );
+}
+
 export function Message({ children }: { children: ReactNode }) {
   return (
     <Alert>
@@ -131,19 +150,22 @@ function FieldInput({ field, value }: { field: Field; value: unknown }) {
   if (type === "many") {
     const selected = Array.isArray(value) ? value.map((item: unknown) => textValue(item, "")) : [];
     return (
-      <fieldset className="grid gap-2 rounded-md border p-3">
+      <fieldset className="min-w-0 border p-3">
         <legend className="px-1 text-sm font-semibold">{label}</legend>
-        {(field.options ?? []).map((option) => (
-          <label key={option.value} className="flex items-center gap-2 text-sm">
-            <input
-              name={key}
-              type="checkbox"
-              value={option.value}
-              defaultChecked={selected.includes(option.value)}
-            />
-            {option.label}
-          </label>
-        ))}
+        <div className="workspace-form-options">
+          {(field.options ?? []).map((option) => (
+            <label key={option.value} className="flex items-start gap-2 text-sm">
+              <input
+                className="mt-1 shrink-0 accent-brand-navy"
+                name={key}
+                type="checkbox"
+                value={option.value}
+                defaultChecked={selected.includes(option.value)}
+              />
+              {option.label}
+            </label>
+          ))}
+        </div>
       </fieldset>
     );
   }
@@ -321,30 +343,79 @@ export function Action({
 
 export type Columns = [string, string, ((value: unknown) => ReactNode)?][];
 
+export function revealDetails(heading: HTMLElement | null) {
+  if (heading) {
+    heading.focus({ preventScroll: true });
+    heading.scrollIntoView({ block: "start" });
+  }
+}
+
+export function FilePicker({
+  id,
+  accept,
+  file,
+  onChange,
+  disabled,
+}: {
+  id: string;
+  accept: string;
+  file?: File;
+  onChange: (file: File | undefined) => void;
+  disabled?: boolean;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (file === undefined && input.current) {
+      input.current.value = "";
+    }
+  }, [file]);
+  return (
+    <div className="workspace-file-picker">
+      <Input
+        id={id}
+        ref={input}
+        className="sr-only"
+        aria-describedby={`${id}-filename`}
+        type="file"
+        accept={accept}
+        disabled={disabled}
+        onChange={(event) => onChange(event.currentTarget.files?.[0])}
+      />
+      <label htmlFor={id}>
+        <Upload aria-hidden />
+        Wybierz plik
+      </label>
+      <span id={`${id}-filename`} aria-live="polite">
+        {file?.name ?? "Nie wybrano pliku"}
+      </span>
+    </div>
+  );
+}
+
 export function Rows({
   rows,
   columns,
   renderAction,
+  empty = "Brak pozycji.",
 }: {
   rows: ApiRecord[];
   columns: Columns;
+  empty?: string;
   renderAction?: (row: ApiRecord) => ReactNode;
 }) {
   if (rows.length === 0) {
-    return (
-      <p className="rounded-md border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-        Brak pozycji.
-      </p>
-    );
+    return <p className="workspace-records-empty">{empty}</p>;
   }
   return (
-    <Table className="max-sm:block">
-      <TableHeader className="max-sm:hidden">
+    <Table className="workspace-records max-sm:block">
+      <TableHeader className="max-sm:sr-only">
         <TableRow>
           {columns.map(([key, title]) => (
-            <TableHead key={key}>{title}</TableHead>
+            <TableHead key={key} scope="col">
+              {title}
+            </TableHead>
           ))}
-          {renderAction && <TableHead>Akcje</TableHead>}
+          {renderAction && <TableHead scope="col">Akcje</TableHead>}
         </TableRow>
       </TableHeader>
       <TableBody className="max-sm:grid max-sm:gap-2">
@@ -353,14 +424,20 @@ export function Rows({
             {columns.map(([key, title, display], column) => (
               <TableCell
                 key={key}
-                data-label={title}
                 className={cn(
                   "max-w-[35rem] whitespace-normal",
                   recordField,
                   column === 0 && recordTitle,
                 )}
               >
-                {display ? display(row[key]) : textValue(row[key])}
+                {column !== 0 && (
+                  <span className="text-start text-xs text-muted-foreground sm:hidden">
+                    {title}
+                  </span>
+                )}
+                <span className="min-w-0 wrap-anywhere">
+                  {display ? display(row[key]) : textValue(row[key])}
+                </span>
               </TableCell>
             ))}
             {renderAction && (
@@ -375,14 +452,13 @@ export function Rows({
   );
 }
 
-// Below the sm breakpoint every row becomes a record card: the first column is its title, the
-// others are "label: value" lines taken from data-label, so no column is cut off on a phone.
+// Keep table semantics when the narrow layout turns a row into labeled fields.
 const recordRow =
   "max-sm:grid max-sm:gap-1 max-sm:rounded-md max-sm:border-0 max-sm:bg-card max-sm:p-3 max-sm:ring-1 max-sm:ring-border max-sm:ring-inset max-sm:even:bg-card";
 const recordField =
-  "max-sm:flex max-sm:items-baseline max-sm:justify-between max-sm:gap-4 max-sm:p-0 max-sm:text-right max-sm:before:shrink-0 max-sm:before:text-left max-sm:before:text-xs max-sm:before:text-muted-foreground max-sm:before:content-[attr(data-label)]";
+  "max-sm:flex max-sm:items-baseline max-sm:justify-between max-sm:gap-4 max-sm:p-0 max-sm:text-right";
 const recordTitle =
-  "max-sm:mb-1 max-sm:justify-start max-sm:text-left max-sm:text-[15px] max-sm:font-semibold max-sm:text-brand-navy-ink max-sm:before:hidden";
+  "max-sm:mb-1 max-sm:justify-start max-sm:text-left max-sm:text-[15px] max-sm:font-semibold max-sm:text-brand-navy-ink";
 
 export function choice(...choices: [string, string][]): Option[] {
   return choices.map(([value, label]) => ({ value, label }));

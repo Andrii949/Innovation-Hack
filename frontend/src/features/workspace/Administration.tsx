@@ -116,32 +116,38 @@ const notificationLabels: Record<string, string> = {
 
 export function Administration(props: WorkspaceProps) {
   const { permissions } = props;
+  const canEditEquipment = permissions.includes("equipment:write");
+  const canEditSettings = permissions.includes("settings:write");
+  const canEditUsers = permissions.includes("users:write");
+  const firstTab = canEditEquipment ? "catalog" : canEditSettings ? "templates" : "users";
   return (
-    <Tabs defaultValue="catalog" className="min-w-0">
-      <TabsList className="h-auto w-full flex-wrap justify-start p-1.5">
-        {permissions.includes("equipment:write") && (
-          <TabsTrigger value="catalog">Katalog modeli</TabsTrigger>
-        )}
-        {permissions.includes("settings:write") && (
+    <Tabs defaultValue={firstTab} className="min-w-0 gap-4">
+      <TabsList
+        aria-label="Sekcje administracji"
+        variant="line"
+        className="workspace-admin-tabs w-full flex-wrap justify-start gap-0 px-0 py-0 [&>button]:flex-none [&>button]:rounded-none [&>button]:after:bottom-[-1px]"
+      >
+        {canEditEquipment && <TabsTrigger value="catalog">Katalog modeli</TabsTrigger>}
+        {canEditSettings && (
           <>
             <TabsTrigger value="templates">Szablony sprawdzeń</TabsTrigger>
             <TabsTrigger value="settings">Ustawienia ogólne</TabsTrigger>
             <TabsTrigger value="rules">Reguły powiadomień</TabsTrigger>
           </>
         )}
-        {permissions.includes("users:write") && (
+        {canEditUsers && (
           <>
             <TabsTrigger value="users">Użytkownicy</TabsTrigger>
             <TabsTrigger value="labs">Pracownie</TabsTrigger>
           </>
         )}
       </TabsList>
-      {permissions.includes("equipment:write") && (
+      {canEditEquipment && (
         <TabsContent value="catalog">
           <Catalog {...props} />
         </TabsContent>
       )}
-      {permissions.includes("settings:write") && (
+      {canEditSettings && (
         <>
           <TabsContent value="templates">
             <Templates {...props} />
@@ -154,7 +160,7 @@ export function Administration(props: WorkspaceProps) {
           </TabsContent>
         </>
       )}
-      {permissions.includes("users:write") && (
+      {canEditUsers && (
         <>
           <TabsContent value="users">
             <Users {...props} />
@@ -504,22 +510,30 @@ export function Audit({ token }: WorkspaceProps) {
         {state?.data ? (
           <>
             <Rows rows={page} columns={auditColumns} />
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                disabled={offset === 0}
-                onClick={() => setOffset((value) => value - 50)}
-              >
-                Nowsze
-              </Button>
-              <Button
-                variant="outline"
-                disabled={state.data.length <= offset + 50}
-                onClick={() => setOffset((value) => value + 50)}
-              >
-                Starsze
-              </Button>
-            </div>
+            {state.data.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                <p className="text-xs text-muted-foreground">
+                  Wpisy {offset + 1}–{Math.min(offset + 50, state.data.length)} z{" "}
+                  {state.data.length}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={offset === 0}
+                    onClick={() => setOffset((value) => value - 50)}
+                  >
+                    Nowsze
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={state.data.length <= offset + 50}
+                    onClick={() => setOffset((value) => value + 50)}
+                  >
+                    Starsze
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <Loading state={state} />

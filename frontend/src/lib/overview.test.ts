@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { scheduleDetail, scheduleDevice, scheduleDue } from "./overview";
+import { overviewSchedule, scheduleDetail, scheduleDevice, scheduleDue } from "./overview";
 
 const devices = [
   { id: 1, code: "12/A" },
@@ -53,5 +53,20 @@ describe("scheduleDevice", () => {
     expect(
       scheduleDevice({ ref_type: "reagent", ref_id: 1, label: "Kwas solny" }, devices),
     ).toBeUndefined();
+  });
+});
+
+describe("overviewSchedule", () => {
+  test("keeps urgent and upcoming entries separate and sorts upcoming by real deadlines", () => {
+    const rows = [
+      { id: 1, status: "OVERDUE", due: "2026-11-01", valid_until: "2026-11-30" },
+      { id: 2, status: "DUE_SOON", due: "2026-12-01", valid_until: "2026-12-31" },
+      { id: 3, status: "OK", due: "2026-12-03", valid_until: "2026-12-03" },
+      { id: 4, status: "NO_DATA", due: null, valid_until: null },
+      { id: 5, status: "COUNT_DUE", due: null, valid_until: null },
+    ];
+    const { pressing, upcoming } = overviewSchedule(rows);
+    expect(pressing.map(({ id }) => id)).toEqual([1, 4, 5]);
+    expect(upcoming.map(({ id }) => id)).toEqual([3, 2]);
   });
 });

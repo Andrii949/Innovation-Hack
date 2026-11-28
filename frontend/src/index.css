@@ -698,7 +698,7 @@
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: 'Open Sans', 'Geist Variable', sans-serif;
+  --font-sans: 'Avenir Next', 'Geist Variable', 'Open Sans', sans-serif;
   --color-brand-navy: var(--brand-navy);
   --color-brand-navy-deep: var(--brand-navy-deep);
   --color-brand-navy-ink: var(--brand-navy-ink);

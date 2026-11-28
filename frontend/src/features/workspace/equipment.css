@@ -1,0 +1,150 @@
+.workspace-equipment-register,
+.workspace-equipment-details,
+.workspace-scan-page {
+  display: grid;
+  min-width: 0;
+  align-items: start;
+  gap: 20px;
+}
+
+.workspace-scan-page {
+  width: min(100%, 42rem);
+}
+
+.workspace .workspace-scan-panel[data-slot="card"] {
+  --card-spacing: clamp(18px, 2.2vw, 28px);
+  border: 1px solid #d9e4d3;
+  border-top: 3px solid var(--brand-lime);
+  background: var(--brand-lime-soft);
+  color: var(--workspace-ink);
+}
+
+.workspace .workspace-scan-panel.workspace-feature {
+  border: 0;
+  background: var(--brand-lime);
+}
+
+.workspace .workspace-scan-panel [data-slot="card-header"] {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.workspace .workspace-scan-panel [data-slot="card-title"],
+.workspace .workspace-scan-panel [data-slot="card-description"] {
+  color: inherit;
+}
+
+.workspace .workspace-scan-panel [data-slot="card-title"] {
+  font-size: clamp(21px, 2.3vw, 28px);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.workspace .workspace-scan-panel [data-slot="card-description"] {
+  max-width: 42ch;
+}
+
+.workspace-scan-icon {
+  width: 2rem;
+  height: 2rem;
+  margin-bottom: 4px;
+  color: var(--workspace-ink);
+  stroke-width: 1.6;
+}
+
+.workspace-scan-form,
+.workspace-scan-fields {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.workspace-scan-methods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-scan-progress {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  font-size: 13px;
+}
+
+.workspace .workspace-scan-fields [data-slot="input"],
+.workspace .workspace-scan-panel [data-slot="button"] {
+  min-height: 44px;
+}
+
+.workspace .workspace-scan-panel [data-variant="outline"] {
+  border-color: color-mix(in srgb, var(--workspace-ink) 46%, transparent);
+  background-color: transparent;
+  color: var(--workspace-ink);
+}
+
+.workspace .workspace-scan-panel [data-variant="outline"]:hover {
+  border-color: var(--workspace-ink);
+  background-color: color-mix(in srgb, white 24%, transparent);
+}
+
+.workspace .workspace-device-panel[data-slot="card"] {
+  --card-spacing: clamp(18px, 2.25vw, 32px);
+  border-color: #d9e4d3;
+  border-top: 3px solid var(--brand-lime);
+  background: var(--brand-lime-soft);
+}
+
+.workspace .workspace-device-panel .workspace-device-title {
+  margin-top: 10px;
+  color: var(--workspace-ink);
+  font-size: clamp(24px, 3vw, 36px);
+  font-weight: 750;
+  line-height: 1.18;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.workspace-device-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+  padding-block: 12px;
+  border-block: 1px solid #d0ddcc;
+  font-size: 13px;
+}
+
+.workspace-device-facts dt {
+  color: var(--muted-foreground);
+  line-height: 1.4;
+}
+
+.workspace-device-facts dd {
+  margin-top: 3px;
+  color: var(--brand-navy-deep);
+  font-size: 16px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 640px) {
+  .workspace-scan-page .workspace-scan-fields {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .workspace-device-facts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1120px) {
+  .workspace-equipment-register .workspace-records td:first-child {
+    width: 27%;
+  }
+
+  .workspace-equipment-register {
+    grid-template-columns: minmax(0, 1fr) minmax(17rem, 25%);
+    gap: 24px;
+  }
+}

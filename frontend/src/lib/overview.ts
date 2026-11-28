@@ -48,3 +48,23 @@ export function scheduleDevice<T extends { id: number; code: string }>(
   }
   return undefined;
 }
+
+const attentionStatuses = new Set(["OVERDUE", "NO_DATA", "LOW", "COUNT_DUE"]);
+const upcomingStatuses = new Set(["DUE_SOON", "OK"]);
+
+/** Keep overdue alerts apart from the upcoming calendar, without recalculating API statuses. */
+export function overviewSchedule<
+  T extends { status: string; due: string | null; valid_until: string | null },
+>(rows: T[]) {
+  const pressing: T[] = [];
+  const upcoming: (T & { due: string })[] = [];
+  for (const row of rows) {
+    if (attentionStatuses.has(row.status)) {
+      pressing.push(row);
+    } else if (upcomingStatuses.has(row.status) && row.due !== null) {
+      upcoming.push({ ...row, due: row.due });
+    }
+  }
+  upcoming.sort((a, b) => (a.valid_until ?? a.due).localeCompare(b.valid_until ?? b.due));
+  return { pressing, upcoming };
+}
