@@ -280,7 +280,6 @@ export function Workspace({ onChangeServer }: { onChangeServer?: () => void } = 
   // Live notification polling: keeps unread bell badge accurate, coalesces bursts, and triggers native banners.
   useEffect(() => {
     if (!session) {
-      setUnreadCount(0);
       pollStateRef.current = { token: "", cursor: null, lastSummaryAt: 0 };
       return undefined;
     }
@@ -349,7 +348,7 @@ export function Workspace({ onChangeServer }: { onChangeServer?: () => void } = 
         window.clearTimeout(timer);
       }
     };
-  }, [navigate, notificationRevision, session]);
+  }, [navigate, session]);
 
   // Presentation console: the API queues ephemeral signals that drive the app on stage.
   useEffect(() => {
