@@ -104,3 +104,30 @@ def test_get_audit_endpoint_filters(
     assert len(items) == 1
     assert items[0]["action"] == "create"
     assert items[0]["entity"] == "setting"
+
+
+def test_get_audit_endpoint_paginates(
+    client: TestClient,
+    db: Session,
+    make_user: Any,
+    auth: Any,
+) -> None:
+    admin = make_user("admin", all_labs=True)
+    for idx in range(3):
+        log_event(
+            db,
+            action="create",
+            entity="pagination_probe",
+            entity_id=str(idx),
+            after={"idx": idx},
+            user_id=admin.id,
+        )
+    db.flush()
+
+    page = client.get(
+        "/api/audit?entity=pagination_probe&limit=1&offset=1",
+        headers=auth(admin),
+    )
+    assert page.status_code == 200
+    assert len(page.json()) == 1
+    assert page.json()[0]["entity_id"] == "1"

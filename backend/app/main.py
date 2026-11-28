@@ -9,6 +9,7 @@ from app.audit.router import router as audit_router
 from app.auth.router import router as auth_router
 from app.config import get_settings
 from app.db import SessionLocal
+from app.demo.router import router as demo_router
 from app.equipment.calibration_plans import router as calibration_plans_router
 from app.equipment.router import catalog_router, check_plans_router
 from app.equipment.router import router as equipment_router
@@ -42,6 +43,7 @@ api.include_router(results_router)
 api.include_router(reagents_router)
 api.include_router(lots_router)
 api.include_router(notifications_router)
+api.include_router(demo_router)
 api.include_router(notification_rules_router)
 api.include_router(devices_router)
 api.include_router(print_router)

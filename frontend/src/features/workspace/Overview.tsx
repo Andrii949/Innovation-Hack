@@ -1,4 +1,14 @@
 import { cn } from "cn";
+import {
+  ArrowRight,
+  ChartLine,
+  ChevronDown,
+  ChevronRight,
+  Clock3,
+  FileText,
+  FlaskConical,
+  type LucideIcon,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { type ApiRecord, textValue } from "@/api/workspaceClient";
@@ -7,11 +17,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { type AuditEntry, describeAudit } from "@/lib/audit";
 import { formatDate, formatDecimal, formatRange } from "@/lib/format";
 import { formatMonth } from "@/lib/months";
-import { plural, scheduleDetail, scheduleDevice } from "@/lib/overview";
-import { dueKindLabel, isDueKind, isStatus, statusBadgeClass, statusDotClass } from "@/lib/status";
+import { overviewSchedule, scheduleDevice, scheduleDue } from "@/lib/overview";
+import { dueKindLabel, isDueKind } from "@/lib/status";
 
-import { statusLabels } from "./Equipment";
-import { ResultChart } from "./Results";
+import { CalibrationEntry } from "./CalibrationEntry";
+import { equipmentStatusLabel, Status } from "./Equipment";
+import { ResultChart, ResultReviewStatus } from "./Results";
 import {
   type Columns,
   Loading,
@@ -21,6 +32,8 @@ import {
   useApi,
   type WorkspaceProps,
 } from "./shared";
+
+import "./overview.css";
 
 type Device = {
   id: number;
@@ -36,221 +49,385 @@ type DueRow = {
   kind: string;
   ref_type: string;
   ref_id: number;
+  lab_id: number;
   label: string;
   due: string | null;
+  valid_until: string | null;
   status: string;
+};
+type Reagent = {
+  id: number;
+  current_stock: string;
+  usable_stock_estimate: string | null;
+  unit: string;
 };
 type AuditRow = AuditEntry & { id: number; at: string; user_id: number | null };
 export type OverviewTarget = "schedule" | "reagents" | "results" | "audit";
 
-const noDevices: Device[] = [];
-const noRecords: ApiRecord[] = [];
+type Issue = {
+  key: string;
+  group: string;
+  name: string;
+  detail: string;
+  status: string;
+  tone: "alarm" | "missing" | "stock";
+  icon: LucideIcon;
+  label: string;
+  open: () => void;
+  calibration?: Device;
+};
+
+const emptyLabs: Lab[] = [];
+const emptyDevices: Device[] = [];
+const emptyRecords: ApiRecord[] = [];
+
+const fullDate = new Intl.DateTimeFormat("pl-PL", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "Europe/Warsaw",
+});
+
+function resultReading(row: ApiRecord) {
+  const unit = textValue(row.unit, "");
+  const value = formatDecimal(textValue(row.value));
+  return unit === "%" ? `${value}%` : `${value} ${unit}`.trim();
+}
+
+function issueStatus(row: DueRow) {
+  if (row.kind === "CALIBRATION") {
+    return row.status === "NO_DATA" ? "Brak wpisu o wzorcowaniu" : "Wzorcowanie po terminie";
+  }
+  if (row.kind === "CHECK") {
+    return row.status === "NO_DATA" ? "Brak wpisu o sprawdzeniu" : "Sprawdzenie po terminie";
+  }
+  return equipmentStatusLabel(row.status);
+}
+
+function issueOrder(issues: Issue[]) {
+  const seen = new Set<string>();
+  const priority: Issue[] = [];
+  const rest: Issue[] = [];
+  for (const issue of issues) {
+    if (seen.has(issue.group)) {
+      rest.push(issue);
+    } else {
+      seen.add(issue.group);
+      priority.push(issue);
+    }
+  }
+  return [...priority, ...rest];
+}
 
 export function Overview({
   token,
   permissions,
   onOpenDevice,
   onNavigate,
-  error,
 }: WorkspaceProps & {
   onOpenDevice: (publicId: string) => void;
   onNavigate: (section: OverviewTarget) => void;
-  error: string;
 }) {
+  const [labId, setLabId] = useState("");
+  const [revision, setRevision] = useState(0);
+  const [expanded, setExpanded] = useState(false);
   const can = (permission: string) => permissions.includes(permission);
-  const devices = useApi<Device[]>("/equipment", token);
+  const devices = useApi<Device[]>(can("equipment:read") ? "/equipment" : null, token, revision);
   const labs = useApi<Lab[]>("/labs", token);
-  const schedule = useApi<DueRow[]>("/schedule", token);
+  const schedule = useApi<DueRow[]>("/schedule?include_ok=true", token, revision);
   const results = useApi<ApiRecord[]>(can("result:read") ? "/test-results" : null, token);
+  const reagents = useApi<Reagent[]>(can("reagent:read") ? "/reagents" : null, token);
   const parameters = useApi<ApiRecord[]>(can("report:read") ? "/test-parameters" : null, token);
   const audit = useApi<AuditRow[]>(can("audit:read") ? "/audit" : null, token);
   const users = useApi<ApiRecord[]>(can("users:write") ? "/users" : null, token);
-  const flagged = useMemo(
-    () => (results?.data ?? noRecords).filter((row) => row.in_range === false),
-    [results],
+  const availableLabs = labs?.data ?? emptyLabs;
+  const selectedLab = availableLabs.find(({ id }) => String(id) === labId);
+  const deviceRows = devices?.data ?? emptyDevices;
+  const scopedLabId = selectedLab?.id;
+  const visibleDevices = useMemo(
+    () =>
+      scopedLabId === undefined
+        ? deviceRows
+        : deviceRows.filter(({ lab_id }) => lab_id === scopedLabId),
+    [deviceRows, scopedLabId],
   );
+  const flagged = useMemo(() => {
+    const visibleIds = new Set(visibleDevices.map(({ id }) => id));
+    return (results?.data ?? emptyRecords).filter(
+      (row) =>
+        row.in_range === false &&
+        (scopedLabId === undefined ||
+          (typeof row.equipment_id === "number" && visibleIds.has(row.equipment_id))),
+    );
+  }, [results, scopedLabId, visibleDevices]);
   const preferred = textValue((flagged[0] ?? results?.data?.[0])?.parameter_id, "");
+  const scheduleRows = (schedule?.data ?? []).filter(
+    (row) => !selectedLab || row.lab_id === selectedLab.id,
+  );
+  const { pressing, upcoming } = overviewSchedule(scheduleRows);
+
+  function openSchedule(row: DueRow) {
+    const device = scheduleDevice(row, deviceRows);
+    if (device) {
+      onOpenDevice(device.public_id);
+    } else {
+      onNavigate(
+        row.ref_type.startsWith("reagent") && can("reagent:read") ? "reagents" : "schedule",
+      );
+    }
+  }
+
+  const scheduleIssues = pressing.map((row): Issue => {
+    const device = scheduleDevice(row, deviceRows);
+    const reagent =
+      row.ref_type === "reagent" ? reagents?.data?.find(({ id }) => id === row.ref_id) : undefined;
+    const amount = reagent
+      ? `${formatDecimal(reagent.usable_stock_estimate ?? reagent.current_stock)} ${reagent.unit}`.trim()
+      : "";
+    const due = row.due ? `Termin: ${scheduleDue(row)}` : "";
+    const stock = row.kind === "LOW_STOCK";
+    const missing = row.status === "NO_DATA";
+    return {
+      key: `${row.kind}-${row.ref_type}-${row.ref_id}`,
+      group: stock ? "stock" : row.status,
+      name: row.kind === "CALIBRATION" && device ? device.name : row.label,
+      detail: stock
+        ? amount
+        : [row.kind === "CALIBRATION" ? device?.code : undefined, due].filter(Boolean).join(" · "),
+      status: issueStatus(row),
+      tone: stock ? "stock" : missing ? "missing" : "alarm",
+      icon: stock ? FlaskConical : Clock3,
+      label: device
+        ? "Otwórz kartę urządzenia"
+        : row.ref_type.startsWith("reagent") && can("reagent:read")
+          ? "Otwórz odczynniki"
+          : "Otwórz harmonogram",
+      open: () => openSchedule(row),
+      calibration: row.kind === "CALIBRATION" && can("calibration:write") ? device : undefined,
+    };
+  });
+
+  const [firstIssue, ...remainingIssues] = scheduleIssues;
+  const issues = issueOrder([
+    ...(firstIssue ? [firstIssue] : []),
+    ...flagged.map((row): Issue => ({
+      key: `result-${textValue(row.id)}`,
+      group: "result",
+      name: `${textValue(row.parameter_name)} · próbka ${textValue(row.sample_label)}`,
+      detail: resultReading(row),
+      status: "Poza zakresem",
+      tone: "alarm",
+      icon: ChartLine,
+      label: "Otwórz wyniki badań",
+      open: () => onNavigate("results"),
+    })),
+    ...remainingIssues,
+  ]);
+  const [focus, ...otherIssues] = issues;
+  const visibleIssues = expanded ? otherIssues : otherIssues.slice(0, 3);
+  const hidden = otherIssues.length - 3;
+  const hasMoreData = devices?.data || parameters?.data || results?.data || audit?.data;
+  const hasOtherError = devices?.error || labs?.error || results?.error || reagents?.error;
 
   return (
-    <>
-      <Hero
-        rows={schedule?.data}
-        devices={devices?.data}
-        onOpenDevice={onOpenDevice}
-        onNavigate={onNavigate}
-      />
-      <div className="grid gap-6 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
-        {error && <Message>{error}</Message>}
-        {/* Bento: panels share hairlines instead of floating as separate cards. */}
-        <div className="grid gap-px overflow-hidden rounded-2xl bg-line ring-1 ring-line xl:grid-cols-[minmax(0,1fr)_24rem] [&>*]:min-w-0 [&>*]:bg-white [&_[data-slot=card]]:rounded-none [&_[data-slot=card]]:ring-0">
+    <div className="warta-overview">
+      <div className="warta-overview-intro">
+        <div className="warta-overview-inner warta-overview-intro-content">
           <div>
-            {devices?.data && labs?.data ? (
-              <EquipmentBoard devices={devices.data} labs={labs.data} onOpen={onOpenDevice} />
-            ) : (
-              <Loading state={devices ?? labs} />
-            )}
+            <p className="warta-overview-date">{fullDate.format(new Date())}</p>
+            <h1>Przegląd</h1>
           </div>
-          <div>
-            {schedule?.data ? (
-              <Attention
-                rows={schedule.data}
-                devices={devices?.data ?? noDevices}
-                onOpenDevice={onOpenDevice}
-                onNavigate={onNavigate}
-              />
-            ) : (
-              <Loading state={schedule} />
-            )}
+          <div className="warta-overview-scope">
+            <FlaskConical aria-hidden />
+            <select
+              aria-label="Pracownia"
+              value={selectedLab ? String(selectedLab.id) : ""}
+              onChange={(event) => {
+                setLabId(event.target.value);
+                setExpanded(false);
+              }}
+            >
+              <option value="">Wszystkie pracownie</option>
+              {availableLabs.map((lab) => (
+                <option key={lab.id} value={String(lab.id)}>
+                  {lab.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown aria-hidden />
           </div>
-          {parameters?.data && (
-            <div>
+        </div>
+      </div>
+
+      <section
+        className="warta-overview-inner warta-overview-attention"
+        aria-labelledby="attention-title"
+      >
+        <div className="warta-overview-attention-heading">
+          <h2 id="attention-title">Wymaga uwagi</h2>
+          {hidden > 0 && (
+            <button
+              type="button"
+              className="warta-overview-link warta-overview-toggle"
+              aria-expanded={expanded}
+              aria-controls="attention-issues"
+              onClick={() => setExpanded((value) => !value)}
+            >
+              {expanded ? "Zwiń listę" : `Pozostałe (${hidden})`}
+              <ChevronDown aria-hidden />
+            </button>
+          )}
+        </div>
+        {hasOtherError && <Message>{hasOtherError}</Message>}
+        {!schedule?.data && <Loading state={schedule} />}
+        {schedule?.data &&
+          !focus &&
+          (can("result:read") && !results?.data && !results?.error ? (
+            <Loading state={results} />
+          ) : (
+            <p className="warta-overview-empty">Brak spraw wymagających uwagi.</p>
+          ))}
+        {focus && (
+          <div className="warta-overview-issues">
+            <article className="warta-overview-feature" aria-label="Najpilniejsza sprawa">
+              <p className="warta-overview-feature-status">
+                <focus.icon aria-hidden />
+                {focus.status}
+              </p>
+              <h3>{focus.name}</h3>
+              {focus.detail && <p>{focus.detail}</p>}
+              <button className="warta-overview-primary" type="button" onClick={focus.open}>
+                {focus.label}
+                <ArrowRight aria-hidden />
+              </button>
+              {focus.calibration && (
+                <CalibrationEntry
+                  key={focus.calibration.id}
+                  token={token}
+                  equipmentId={focus.calibration.id}
+                  name={focus.calibration.name}
+                  after={() => setRevision((value) => value + 1)}
+                >
+                  <button type="button" className="warta-overview-link warta-overview-certificate">
+                    <FileText aria-hidden />
+                    Zarejestruj świadectwo
+                    <ArrowRight aria-hidden />
+                  </button>
+                </CalibrationEntry>
+              )}
+            </article>
+            <div className="warta-overview-list">
+              <div className="warta-overview-column-labels" aria-hidden>
+                <span>Sprawa</span>
+                <span>Status</span>
+              </div>
+              <ul id="attention-issues">
+                {[focus, ...visibleIssues].map((issue) => (
+                  <li
+                    key={issue.key}
+                    className={issue === focus ? "warta-overview-focus-row" : undefined}
+                  >
+                    <button type="button" onClick={issue.open}>
+                      <span className="warta-overview-issue-main">
+                        <strong>{issue.name}</strong>
+                        {issue.detail && <span>{issue.detail}</span>}
+                      </span>
+                      <span className={`warta-overview-issue-status is-${issue.tone}`}>
+                        {issue.status}
+                      </span>
+                      <span
+                        className={`warta-overview-issue-status warta-overview-mobile-status is-${issue.tone}`}
+                      >
+                        {[issue.detail, issue.status].filter(Boolean).join(" · ")}
+                      </span>
+                      <ChevronRight aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="warta-overview-calendar" aria-labelledby="timeline-title">
+        <div className="warta-overview-inner">
+          <div className="warta-overview-calendar-heading">
+            <h2 id="timeline-title">Najbliższe terminy</h2>
+            <button
+              type="button"
+              className="warta-overview-link"
+              onClick={() => onNavigate("schedule")}
+            >
+              <span>Harmonogram</span>
+              <ArrowRight aria-hidden />
+            </button>
+          </div>
+          {schedule?.data &&
+            (upcoming.length > 0 ? (
+              <ul>
+                {upcoming.slice(0, 2).map((row) => {
+                  const device = scheduleDevice(row, deviceRows);
+                  const kind = isDueKind(row.kind) ? dueKindLabel(row.kind) : row.kind;
+                  return (
+                    <li key={`${row.kind}-${row.ref_type}-${row.ref_id}`}>
+                      <button type="button" onClick={() => openSchedule(row)}>
+                        <span className="warta-overview-event-date">{scheduleDue(row)}</span>
+                        <span className="warta-overview-issue-main">
+                          <strong>
+                            {row.kind === "CALIBRATION" && device ? device.name : row.label}
+                          </strong>
+                          <span>
+                            {[row.kind === "CALIBRATION" ? device?.code : undefined, kind]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </span>
+                        </span>
+                        <ChevronRight aria-hidden />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="warta-overview-empty">Brak nadchodzących terminów.</p>
+            ))}
+        </div>
+      </section>
+
+      {hasMoreData && (
+        <details className="warta-overview-inner warta-overview-more">
+          <summary>Wyposażenie, wyniki i historia</summary>
+          <div className="grid gap-4 xl:grid-cols-2">
+            {devices?.data && labs?.data && (
+              <EquipmentBoard devices={visibleDevices} labs={availableLabs} onOpen={onOpenDevice} />
+            )}
+            {parameters?.data && !selectedLab && (
               <ResultChart
                 token={token}
                 parameters={options(parameters.data.filter((row) => row.active === true))}
                 preferred={preferred}
                 revision={0}
               />
-            </div>
-          )}
-          {audit?.data && (
-            <div>
+            )}
+            {results?.data && <OutOfRange rows={flagged} onShowAll={() => onNavigate("results")} />}
+            {audit?.data && !selectedLab && (
               <RecentEntries
                 rows={audit.data}
-                users={users?.data ?? noRecords}
+                users={users?.data ?? emptyRecords}
                 onShowAll={() => onNavigate("audit")}
               />
-            </div>
-          )}
-          {results?.data && (
-            <div className="xl:col-span-2">
-              <OutOfRange rows={flagged} onShowAll={() => onNavigate("results")} />
-            </div>
-          )}
-        </div>
-      </div>
-    </>
-  );
-}
-
-const longDate = new Intl.DateTimeFormat("pl-PL", {
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-});
-
-/** The state of the lab as one sentence, the next thing to do, and progress towards all in date. */
-function headline(devices: Device[]): string {
-  const count = (status: string) => devices.filter((device) => device.status === status).length;
-  const overdue = count("OVERDUE");
-  const missing = count("NO_DATA");
-  const soon = count("DUE_SOON");
-  if (overdue > 0) {
-    return `${overdue} ${plural(overdue, "urządzenie jest", "urządzenia są", "urządzeń jest")} po terminie wzorcowania.`;
-  }
-  if (missing > 0) {
-    return `${missing} ${plural(missing, "urządzenie nie ma", "urządzenia nie mają", "urządzeń nie ma")} wpisu wzorcowania.`;
-  }
-  if (soon > 0) {
-    return `Wszystko w terminie. ${soon} ${plural(soon, "urządzenie czeka", "urządzenia czekają", "urządzeń czeka")} na wzorcowanie.`;
-  }
-  return "Całe wyposażenie ma ważne wzorcowanie.";
-}
-
-function Hero({
-  rows,
-  devices,
-  onOpenDevice,
-  onNavigate,
-}: {
-  rows?: DueRow[];
-  devices?: Device[];
-  onOpenDevice: (publicId: string) => void;
-  onNavigate: (section: OverviewTarget) => void;
-}) {
-  const supervised = (devices ?? noDevices).filter(
-    ({ status }) => status !== "WITHDRAWN" && status !== "NOT_REQUIRED",
-  );
-  const valid = supervised.filter(({ status }) => status === "OK").length;
-  const share = supervised.length === 0 ? 100 : Math.round((valid / supervised.length) * 100);
-  const next = rows?.[0];
-  const device = next === undefined ? undefined : scheduleDevice(next, devices ?? noDevices);
-  return (
-    <section className="border-b border-line px-4 py-10 sm:px-8 lg:px-12 lg:py-16">
-      <p className="text-sm font-semibold text-brand-lime-ink">
-        Stan na {longDate.format(new Date())}
-      </p>
-      <h1 className="mt-3 max-w-4xl text-4xl font-semibold tracking-tighter text-balance text-brand-navy-deep sm:text-5xl lg:text-6xl">
-        {devices === undefined ? "Wczytywanie stanu laboratorium…" : headline(devices)}
-      </h1>
-      {devices !== undefined && (
-        <div className="mt-8 grid max-w-4xl gap-8 sm:grid-cols-[minmax(0,1fr)_16rem] sm:items-end">
-          <div>
-            {next === undefined ? (
-              <p className="text-lg/8 text-muted-foreground">
-                Żaden termin nie wymaga teraz działania.
-              </p>
-            ) : (
-              <p className="text-lg/8 text-muted-foreground">
-                Najpierw: <span className="font-medium text-brand-navy-deep">{next.label}</span>,{" "}
-                {isDueKind(next.kind) ? dueKindLabel(next.kind).toLowerCase() : next.kind},{" "}
-                {scheduleDetail(next)}.
-              </p>
             )}
-            <div className="mt-6 flex flex-wrap gap-3">
-              {next !== undefined && (
-                <Button
-                  size="lg"
-                  onClick={() => {
-                    if (device === undefined) {
-                      onNavigate(next.ref_type.startsWith("reagent") ? "reagents" : "schedule");
-                    } else {
-                      onOpenDevice(device.public_id);
-                    }
-                  }}
-                >
-                  {device === undefined ? "Przejdź do terminu" : `Otwórz kartę ${device.code}`}
-                </Button>
-              )}
-              <Button size="lg" variant="outline" onClick={() => onNavigate("schedule")}>
-                Cały harmonogram
-              </Button>
-            </div>
           </div>
-          <div>
-            <p className="flex items-baseline justify-between text-sm text-muted-foreground">
-              Ważne wzorcowanie
-              <span className="font-mono text-brand-navy-deep tabular-nums">
-                {valid}/{supervised.length}
-              </span>
-            </p>
-            <progress
-              aria-label="Urządzenia z ważnym wzorcowaniem"
-              value={share}
-              max={100}
-              className="mt-2 block h-1.5 w-full appearance-none overflow-hidden rounded-full bg-line [&::-moz-progress-bar]:rounded-full [&::-moz-progress-bar]:bg-brand-lime [&::-webkit-progress-bar]:bg-line [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-brand-lime"
-            />
-          </div>
-        </div>
+        </details>
       )}
-    </section>
+    </div>
   );
 }
 
 /** Attention first, then the rest, as on a control-room annunciator. */
 const boardOrder = ["OVERDUE", "NO_DATA", "DUE_SOON", "OK", "WITHDRAWN", "NOT_REQUIRED"];
-
-const tileTone: Record<string, string> = {
-  OVERDUE: "border-status-alarm bg-status-alarm text-white",
-  NO_DATA: "border-dashed border-status-alarm bg-status-alarm-soft text-status-alarm-ink",
-  DUE_SOON: "border-status-due bg-status-due text-brand-navy-ink",
-  OK: "border-border bg-card text-brand-navy-ink",
-  WITHDRAWN: "border-transparent bg-status-idle-soft text-status-idle-ink",
-  NOT_REQUIRED: "border-transparent bg-status-idle-soft text-status-idle-ink",
-};
-
-function lampClass(status: string) {
-  return isStatus(status) ? statusDotClass(status) : "bg-status-idle";
-}
 
 function EquipmentBoard({
   devices,
@@ -266,6 +443,10 @@ function EquipmentBoard({
   for (const device of devices) {
     counts.set(device.status, (counts.get(device.status) ?? 0) + 1);
   }
+  const supervised = devices.filter(
+    ({ status }) => status !== "WITHDRAWN" && status !== "NOT_REQUIRED",
+  );
+  const current = supervised.filter(({ status }) => status === "OK").length;
   const groups = labs
     .map((lab) => ({ lab, items: devices.filter((device) => device.lab_id === lab.id) }))
     .filter(({ items }) => items.length > 0);
@@ -278,6 +459,12 @@ function EquipmentBoard({
             Jedno pole to jedno urządzenie. Kliknij pole, aby otworzyć kartę.
           </CardDescription>
         </div>
+        <p className="text-sm text-muted-foreground">
+          Ważne wzorcowanie:{" "}
+          <strong className="text-base font-bold text-brand-navy-ink tabular-nums">
+            {current} z {supervised.length}
+          </strong>
+        </p>
       </CardHeader>
       <CardContent className="grid gap-5">
         <fieldset className="flex flex-wrap gap-2" aria-label="Wyróżnij urządzenia w stanie">
@@ -287,20 +474,15 @@ function EquipmentBoard({
               <button
                 key={status}
                 type="button"
-                aria-label={`${statusLabels[status]}: ${counts.get(status)}`}
+                aria-label={`${equipmentStatusLabel(status)}: ${counts.get(status)}`}
                 aria-pressed={focus === status}
                 onClick={() => setFocus(focus === status ? undefined : status)}
-                className="flex min-w-[8.5rem] items-stretch gap-2.5 rounded-sm border bg-card py-1.5 pr-3 pl-1.5 text-left transition-colors outline-none hover:bg-background focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:border-brand-navy aria-pressed:bg-accent"
+                className="flex items-center gap-2 rounded-sm border bg-card px-3 py-2 text-left outline-none hover:bg-background focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:border-brand-navy aria-pressed:bg-accent"
               >
-                <span aria-hidden className={cn("w-1 shrink-0 rounded-full", lampClass(status))} />
-                <span>
-                  <span className="block text-xl leading-tight font-bold text-brand-navy-ink tabular-nums">
-                    {counts.get(status)}
-                  </span>
-                  <span className="block text-xs text-muted-foreground">
-                    {statusLabels[status]}
-                  </span>
+                <span className="text-sm font-bold text-brand-navy-ink tabular-nums">
+                  {counts.get(status)}
                 </span>
+                <Status value={status} />
               </button>
             ))}
         </fieldset>
@@ -314,7 +496,7 @@ function EquipmentBoard({
             </h3>
             <ul className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-1.5">
               {items.map((device) => {
-                const state = statusLabels[device.status] ?? device.status;
+                const state = equipmentStatusLabel(device.status);
                 return (
                   <li key={device.id}>
                     <button
@@ -323,12 +505,11 @@ function EquipmentBoard({
                       title={`${device.code} ${device.name}: ${state}`}
                       aria-label={`${device.code} ${device.name}: ${state}`}
                       className={cn(
-                        "flex h-16 w-full flex-col justify-between rounded-lg border px-2.5 py-1.5 text-left transition-[opacity,transform,box-shadow] duration-150 outline-none hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/60 active:translate-y-0 motion-reduce:transform-none",
-                        tileTone[device.status] ?? tileTone.NOT_REQUIRED,
-                        focus !== undefined && focus !== device.status && "opacity-20",
+                        "flex min-h-20 w-full flex-col gap-1 rounded-sm border bg-card px-2 py-1.5 text-left text-brand-navy-ink outline-none hover:border-brand-navy focus-visible:ring-3 focus-visible:ring-ring/60",
+                        focus === device.status && "border-brand-navy bg-accent",
                       )}
                     >
-                      <span className="flex items-baseline justify-between gap-1">
+                      <span className="flex w-full items-baseline justify-between gap-1">
                         <span className="text-sm font-bold tabular-nums">{device.code}</span>
                         {device.next_due_month !== null && (
                           <span className="text-[11px] tabular-nums opacity-85">
@@ -336,9 +517,10 @@ function EquipmentBoard({
                           </span>
                         )}
                       </span>
-                      <span className="truncate text-xs leading-tight opacity-90">
+                      <span className="w-full truncate text-xs leading-tight text-muted-foreground">
                         {device.name}
                       </span>
+                      <Status value={device.status} />
                     </button>
                   </li>
                 );
@@ -351,107 +533,6 @@ function EquipmentBoard({
   );
 }
 
-const urgent = new Set(["OVERDUE", "NO_DATA", "LOW"]);
-
-function Attention({
-  rows,
-  devices,
-  onOpenDevice,
-  onNavigate,
-}: {
-  rows: DueRow[];
-  devices: Device[];
-  onOpenDevice: (publicId: string) => void;
-  onNavigate: (section: OverviewTarget) => void;
-}) {
-  function open(row: DueRow) {
-    const device = scheduleDevice(row, devices);
-    if (device === undefined) {
-      onNavigate(row.ref_type.startsWith("reagent") ? "reagents" : "schedule");
-    } else {
-      onOpenDevice(device.public_id);
-    }
-  }
-  const pressing = useMemo(() => rows.filter((row) => urgent.has(row.status)), [rows]);
-  const upcoming = useMemo(() => rows.filter((row) => !urgent.has(row.status)), [rows]);
-  return (
-    <Card>
-      <CardHeader className="flex items-start justify-between gap-3">
-        <div>
-          <CardTitle>Wymaga działania</CardTitle>
-          <CardDescription>Terminy z harmonogramu, od najpilniejszych.</CardDescription>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => onNavigate("schedule")}>
-          Harmonogram
-        </Button>
-      </CardHeader>
-      <CardContent className="grid gap-5">
-        {rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Wszystkie terminy są aktualne.</p>
-        ) : (
-          <>
-            <TaskGroup title="Pilne" rows={pressing} open={open} />
-            <TaskGroup title="W najbliższym czasie" rows={upcoming} open={open} />
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function TaskGroup({
-  title,
-  rows,
-  open,
-}: {
-  title: string;
-  rows: DueRow[];
-  open: (row: DueRow) => void;
-}) {
-  if (rows.length === 0) {
-    return null;
-  }
-  return (
-    <section aria-label={title}>
-      <h3 className="mb-2 flex items-center justify-between text-[13px] font-semibold text-brand-navy-ink">
-        {title}
-        <span className="text-xs font-normal text-muted-foreground tabular-nums">
-          {rows.length}
-        </span>
-      </h3>
-      <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
-        {rows.map((row) => {
-          const detail = `${isDueKind(row.kind) ? dueKindLabel(row.kind) : row.kind}, ${scheduleDetail(row)}`;
-          return (
-            <li key={`${row.kind}-${row.ref_type}-${row.ref_id}`}>
-              <button
-                type="button"
-                onClick={() => open(row)}
-                aria-label={`${row.label}: ${statusLabels[row.status] ?? row.status}, ${detail}`}
-                className="flex w-full items-stretch overflow-hidden rounded-sm bg-background text-left transition-colors outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                <span aria-hidden className={cn("w-1 shrink-0", lampClass(row.status))} />
-                <span className="min-w-0 flex-1 px-3 py-2">
-                  <span className="block truncate text-[13px] font-semibold text-brand-navy-ink">
-                    {row.label}
-                  </span>
-                  <span className="block text-xs text-muted-foreground">{detail}</span>
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
-}
-
-const reviewLabels: Record<string, string> = {
-  PENDING: "Do weryfikacji",
-  ACCEPTED: "Zaakceptowano",
-  REPEAT: "Do powtórzenia",
-};
-
 const outOfRangeColumns: Columns = [
   ["sample_label", "Próbka"],
   ["parameter_name", "Parametr"],
@@ -462,20 +543,7 @@ const outOfRangeColumns: Columns = [
   ],
   ["range", "Zakres wpisu"],
   ["day", "Data"],
-  [
-    "review",
-    "Weryfikacja",
-    (value) => (
-      <span
-        className={cn(
-          "inline-flex rounded-sm border px-1.5 py-0.5 text-xs font-semibold whitespace-nowrap",
-          statusBadgeClass(value === "ACCEPTED" ? "OK" : "DUE_SOON"),
-        )}
-      >
-        {reviewLabels[textValue(value)] ?? textValue(value)}
-      </span>
-    ),
-  ],
+  ["review", "Weryfikacja", (value) => <ResultReviewStatus value={value} />],
 ];
 
 function nullable(value: unknown): string | null {

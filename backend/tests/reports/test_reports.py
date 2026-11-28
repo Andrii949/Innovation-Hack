@@ -156,3 +156,52 @@ def test_unknown_parameter_is_404(client: TestClient, admin: User, auth: Auth) -
 
     assert response.status_code == 404
     assert response.json()["error"] == "NOT_FOUND"
+
+
+def test_report_scopes_parameters_and_pdf_by_lab(
+    client: TestClient,
+    db: Session,
+    make_lab: Callable[..., Any],
+    make_equipment: Callable[..., Any],
+    make_parameter: MakeParameter,
+    make_user: MakeUser,
+    auth: Auth,
+) -> None:
+    lab_a = make_lab("A")
+    lab_w = make_lab("W", name="Wytrzymałościowa")
+    eq_w = make_equipment(lab_w, number="201")
+    param_w = make_parameter(
+        name="Wytrzymałość 28d",
+        unit="MPa",
+        min_value="42.5",
+        max_value="62.5",
+    )
+    admin_a = make_user("admin", labs=[lab_a])
+    admin_w = make_user("admin", labs=[lab_w])
+
+    db.add(
+        TestResult(
+            parameter_id=param_w.id,
+            equipment_id=eq_w.id,
+            sample_label="W-01",
+            value=Decimal("50.0"),
+            min_snapshot=param_w.min_value,
+            max_snapshot=param_w.max_value,
+            in_range=True,
+            created_by=admin_w.id,
+            created_at=datetime(2026, 11, 10, 9, tzinfo=WARSAW),
+        )
+    )
+    db.flush()
+
+    report_a = create_report(client, auth(admin_a), parameter_ids=[])
+    assert report_a["parameter_ids"] == []
+
+    report_w = create_report(client, auth(admin_w), parameter_ids=[])
+    assert report_w["parameter_ids"] == [param_w.id]
+
+    pdf_res = client.get(f"/api/reports/{report_w['id']}.pdf", headers=auth(admin_a))
+    assert pdf_res.status_code == 403
+    assert [r["id"] for r in client.get("/api/reports", headers=auth(admin_a)).json()] == [
+        report_a["id"]
+    ]

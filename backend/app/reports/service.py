@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.models import User
-from app.auth.permissions import Permission, require
+from app.auth.permissions import Permission, require, visible_lab_ids
 from app.config import get_settings
 from app.core.ranges import RangeResult
 from app.errors import AppError
@@ -20,7 +20,7 @@ from app.print.chart import chart_svg
 from app.print.service import date_label, render_pdf
 from app.reports.models import Report
 from app.results.models import TestParameter, TestResult
-from app.results.service import get_parameter_or_404, range_text, result_series
+from app.results.service import get_parameter_or_404, range_text, result_scope, result_series
 
 VERDICTS = {
     RangeResult.IN_RANGE: "w progu",
@@ -76,7 +76,7 @@ def _optional_decimal(text: str | None) -> Decimal | None:
     return Decimal(text) if text is not None else None
 
 
-def _parameters_for(db: Session, data: ReportCreate) -> list[TestParameter]:
+def _parameters_for(db: Session, user: User, data: ReportCreate) -> list[TestParameter]:
     if data.parameter_ids:
         return [get_parameter_or_404(db, pid) for pid in dict.fromkeys(data.parameter_ids)]
     tz = ZoneInfo(get_settings().timezone)
@@ -84,7 +84,11 @@ def _parameters_for(db: Session, data: ReportCreate) -> list[TestParameter]:
     end = datetime.combine(data.period_to + timedelta(days=1), time.min, tzinfo=tz)
     with_results = (
         select(TestResult.parameter_id)
-        .where(TestResult.created_at >= start, TestResult.created_at < end)
+        .where(
+            TestResult.created_at >= start,
+            TestResult.created_at < end,
+            result_scope(user),
+        )
         .distinct()
     )
     stmt = (
@@ -134,7 +138,7 @@ def create_report(db: Session, user: User, data: ReportCreate, *, today: date) -
             "Data początkowa jest późniejsza niż końcowa",
             details=[{"field": "period_from", "message": "period_from > period_to"}],
         )
-    params = _parameters_for(db, data)
+    params = _parameters_for(db, user, data)
     sections = [_report_parameter(db, user, p, data) for p in params]
     pdf = render_pdf(
         "report.typ",
@@ -191,7 +195,10 @@ def serialize_report(report: Report) -> ReportOut:
 
 def list_reports(db: Session, user: User) -> list[Report]:
     require(user, Permission.REPORT_READ)
-    return list(db.scalars(select(Report).order_by(Report.created_at.desc(), Report.id.desc())))
+    stmt = select(Report).order_by(Report.created_at.desc(), Report.id.desc())
+    if visible_lab_ids(user) is not None:
+        stmt = stmt.where(Report.created_by == user.id)
+    return list(db.scalars(stmt))
 
 
 def report_pdf(db: Session, user: User, report_id: int) -> bytes:
@@ -199,5 +206,7 @@ def report_pdf(db: Session, user: User, report_id: int) -> bytes:
     report = db.get(Report, report_id)
     if report is None:
         raise AppError(404, "NOT_FOUND", "Nie znaleziono raportu")
+    if visible_lab_ids(user) is not None and report.created_by != user.id:
+        raise AppError(403, "LAB_OUT_OF_SCOPE", "Raport spoza zakresu uprawnień użytkownika")
     _attachment, raw = load_attachment_for_user(db, user, report.attachment_id)
     return raw

@@ -1,9 +1,16 @@
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 from app.auth.models import User
 from app.notifications.models import DeviceToken, Notification, NotificationKind
-from app.notifications.push import PUSH_BODY, PUSH_TITLE, build_message, push_pending
+from app.notifications.push import (
+    PUSH_BODY,
+    PUSH_TITLE,
+    build_message,
+    push_configured,
+    push_pending,
+)
 from app.notifications.service import notify_now
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -120,3 +127,21 @@ def test_unregistered_fid_is_deleted(
     push_pending(db, sender=FakeSender(unregistered=["fid-dead"]))
 
     assert set(db.scalars(select(DeviceToken.fid)).all()) == {"fid-alive"}
+
+
+def test_push_configured_ignores_blank_or_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from app.config import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "fcm_credentials_file", None)
+    assert push_configured() is False
+
+    monkeypatch.setattr(settings, "fcm_credentials_file", tmp_path)
+    assert push_configured() is False
+
+    creds = tmp_path / "fcm.json"
+    creds.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(settings, "fcm_credentials_file", creds)
+    assert push_configured() is True

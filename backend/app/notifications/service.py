@@ -3,10 +3,11 @@
 In-app notifications are always written; `channels` on a rule only decide about push (T17).
 """
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
 from pydantic import BaseModel
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -291,12 +292,98 @@ def notify_now(
     return created
 
 
-def list_notifications(db: Session, user: User, *, unread: bool) -> list[Notification]:
+class NotificationToast(BaseModel):
+    title: str
+    count: int
+    kind: str
+    ref_type: str
+    ref_id: int
+
+
+@dataclass(frozen=True)
+class PollSnapshot:
+    unread_count: int
+    latest_id: int
+    new_items: list[Notification]
+    toast: NotificationToast | None
+
+
+def list_notifications(
+    db: Session,
+    user: User,
+    *,
+    unread: bool,
+    since_id: int | None = None,
+) -> list[Notification]:
     stmt = select(Notification).where(Notification.user_id == user.id)
     if unread:
         stmt = stmt.where(Notification.read_at.is_(None), Notification.resolved_at.is_(None))
+    if since_id is not None:
+        stmt = stmt.where(Notification.id > since_id)
     stmt = stmt.order_by(Notification.created_at.desc(), Notification.id.desc())
     return list(db.scalars(stmt).all())
+
+
+def poll_notifications(
+    db: Session,
+    user: User,
+    *,
+    since_id: int | None = None,
+) -> PollSnapshot:
+    """Lightweight poll cursor for live bell counter and human-friendly coalesced toasts."""
+    unread_count = int(
+        db.scalar(
+            select(func.count(Notification.id)).where(
+                Notification.user_id == user.id,
+                Notification.read_at.is_(None),
+                Notification.resolved_at.is_(None),
+            )
+        )
+        or 0
+    )
+    latest_id = int(
+        db.scalar(
+            select(func.coalesce(func.max(Notification.id), 0)).where(
+                Notification.user_id == user.id
+            )
+        )
+        or 0
+    )
+    if since_id is None:
+        return PollSnapshot(
+            unread_count=unread_count,
+            latest_id=latest_id,
+            new_items=[],
+            toast=None,
+        )
+
+    new_items = list_notifications(db, user, unread=True, since_id=since_id)
+    if not new_items:
+        toast = None
+    elif len(new_items) == 1:
+        newest = new_items[0]
+        toast = NotificationToast(
+            title=newest.title,
+            count=1,
+            kind=newest.kind,
+            ref_type=newest.ref_type,
+            ref_id=newest.ref_id,
+        )
+    else:
+        newest = new_items[0]
+        toast = NotificationToast(
+            title=f"{newest.title} (+{len(new_items) - 1} więcej)",
+            count=len(new_items),
+            kind="BATCH",
+            ref_type=newest.ref_type,
+            ref_id=newest.ref_id,
+        )
+    return PollSnapshot(
+        unread_count=unread_count,
+        latest_id=latest_id,
+        new_items=new_items,
+        toast=toast,
+    )
 
 
 def mark_read(db: Session, user: User, notification_id: int) -> Notification:

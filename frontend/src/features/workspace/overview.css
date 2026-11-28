@@ -1,0 +1,544 @@
+.warta-overview {
+  --overview-ink: var(--brand-navy-deep);
+  --overview-rule: #dfe3e7;
+  --overview-muted: #4c5665;
+  color: var(--overview-ink);
+  background: white;
+}
+
+.warta-overview-inner {
+  width: min(calc(100% - 48px), 1200px);
+  margin-inline: auto;
+}
+
+.warta-overview-intro,
+.warta-overview-calendar {
+  background: var(--workspace-brand-paper);
+}
+
+.warta-overview-intro {
+  border-bottom: 1px solid var(--overview-rule);
+}
+
+.warta-overview-intro-content {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 25px 26px;
+}
+
+.warta-overview-date {
+  color: var(--overview-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.warta-overview-date::first-letter {
+  text-transform: uppercase;
+}
+
+.warta-overview h1 {
+  margin-top: 7px;
+  font-size: clamp(36px, 4.2vw, 52px);
+  font-weight: 600;
+  line-height: 1.14;
+  letter-spacing: -0.035em;
+}
+
+.warta-overview h2 {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.024em;
+}
+
+.warta-overview-scope {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 280px;
+  min-width: 230px;
+  color: var(--brand-navy);
+}
+
+.warta-overview-scope svg {
+  position: absolute;
+  width: 17px;
+  pointer-events: none;
+}
+
+.warta-overview-scope svg:first-child {
+  left: 12px;
+}
+
+.warta-overview-scope svg:last-child {
+  right: 12px;
+  width: 14px;
+}
+
+.warta-overview-scope select {
+  width: 100%;
+  min-height: 44px;
+  appearance: none;
+  border: 1px solid var(--overview-rule);
+  background: white;
+  padding-inline: 37px 34px;
+  color: var(--overview-ink);
+  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.warta-overview-attention {
+  padding-block: 32px 47px;
+}
+
+.warta-overview-attention-heading {
+  display: flex;
+  min-height: 34px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 12px;
+}
+
+.warta-overview-attention-heading .warta-overview-toggle {
+  min-height: 34px;
+}
+
+.warta-overview-attention > :not(.warta-overview-attention-heading) {
+  margin-top: 15px;
+}
+
+.warta-overview-issues {
+  display: grid;
+  grid-template-columns: minmax(0, 1.92fr) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(24px, 3.4vw, 49px);
+}
+
+.warta-overview-issues .warta-overview-feature {
+  grid-column: 2;
+  grid-row: 1;
+  margin-top: -39px;
+}
+
+.warta-overview-list {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.warta-overview-column-labels,
+.warta-overview-list li button {
+  display: grid;
+  grid-template-columns: minmax(0, 1.32fr) minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 12px;
+  padding-inline: 15px;
+}
+
+.warta-overview-column-labels {
+  height: 31px;
+  border-bottom: 1px solid #b9c0c9;
+  color: var(--overview-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.warta-overview-list li {
+  border-bottom: 1px solid var(--overview-rule);
+}
+
+.warta-overview-list li button,
+.warta-overview-calendar li button {
+  width: 100%;
+  min-height: 62px;
+  text-align: left;
+}
+
+.warta-overview-list li button:hover,
+.warta-overview-calendar li button:hover {
+  background: #f4f6f0;
+}
+
+.warta-overview-focus-row {
+  box-shadow: inset 3px 0 var(--brand-lime);
+  background: #f1f4ec;
+}
+
+.warta-overview-issue-main {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding-block: 7px;
+  overflow-wrap: anywhere;
+}
+
+.warta-overview-issue-main strong {
+  font-size: 16px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.warta-overview-issue-main > span {
+  color: var(--overview-muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.warta-overview-issue-status {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.warta-overview-mobile-status {
+  display: none;
+}
+
+.warta-overview-issue-status.is-alarm {
+  color: #9c392e;
+}
+
+.warta-overview-issue-status.is-missing {
+  color: var(--brand-navy);
+}
+
+.warta-overview-issue-status.is-stock {
+  color: #795017;
+}
+
+.warta-overview-list li svg,
+.warta-overview-calendar li svg {
+  width: 17px;
+  color: var(--brand-navy);
+}
+
+.warta-overview-feature {
+  min-height: 326px;
+  padding: 27px 25px;
+  background: var(--brand-lime);
+}
+
+.warta-overview-feature h3 {
+  max-width: 15ch;
+  text-wrap: balance;
+  margin-block: 22px 16px;
+  font-size: clamp(24px, 2.2vw, 28px);
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.warta-overview-feature p {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.warta-overview-feature .warta-overview-feature-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.warta-overview-feature-status svg,
+.warta-overview-link svg,
+.warta-overview-primary svg {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+
+.warta-overview-primary {
+  display: flex;
+  min-height: 51px;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 23px;
+  padding: 8px 15px;
+  background: var(--brand-navy);
+  color: white;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.warta-overview-primary:hover {
+  background: var(--brand-navy-deep);
+}
+
+.warta-overview-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  color: var(--brand-navy);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.warta-overview-link:hover {
+  text-decoration: underline;
+}
+
+.warta-overview-certificate {
+  margin-top: 12px;
+  color: var(--overview-ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.warta-overview-calendar {
+  border-top: 1px solid var(--overview-rule);
+  padding-block: 25px 49px;
+}
+
+.warta-overview-calendar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.warta-overview-calendar ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 60px;
+  margin-top: 18px;
+}
+
+.warta-overview-calendar li {
+  border-top: 1px solid var(--overview-rule);
+}
+
+.warta-overview-calendar li button {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 12px;
+  padding-right: 8px;
+}
+
+.warta-overview-event-date {
+  color: var(--brand-navy);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.warta-overview-empty {
+  padding-block: 14px;
+  color: var(--overview-muted);
+  font-size: 14px;
+}
+
+.warta-overview-more {
+  padding-block: 13px 35px;
+}
+
+.warta-overview-more summary {
+  width: fit-content;
+  min-height: 44px;
+  padding-block: 12px;
+  cursor: pointer;
+  color: var(--brand-navy);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.warta-overview-more[open] summary {
+  margin-bottom: 12px;
+}
+
+.warta-overview button:focus-visible,
+.warta-overview select:focus-visible,
+.warta-overview summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  .warta-overview-inner {
+    width: calc(100% - 36px);
+  }
+
+  .warta-overview-intro-content {
+    display: grid;
+    gap: 4px;
+    padding-block: 10px 3px;
+  }
+
+  .warta-overview-date {
+    font-size: 11px;
+  }
+
+  .warta-overview h1 {
+    margin-top: 3px;
+    line-height: 1.05;
+  }
+
+  .warta-overview h2 {
+    font-size: 21px;
+  }
+
+  .warta-overview-scope {
+    width: max-content;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .warta-overview-scope select {
+    min-height: 31px;
+    padding-inline: 0 28px;
+    border: 0;
+    background: transparent;
+    color: var(--brand-navy);
+    font-size: 13px;
+  }
+
+  .warta-overview-scope svg:first-child {
+    display: none;
+  }
+
+  .warta-overview-scope svg:last-child {
+    right: 4px;
+  }
+
+  .warta-overview-attention {
+    padding-block: 15px 18px;
+  }
+
+  .warta-overview-attention-heading {
+    display: flex;
+    min-height: 34px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0 12px;
+  }
+
+  .warta-overview-attention-heading .warta-overview-toggle {
+    min-height: 34px;
+  }
+
+  .warta-overview-attention > :not(.warta-overview-attention-heading) {
+    margin-top: 12px;
+  }
+
+  .warta-overview-issues {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .warta-overview-list,
+  .warta-overview-feature {
+    width: 100%;
+  }
+
+  .warta-overview-issues .warta-overview-feature {
+    margin-top: 0;
+  }
+
+  .warta-overview-column-labels,
+  .warta-overview-focus-row {
+    display: none;
+  }
+
+  .warta-overview-list li:nth-child(2) {
+    border-top: 1px solid var(--overview-rule);
+  }
+
+  .warta-overview-list li button {
+    grid-template-columns: minmax(0, 1fr) 18px;
+    gap: 0 6px;
+    min-height: 54px;
+    padding-inline: 0 4px;
+    padding-block: 6px;
+  }
+
+  .warta-overview-list .warta-overview-issue-main {
+    display: contents;
+  }
+
+  .warta-overview-issue-main strong {
+    font-size: 14px;
+  }
+
+  .warta-overview-list .warta-overview-issue-main > span,
+  .warta-overview-list .warta-overview-issue-status {
+    display: none;
+  }
+
+  .warta-overview-list .warta-overview-mobile-status {
+    display: block;
+    grid-row: 2;
+    grid-column: 1;
+    font-size: 11px;
+  }
+
+  .warta-overview-list li svg {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+  }
+
+  .warta-overview-feature {
+    min-height: auto;
+    padding: 12px;
+  }
+
+  .warta-overview-feature h3 {
+    max-width: none;
+    margin-block: 8px 4px;
+    font-size: 22px;
+  }
+
+  .warta-overview-feature p,
+  .warta-overview-feature .warta-overview-feature-status {
+    font-size: 12px;
+  }
+
+  .warta-overview-primary {
+    min-height: 44px;
+    margin-top: 12px;
+  }
+
+  .warta-overview-certificate {
+    margin-top: 0;
+    min-height: 33px;
+    font-size: 11px;
+  }
+
+  .warta-overview-calendar {
+    padding-block: 10px 14px;
+  }
+
+  .warta-overview-calendar ul {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    margin-top: 3px;
+  }
+
+  .warta-overview-calendar li button {
+    min-height: 52px;
+    grid-template-columns: 55px minmax(0, 1fr) 17px;
+    gap: 7px;
+  }
+
+  .warta-overview-calendar li .warta-overview-issue-main > span,
+  .warta-overview-event-date,
+  .warta-overview-calendar .warta-overview-link {
+    font-size: 11px;
+  }
+
+  .warta-overview-calendar .warta-overview-link svg {
+    display: none;
+  }
+}

@@ -3,6 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_CORS_ORIGINS = "http://localhost:5173,https://localhost,capacitor://localhost"
@@ -38,6 +39,13 @@ class Settings(BaseSettings):
     files_dir: Path = Path("files")
     timezone: str = "Europe/Warsaw"
     fcm_credentials_file: Path | None = None
+
+    @field_validator("fcm_credentials_file", mode="before")
+    @classmethod
+    def _empty_path_is_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     ocr_api_url: str | None = None
     ocr_api_key: str | None = None

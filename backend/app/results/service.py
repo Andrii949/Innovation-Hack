@@ -275,7 +275,7 @@ def record_result(db: Session, user: User, data: TestResultCreate) -> TestResult
         equipment = get_equipment_or_404(db, equipment_id)
         require(user, Permission.RESULT_WRITE, lab_id=equipment.lab_id)
         if equipment.withdrawn_at is not None:
-            raise AppError(409, "VALIDATION_ERROR", "Urządzenie jest wycofane")
+            raise AppError(409, "EQUIPMENT_WITHDRAWN", "Urządzenie jest wycofane")
         if not can_user_write_results(user, equipment):
             raise AppError(
                 403, "NOT_AUTHORIZED_FOR_EQUIPMENT", "Brak uprawnień do wpisu dla tego urządzenia"
@@ -336,7 +336,7 @@ def record_result(db: Session, user: User, data: TestResultCreate) -> TestResult
     return result
 
 
-def _result_scope(user: User):
+def result_scope(user: User):
     allowed = visible_lab_ids(user)
     if allowed is None:
         return TestResult.id.is_not(None)
@@ -352,7 +352,7 @@ def list_results(
     require(user, Permission.RESULT_READ)
     stmt = (
         select(TestResult)
-        .where(_result_scope(user))
+        .where(result_scope(user))
         .order_by(TestResult.created_at.desc(), TestResult.id.desc())
     )
     if parameter_id is not None:
@@ -391,7 +391,7 @@ def result_series(
         .order_by(TestResult.created_at, TestResult.id)
     )
     if user is not None:
-        stmt = stmt.where(_result_scope(user))
+        stmt = stmt.where(result_scope(user))
     rows = db.scalars(stmt).all()
     points = [
         SeriesPoint(

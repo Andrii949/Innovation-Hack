@@ -13,11 +13,10 @@ import {
 import { toast } from "sonner";
 
 import { api, type ApiRecord, errorMessage, objectValue, textValue } from "@/api/workspaceClient";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { formatDecimal, formatRange } from "@/lib/format";
+import { formatDate, formatDecimal, formatRange } from "@/lib/format";
 
 import { apiSave, DownloadButton } from "./Equipment";
 import {
@@ -26,11 +25,13 @@ import {
   type Columns,
   Control,
   type Field,
+  FilePicker,
   Loading,
   Message,
   options,
   Rows,
   selectStyle,
+  StatusIndicator,
   today,
   useApi,
   type WorkspaceProps,
@@ -192,21 +193,25 @@ export function Results({
           )}
         </CardHeader>
         <CardContent className="grid gap-3">
-          <Control label="Filtruj po parametrze" htmlFor="filter-result-parameter">
-            <select
-              id="filter-result-parameter"
-              className={selectStyle}
-              value={filter}
-              onChange={(event) => setFilter(event.currentTarget.value)}
-            >
-              <option value="">Wszystkie parametry</option>
-              {(parameters?.data ?? []).map((row) => (
-                <option key={textValue(row.id)} value={textValue(row.id)}>
-                  {textValue(row.name)}
-                </option>
-              ))}
-            </select>
-          </Control>
+          <div className="workspace-filter-bar grid gap-3">
+            <div className="w-full max-w-md min-w-0">
+              <Control label="Parametr badania" htmlFor="filter-result-parameter">
+                <select
+                  id="filter-result-parameter"
+                  className={selectStyle}
+                  value={filter}
+                  onChange={(event) => setFilter(event.currentTarget.value)}
+                >
+                  <option value="">Wszystkie parametry</option>
+                  {(parameters?.data ?? []).map((row) => (
+                    <option key={textValue(row.id)} value={textValue(row.id)}>
+                      {textValue(row.name)}
+                    </option>
+                  ))}
+                </select>
+              </Control>
+            </div>
+          </div>
           {data?.data ? (
             <Rows
               rows={data.data}
@@ -260,14 +265,13 @@ export function Results({
             />
           </CardHeader>
           <CardContent className="grid gap-4">
-            <div className="flex flex-wrap items-end gap-2">
+            <div className="workspace-filter-bar flex flex-wrap items-end gap-3">
               <Control label="Parametry z pliku CSV (UTF-8)" htmlFor="parameter-csv">
-                <Input
+                <FilePicker
                   id="parameter-csv"
-                  key={csv === undefined ? "empty" : "file"}
-                  type="file"
                   accept=".csv,text/csv"
-                  onChange={(event) => setCsv(event.currentTarget.files?.[0])}
+                  file={csv}
+                  onChange={setCsv}
                 />
               </Control>
               <Button
@@ -391,7 +395,7 @@ export function ResultChart({
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr]">
+        <div className="workspace-filter-bar workspace-chart-filters grid gap-3 sm:grid-cols-[2fr_1fr_1fr]">
           <Control label="Parametr na wykresie" htmlFor="chart-parameter">
             <select
               id="chart-parameter"
@@ -430,7 +434,7 @@ export function ResultChart({
           <Loading state={data} />
         ) : (
           <>
-            <dl className="flex flex-wrap gap-x-8 gap-y-2 border-y py-2.5">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-y py-3 sm:grid-cols-3">
               <div>
                 <dt className="text-xs text-muted-foreground">Pomiary</dt>
                 <dd className="text-base font-semibold">{data.data.count}</dd>
@@ -447,7 +451,7 @@ export function ResultChart({
                   {data.data.out_of_threshold}
                 </dd>
               </div>
-              <div>
+              <div className="col-span-2 sm:col-span-1">
                 <dt className="text-xs text-muted-foreground">Progi weryfikacji</dt>
                 <dd className="text-base font-semibold">
                   {formatRange(lower ?? null, upper ?? null, data.data.parameter.unit)}
@@ -458,7 +462,7 @@ export function ResultChart({
               <Message>Brak pomiarów w wybranym okresie.</Message>
             ) : (
               <figure
-                className="h-72 min-w-0"
+                className="h-60 min-w-0 sm:h-72"
                 aria-label={`Wykres parametru ${data.data.parameter.name}`}
               >
                 <ResponsiveContainer width="100%" height="100%">
@@ -556,13 +560,22 @@ const resultReviewFields: Field[] = [
   { key: "note", label: "Uzasadnienie", required: true, type: "note" },
 ];
 
+export function ResultReviewStatus({ value }: { value: unknown }) {
+  switch (value) {
+    case "ACCEPTED":
+      return <StatusIndicator tone="ok">Zaakceptowano</StatusIndicator>;
+    case "REPEAT":
+      return <StatusIndicator tone="alarm">Do powtórzenia</StatusIndicator>;
+    case "PENDING":
+      return <StatusIndicator tone="warning">Do weryfikacji</StatusIndicator>;
+    default:
+      return <StatusIndicator tone="neutral">{textValue(value)}</StatusIndicator>;
+  }
+}
+
 function ResultReview({ token, row, after }: { token: string; row: ApiRecord; after: () => void }) {
   if (row.review_decision === "ACCEPTED" || row.review_decision === "REPEAT") {
-    return (
-      <Badge variant="outline">
-        {row.review_decision === "ACCEPTED" ? "Zaakceptowano" : "Do powtórzenia"}
-      </Badge>
-    );
+    return <ResultReviewStatus value={row.review_decision} />;
   }
   return (
     <Action
@@ -620,6 +633,7 @@ export function Reports({ token, permissions }: WorkspaceProps) {
           <Rows
             rows={reports.data}
             columns={reportColumns}
+            empty="Brak raportów do wyświetlenia."
             renderAction={(row) => (
               <DownloadButton
                 token={token}
@@ -637,22 +651,26 @@ export function Reports({ token, permissions }: WorkspaceProps) {
   );
 }
 
+function localDate(value: unknown) {
+  return typeof value === "string" ? formatDate(value.slice(0, 10)) : textValue(value);
+}
+
 const resultColumns: Columns = [
   ["sample_label", "Próbka"],
   ["parameter_name", "Parametr"],
-  ["value", "Wartość"],
+  ["value", "Wartość", (value) => formatDecimal(textValue(value))],
   ["unit", "Jednostka"],
   ["equipment_code", "Urządzenie"],
   [
     "in_range",
     "Zakres wpisu",
     (value) => (
-      <Badge variant={value ? "outline" : "destructive"}>
+      <StatusIndicator tone={value ? "ok" : "alarm"}>
         {value ? "W zakresie" : "Poza zakresem"}
-      </Badge>
+      </StatusIndicator>
     ),
   ],
-  ["created_at", "Data", (value) => textValue(value).slice(0, 10)],
+  ["created_at", "Data", localDate],
 ];
 
 const parameterColumns: Columns = [
@@ -664,7 +682,7 @@ const parameterColumns: Columns = [
 
 const reportColumns: Columns = [
   ["id", "Nr raportu"],
-  ["period_from", "Okres od"],
-  ["period_to", "Okres do"],
-  ["created_at", "Utworzono", (value) => textValue(value).slice(0, 10)],
+  ["period_from", "Okres od", localDate],
+  ["period_to", "Okres do", localDate],
+  ["created_at", "Utworzono", localDate],
 ];
