@@ -33,10 +33,10 @@ const catalogFields: Field[] = [
   ...modelFields.map((field) =>
     Object.assign({}, field, { required: field.key !== "software_version" }),
   ),
-  { key: "suggested_lab_code", label: "Kod sugerowanej pracowni" },
+  { key: "suggested_lab_code", label: "Kod sugerowanej pracowni", clear: true },
   ...calibrationFields.filter((field) => field.key !== "calibration_interval_months"),
   { key: "calibration_interval_months", label: "Cykl (miesiące)", type: "number" },
-  { key: "search_aliases", label: "Hasła wyszukiwania" },
+  { key: "search_aliases", label: "Hasła wyszukiwania", clear: true },
   { key: "active", label: "Aktywny", type: "boolean" },
 ];
 
@@ -133,6 +133,7 @@ export function Administration(props: WorkspaceProps) {
             <TabsTrigger value="templates">Szablony sprawdzeń</TabsTrigger>
             <TabsTrigger value="settings">Ustawienia ogólne</TabsTrigger>
             <TabsTrigger value="rules">Reguły powiadomień</TabsTrigger>
+            <TabsTrigger value="labs">Pracownie</TabsTrigger>
           </>
         )}
         {canEditUsers && (
@@ -169,6 +170,11 @@ export function Administration(props: WorkspaceProps) {
             <Labs {...props} />
           </TabsContent>
         </>
+      )}
+      {permissions.includes("users:write") && (
+        <TabsContent value="users">
+          <Users {...props} />
+        </TabsContent>
       )}
     </Tabs>
   );

@@ -477,7 +477,7 @@ export function CalibrationPlans({ token, permissions }: WorkspaceProps) {
       },
       { key: "dispatch_on", label: "Planowana wysyłka", type: "date", required: true },
       { key: "return_on", label: "Planowany powrót", type: "date", required: true },
-      { key: "note", label: "Uwagi", type: "note" },
+      { key: "note", label: "Uwagi", type: "note", clear: true },
     ],
     [optionsList],
   );

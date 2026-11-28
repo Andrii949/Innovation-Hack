@@ -229,3 +229,25 @@ def test_by_qr_returns_card(
     assert card["qr_url"].endswith(f"/e/{eq.public_id}")
     assert card["check_plans"] == []
     assert card["can_write"] is False
+
+
+def test_list_equipment_matches_serial_no(
+    client: TestClient,
+    make_lab: Any,
+    make_user: Any,
+    make_equipment: Any,
+    auth: Any,
+) -> None:
+    lab_a = make_lab("A")
+    admin = make_user("admin", labs=(lab_a,))
+    eq = make_equipment(lab_a, number="333")
+    patch = client.patch(
+        f"/api/equipment/{eq.id}",
+        headers=auth(admin),
+        json={"serial_no": "SN-9876-XYZ"},
+    )
+    assert patch.status_code == 200
+
+    found = client.get("/api/equipment", params={"q": "9876"}, headers=auth(admin))
+    assert found.status_code == 200
+    assert [item["id"] for item in found.json()] == [eq.id]

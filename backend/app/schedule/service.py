@@ -79,6 +79,22 @@ def calibration_items(
             )
             continue
 
+        if last.result == "NOK":
+            items.append(
+                DueItem(
+                    kind=DueKind.CALIBRATION,
+                    ref_type="equipment",
+                    ref_id=eq.id,
+                    lab_id=eq.lab_id,
+                    label=label,
+                    due=None,
+                    alert_from=None,
+                    valid_until=None,
+                    status=Status.OVERDUE,
+                )
+            )
+            continue
+
         due = next_due_month(last.calibrated_month, eq.calibration_interval_months)
         alert_from, valid_until = month_window(due, eq.lead_months)
         st = due_status(alert_from, valid_until, today)

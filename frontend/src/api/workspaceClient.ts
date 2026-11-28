@@ -11,6 +11,15 @@ export class ApiError extends Error {
   }
 }
 
+const unauthorizedListeners = new Set<() => void>();
+
+export function onUnauthorized(listener: () => void): () => void {
+  unauthorizedListeners.add(listener);
+  return () => {
+    unauthorizedListeners.delete(listener);
+  };
+}
+
 async function request(path: string, token: string | null, method: string, body?: unknown) {
   const headers = new Headers();
   if (token !== null) {
@@ -22,6 +31,11 @@ async function request(path: string, token: string | null, method: string, body?
   }
   const response = await fetch(`${getApiBaseUrl()}/api${path}`, { method, headers, body: payload });
   if (!response.ok) {
+    if (response.status === 401 && token !== null) {
+      for (const listener of unauthorizedListeners) {
+        listener();
+      }
+    }
     const failure: unknown = await response.json().catch(() => null);
     const details = objectValue(failure);
     throw new ApiError(

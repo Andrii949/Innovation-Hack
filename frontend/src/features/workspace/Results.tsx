@@ -63,12 +63,12 @@ export function Results({
   token,
   permissions,
   equipmentId,
-}: WorkspaceProps & { equipmentId?: number }) {
+  onClearEquipment,
+}: WorkspaceProps & { equipmentId?: number; onClearEquipment?: () => void }) {
   const [revision, setRevision] = useState(0);
   const [filter, setFilter] = useState("");
   const [csv, setCsv] = useState<File>();
   const [importing, setImporting] = useState(false);
-  const [repeatId, setRepeatId] = useState<number>();
   const after = () => setRevision((value) => value + 1);
   const canWrite = permissions.includes("result:write");
   const admin = permissions.includes("settings:write");
@@ -126,6 +126,10 @@ export function Results({
         ? resultFields
         : resultFields.filter(({ key }) => key !== "equipment_id"),
     [equipmentId, resultFields],
+  );
+  const repeatFields = useMemo(
+    () => resultFields.filter(({ key }) => key !== "parameter_id"),
+    [resultFields],
   );
   const selectedDevice = devices?.data?.find((device) => device.id === equipmentId);
   const resultInitial = useMemo<ApiRecord>(() => ({ parameter_id: filter }), [filter]);
@@ -221,26 +225,9 @@ export function Results({
                   {canReview && (row.in_range === false || row.review_decision != null) && (
                     <ResultReview token={token} row={row} after={after} />
                   )}
-                  {canWrite &&
-                    (row.in_range === false || row.review_decision === "REPEAT") &&
-                    (repeatId === row.id ? (
-                      <Action
-                        label="Wpisz powtórzenie"
-                        fields={resultFields}
-                        initial={row}
-                        save={(payload) =>
-                          api("/test-results", token, "POST", { ...payload, repeat_of_id: row.id })
-                        }
-                        after={() => {
-                          setRepeatId(undefined);
-                          after();
-                        }}
-                      />
-                    ) : (
-                      <Button variant="ghost" size="sm" onClick={() => setRepeatId(Number(row.id))}>
-                        Powtórz
-                      </Button>
-                    ))}
+                  {canWrite && (row.in_range === false || row.review_decision === "REPEAT") && (
+                    <RepeatResult token={token} row={row} fields={repeatFields} after={after} />
+                  )}
                 </>
               )}
             />

@@ -24,20 +24,38 @@ def flag_results_for_review(db: Session, calibration: Calibration) -> None:
         .order_by(Calibration.calibrated_month.desc(), Calibration.id.desc())
         .limit(1)
     )
+    next_ok = db.scalar(
+        select(Calibration.calibrated_month)
+        .where(
+            Calibration.equipment_id == calibration.equipment_id,
+            Calibration.result == "OK",
+            Calibration.calibrated_month > calibration.calibrated_month,
+        )
+        .order_by(Calibration.calibrated_month.asc(), Calibration.id.asc())
+        .limit(1)
+    )
+    tz = ZoneInfo(get_settings().timezone)
+    cal_created = (
+        calibration.created_at
+        if calibration.created_at.tzinfo is not None
+        else calibration.created_at.replace(tzinfo=UTC)
+    )
+    upper = cal_created.astimezone(UTC)
+    if next_ok is not None:
+        next_ok_start = datetime.combine(next_ok, time.min, tz).astimezone(UTC)
+        upper = min(upper, next_ok_start)
+
     candidates = select(TestResult).where(
         TestResult.equipment_id == calibration.equipment_id,
-        TestResult.created_at <= calibration.created_at,
-        TestResult.review_decision.is_distinct_from("PENDING"),
+        TestResult.created_at <= upper,
+        TestResult.review_decision.is_(None),
     )
     if last_ok is not None:
-        start = datetime.combine(last_ok, time.min, ZoneInfo(get_settings().timezone))
+        start = datetime.combine(last_ok, time.min, tz)
         candidates = candidates.where(TestResult.created_at >= start)
     for result in db.scalars(candidates.order_by(TestResult.id).with_for_update()):
         result.review_calibration_id = calibration.id
         result.review_decision = "PENDING"
-        result.review_note = None
-        result.reviewed_by = None
-        result.reviewed_at = None
 
 
 def review_result(db: Session, user: User, result_id: int, data: ResultReviewCreate) -> TestResult:

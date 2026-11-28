@@ -34,7 +34,8 @@ def build_message(fids: list[str]) -> messaging.MulticastMessage:
 
 
 def push_configured() -> bool:
-    return get_settings().fcm_credentials_file is not None
+    path = get_settings().fcm_credentials_file
+    return path is not None and path.is_file()
 
 
 def _firebase_app() -> firebase_admin.App:

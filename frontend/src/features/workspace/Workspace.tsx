@@ -25,6 +25,7 @@ import {
   type ApiRecord,
   apiVoid,
   errorMessage,
+  onUnauthorized,
   textValue,
 } from "@/api/workspaceClient";
 import { CorporateBrand, PlantSkyline } from "@/components/BrandMark";
@@ -161,7 +162,7 @@ function Monogram({ name, className }: { name: string; className?: string }) {
   );
 }
 
-export function Workspace() {
+export function Workspace({ onChangeServer }: { onChangeServer?: () => void } = {}) {
   const [session, setSession] = useState<Session | null>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -802,11 +803,15 @@ function LoginForm({
   busy,
   error,
   equipment,
+  serverUrl,
+  onChangeServer,
 }: {
   login: (name: string, password: string) => Promise<void>;
   busy: boolean;
   error: string;
   equipment: boolean;
+  serverUrl: string | null;
+  onChangeServer?: () => void;
 }) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -842,6 +847,22 @@ function LoginForm({
             {busy ? "Logowanie…" : "Zaloguj się"}
           </Button>
         </form>
+        {serverUrl !== null && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span className="truncate">Serwer: {serverUrl}</span>
+            {onChangeServer && (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto p-0"
+                onClick={onChangeServer}
+              >
+                Zmień serwer
+              </Button>
+            )}
+          </div>
+        )}
         {reviewPassword && (
           <p className="mt-4 text-xs text-muted-foreground">
             Do przeglądu aplikacji wybierz rolę w prawym górnym rogu.

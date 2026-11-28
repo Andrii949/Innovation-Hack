@@ -104,22 +104,22 @@ export const calibrationFields: Field[] = [
   { key: "calibration_interval_months", label: "Cykl (miesiące)", type: "number", clear: true },
   { key: "calibration_mode", label: "Tryb wzorcowania", type: "options", options: mode },
   { key: "lead_months", label: "Wyprzedzenie przypomnienia (miesiące)", type: "number" },
-  { key: "acceptance_criteria", label: "Kryteria akceptacji", type: "note" },
-  { key: "notes", label: "Uwagi", type: "note" },
+  { key: "acceptance_criteria", label: "Kryteria akceptacji", type: "note", clear: true },
+  { key: "notes", label: "Uwagi", type: "note", clear: true },
 ];
 
 export const modelFields: Field[] = [
   { key: "name", label: "Nazwa" },
-  { key: "category", label: "Kategoria" },
-  { key: "manufacturer", label: "Producent" },
-  { key: "model", label: "Model" },
-  { key: "software_version", label: "Wersja oprogramowania" },
+  { key: "category", label: "Kategoria", clear: true },
+  { key: "manufacturer", label: "Producent", clear: true },
+  { key: "model", label: "Model", clear: true },
+  { key: "software_version", label: "Wersja oprogramowania", clear: true },
 ];
 const deviceFields: Field[] = [
   { key: "number", label: "Numer ewidencyjny", required: true },
   ...modelFields,
-  { key: "serial_no", label: "Numer seryjny" },
-  { key: "location", label: "Lokalizacja" },
+  { key: "serial_no", label: "Numer seryjny", clear: true },
+  { key: "location", label: "Lokalizacja", clear: true },
   ...calibrationFields,
 ];
 const withdrawFields: Field[] = [
@@ -514,10 +514,7 @@ function EquipmentDetails({
   const path = `/equipment/${device.id}`;
   const write = permissions.includes("equipment:write");
   const calibrate = permissions.includes("calibration:write");
-  const users = useApi<ApiRecord[]>(
-    write && permissions.includes("users:write") ? "/users" : null,
-    token,
-  );
+  const users = useApi<ApiRecord[]>(write ? "/users" : null, token);
   const authorized = useApi<ApiRecord[]>(
     write ? `${path}/authorized-users` : null,
     token,
