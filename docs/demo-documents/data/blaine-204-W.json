@@ -1,0 +1,60 @@
+{
+  "cert_no": "SW/2026/11/W204",
+  "issue_date": "9 listopada 2026 r.",
+  "calibration_date": "6 listopada 2026 r.",
+  "unit": "cm²/g",
+  "lab": {
+    "name": "METRUM Laboratorium Wzorcujące Sp. z o.o.",
+    "address": "ul. Metrologiczna 7, 30-001 Kraków · NIP 675-000-00-00",
+    "contact": "tel. +48 12 000 00 00 · laboratorium@metrum-demo.pl · www.metrum-demo.pl",
+    "ap": "214",
+    "accreditation": "Laboratorium wzorcujące akredytowane przez Polskie Centrum Akredytacji, sygnatariusza porozumień EA MLA i ILAC MRA dotyczących wzajemnego uznawania świadectw wzorcowania."
+  },
+  "client": {
+    "name": "Cementownia Warta S.A.",
+    "address": "Laboratorium Zakładowe, ul. Przemysłowa 1, 42-200 Częstochowa"
+  },
+  "user": {
+    "name": "Pracownia Wytrzymałościowa (W)",
+    "address": "Laboratorium Zakładowe, ul. Przemysłowa 1, 42-200 Częstochowa"
+  },
+  "object": {
+    "name": "Aparat Blaine'a",
+    "manufacturer": "Toni Technik",
+    "model": "ToniPERM",
+    "serial": "TT-TP-2022-1180",
+    "inventory": "204/W",
+    "location": "Pracownia Wytrzymałościowa — stół 2"
+  },
+  "place": "Laboratorium Zakładowe Cementowni Warta S.A., Pracownia Wytrzymałościowa, ul. Przemysłowa 1, 42-200 Częstochowa",
+  "method": "PW-07 wyd. 3 z 05.06.2023 — wzorcowanie aparatu Blaine'a; PN-EN 196-6:2019-01",
+  "conditions": "Temperatura: 20,0 °C · Wilgotność względna: 50 % · Ciśnienie: 997 hPa",
+  "traceability": "Wyniki odniesiono do certyfikowanego materiału odniesienia NIST SRM 114q (świadectwo nr 2025/778) oraz do wzorca długości i czasu utrzymywanych w GUM.",
+  "uncertainty": "Niepewność pomiaru określono zgodnie z EA-4/02 M:2022. Podane wartości stanowią niepewność rozszerzoną U przy poziomie ufności ok. 95 % i współczynniku rozszerzenia k = 2.",
+  "adjustments": "Bez adiustacji. Sprawdzono szczelność i drożność układu pomiarowego.",
+  "compliance": "Na życzenie Zgłaszającego nie oceniano zgodności z wymaganiami metrologicznymi. Oceny zgodności dokonuje laboratorium użytkownika na podstawie wyników wzorcowania.",
+  "points": [
+    {
+      "reference": "2000",
+      "indication": "2009",
+      "error": "9",
+      "uncertainty": "28"
+    },
+    {
+      "reference": "3500",
+      "indication": "3515",
+      "error": "15",
+      "uncertainty": "35"
+    },
+    {
+      "reference": "5000",
+      "indication": "5021",
+      "error": "21",
+      "uncertainty": "42"
+    }
+  ],
+  "notes": "Czas przepływu powietrza mierzony trzykrotnie; w tabeli podano wartość średnią. Temperatura pomiaru 20,0 °C. Zakres wzorcowania: 2000–5000 cm²/g.",
+  "performed_by": "mgr inż. Ewa Wiśniewska — specjalista ds. wzorcowań",
+  "authorized_by": "dr inż. Piotr Nowak — kierownik laboratorium",
+  "demo_note": "Dokument demonstracyjny. Laboratorium, numer akredytacji i osoby są fikcyjne."
+}
