@@ -12,8 +12,10 @@ import {
   ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 
+import { type DemoEvent, fetchDemoEvents } from "@/api/demoEvents";
 import {
   api,
   ApiError,
@@ -38,6 +40,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Toaster } from "@/components/ui/sonner";
 import { parseEquipmentUrl } from "@/lib/qr";
+import { notifyLocally } from "@/platform/localNotify";
 import { clearServerUrl, getServerUrl, isNativeApp } from "@/platform/server";
 import { clearToken, getToken, setToken } from "@/platform/tokenStore";
 
@@ -151,13 +154,83 @@ export function Workspace({ onChangeServer }: { onChangeServer?: () => void } = 
     onChangeServer?.();
   }
 
-  function openPublic(id: string | null) {
+  const openPublic = useCallback((id: string | null) => {
     const path = id === null ? "/" : `/e/${id}`;
     if (path !== window.location.pathname) {
       window.history.pushState(null, "", path);
     }
     setPublicId(id);
-  }
+  }, []);
+
+  // Presentation console: the API queues ephemeral signals that drive the app on stage.
+  useEffect(() => {
+    if (!session) {
+      return undefined;
+    }
+    const token = session.token;
+    let after = 0;
+    let primed = false;
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const apply = (event: DemoEvent): void => {
+      switch (event.action) {
+        case "push":
+          setNotificationRevision((value) => value + 1);
+          toast.success(event.title, { description: event.message });
+          void notifyLocally(event.title, event.message);
+          break;
+        case "scan":
+          if (event.public_id !== null) {
+            toast.success(event.source === "qr" ? "Zeskanowano kod QR" : "Odczytano tag NFC", {
+              description: [event.code, event.name].filter(Boolean).join(" · "),
+            });
+            openPublic(event.public_id);
+            setSection("equipment");
+          }
+          break;
+        case "card":
+          if (event.public_id !== null) {
+            openPublic(event.public_id);
+            setSection("equipment");
+          }
+          break;
+        case "toast":
+          toast.info(event.title, { description: event.message });
+          break;
+      }
+    };
+
+    const poll = async (): Promise<void> => {
+      try {
+        const events = await fetchDemoEvents(token, after);
+        if (cancelled) {
+          return;
+        }
+        if (!primed) {
+          primed = true;
+          after = events.reduce((max, event) => Math.max(max, event.id), after);
+        } else {
+          for (const event of events) {
+            after = Math.max(after, event.id);
+            apply(event);
+          }
+        }
+      } catch {
+        // Best effort: a console poll hiccup must not disturb the workspace.
+      }
+      if (!cancelled) {
+        timer = window.setTimeout(() => void poll(), 1200);
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [openPublic, session]);
 
   async function login(loginName: string, password: string) {
     if (busy) {
@@ -441,6 +514,7 @@ export function Workspace({ onChangeServer }: { onChangeServer?: () => void } = 
             )}
             {activeSection === "notifications" && (
               <Notifications
+                key={notificationRevision}
                 token={session.token}
                 permissions={session.user.permissions}
                 after={() => setNotificationRevision((value) => value + 1)}

@@ -11,8 +11,7 @@ import {
 } from "@/api/workspaceClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { enablePushNotifications } from "@/platform/push";
-import { isNativeApp } from "@/platform/server";
+import { enablePushNotifications, isPushAvailable } from "@/platform/push";
 
 import { apiSave, Status } from "./Equipment";
 import {
@@ -309,7 +308,7 @@ export function Notifications({ token, after }: WorkspaceProps & { after: () => 
           <CardTitle>Powiadomienia</CardTitle>
           <CardDescription>Terminy, przekroczenia i gotowe raporty.</CardDescription>
         </div>
-        {isNativeApp() && (
+        {isPushAvailable() && (
           <Button size="sm" variant="outline" disabled={pushBusy} onClick={configurePush}>
             Włącz push na telefonie
           </Button>

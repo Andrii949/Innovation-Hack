@@ -1,4 +1,4 @@
-import { FileUp, Plus, ScanText, Trash2 } from "lucide-react";
+import { Camera, FileUp, Plus, ScanText, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { toast } from "sonner";
 
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { capturePhoto } from "@/platform/camera";
 
 import { Control, Message, selectStyle, today } from "./shared";
 
@@ -62,6 +63,22 @@ export function CalibrationEntry({
     const saved = await upload(file, token);
     setAttachment(saved);
     return saved.id;
+  }
+
+  async function captureCertificate() {
+    setBusy(true);
+    setError("");
+    try {
+      const photo = await capturePhoto();
+      if (photo === null) {
+        return;
+      }
+      setFile(new File([photo.blob], photo.filename, { type: photo.mimeType }));
+      setAttachment(undefined);
+      setDraft(undefined);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function extract() {
@@ -179,6 +196,16 @@ export function CalibrationEntry({
                   type="button"
                   variant="outline"
                   size="sm"
+                  disabled={busy}
+                  onClick={() => void captureCertificate()}
+                >
+                  <Camera />
+                  Zrób zdjęcie
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
                   disabled={!file || busy}
                   onClick={extract}
                 >
@@ -186,6 +213,7 @@ export function CalibrationEntry({
                   Odczytaj świadectwo (OCR)
                 </Button>
               </div>
+              {file !== undefined && <p className="text-xs text-muted-foreground">{file.name}</p>}
             </Control>
           </div>
           {draft && (

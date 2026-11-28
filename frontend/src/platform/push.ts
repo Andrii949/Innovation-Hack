@@ -40,6 +40,10 @@ function resolvePlatform(): PushPlatform {
   return "web";
 }
 
+export function isPushAvailable(): boolean {
+  return isNativeApp() && Capacitor.isPluginAvailable("FirebaseMessaging");
+}
+
 export async function enablePushNotifications(
   registerDevice: (payload: DeviceRegistrationPayload) => Promise<void>,
   onForegroundNotification?: () => void,
@@ -56,7 +60,10 @@ export async function enablePushNotifications(
     return { status: "unavailable" };
   }
 
-  const permission = await messaging.requestPermissions();
+  const permission = await messaging.requestPermissions().catch(() => null);
+  if (permission === null) {
+    return { status: "unavailable" };
+  }
   if (permission.receive !== "granted") {
     return { status: "denied" };
   }
@@ -68,12 +75,16 @@ export async function enablePushNotifications(
       : null);
 
   let fid = "";
-  if (installations !== null) {
-    const idResult = await installations.getId();
-    fid = idResult.id.trim();
-  } else if (messaging.getToken !== undefined) {
-    const tokenResult = await messaging.getToken();
-    fid = tokenResult.token.trim();
+  try {
+    if (installations !== null) {
+      const idResult = await installations.getId();
+      fid = idResult.id.trim();
+    } else if (messaging.getToken !== undefined) {
+      const tokenResult = await messaging.getToken();
+      fid = tokenResult.token.trim();
+    }
+  } catch {
+    return { status: "unavailable" };
   }
 
   if (fid === "" || fid.length > MAX_FID_LENGTH) {
@@ -84,7 +95,9 @@ export async function enablePushNotifications(
   await registerDevice({ platform, fid });
 
   if (onForegroundNotification !== undefined && messaging.addListener !== undefined) {
-    await messaging.addListener("notificationReceived", onForegroundNotification);
+    await messaging
+      .addListener("notificationReceived", onForegroundNotification)
+      .catch(() => undefined);
   }
 
   return { status: "registered", fid, platform };

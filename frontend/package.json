@@ -14,8 +14,15 @@
     "cap:open:ios": "cap open ios"
   },
   "dependencies": {
+    "@capacitor-firebase/messaging": "^8",
+    "@capacitor/barcode-scanner": "^3",
+    "@capacitor/camera": "^8",
     "@capacitor/core": "^8.6.3",
+    "@capacitor/local-notifications": "^8",
+    "@capgo/capacitor-nfc": "^8",
     "@fontsource-variable/geist": "^5.3.0",
+    "@luisbytes/capacitor-firebase-installations": "^8",
+    "capacitor-secure-storage-plugin": "^0.14",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
     "cn": "^0.5.2",

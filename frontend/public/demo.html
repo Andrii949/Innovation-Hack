@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Konsola prezentacji — Laboratorium</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #081321;
+        --panel: #0f1f35;
+        --panel-soft: #142944;
+        --line: #24425f;
+        --text: #eef4fb;
+        --muted: #94a9c4;
+        --accent: #c9f24a;
+        --danger: #ff8a8a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        background: radial-gradient(circle at 85% -10%, #1d3b5c 0, transparent 45%), var(--bg);
+        color: var(--text);
+        font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+      }
+      main {
+        width: min(1080px, 100%);
+        margin: 0 auto;
+        padding: 40px 20px 64px;
+      }
+      .eyebrow {
+        margin: 0 0 8px;
+        color: var(--accent);
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 11px;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(26px, 3vw, 38px);
+        line-height: 1.1;
+      }
+      .lead {
+        margin: 0 0 32px;
+        color: var(--muted);
+        font-size: 15px;
+        max-width: 64ch;
+      }
+      .card {
+        background: linear-gradient(180deg, var(--panel-soft), var(--panel));
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 22px;
+      }
+      .hidden {
+        display: none !important;
+      }
+      form {
+        display: grid;
+        gap: 16px;
+      }
+      .grid {
+        display: grid;
+        gap: 14px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+      label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      input,
+      select,
+      textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #0a1728;
+        color: var(--text);
+        font: inherit;
+        font-size: 15px;
+        padding: 11px 12px;
+        outline: none;
+      }
+      input:focus,
+      select:focus,
+      textarea:focus {
+        border-color: var(--accent);
+      }
+      textarea {
+        min-height: 74px;
+        resize: vertical;
+      }
+      button {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #10233a;
+        color: var(--text);
+        cursor: pointer;
+        font: inherit;
+        font-size: 16px;
+        font-weight: 600;
+        padding: 16px 18px;
+        text-align: left;
+        transition:
+          transform 120ms ease,
+          border-color 120ms ease,
+          background 120ms ease;
+      }
+      button:hover:not(:disabled) {
+        border-color: var(--accent);
+        transform: translateY(-1px);
+      }
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #0b1726;
+      }
+      button small {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 400;
+      }
+      button.primary small {
+        color: #3c4d1d;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 18px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .row strong {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .actions {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        margin-top: 18px;
+      }
+      #log {
+        margin: 24px 0 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 6px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      #log li {
+        padding: 7px 10px;
+        border-left: 2px solid var(--line);
+        background: #0a1728;
+      }
+      #log li.error {
+        border-color: var(--danger);
+        color: var(--danger);
+      }
+      .hint {
+        margin-top: 24px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .hint code {
+        color: var(--text);
+      }
+      .ok {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">Konsola prezentacji</p>
+      <h1>Laboratorium — sygnały na żywo</h1>
+      <p class="lead">
+        Ten panel wysyła zdarzenia do otwartej aplikacji: powiadomienie, skan NFC/QR, kartę
+        urządzenia i dowolny komunikat. Telefon lub tablet ma otwartą aplikację na tym samym
+        serwerze.
+      </p>
+
+      <section class="card" id="login-panel">
+        <form id="login-form">
+          <div class="grid">
+            <label>
+              Adres serwera
+              <input id="base" name="base" autocomplete="url" spellcheck="false" />
+            </label>
+            <label>
+              Login
+              <input id="login" name="login" autocomplete="username" value="admin" required />
+            </label>
+            <label>
+              Hasło
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                required
+              />
+            </label>
+          </div>
+          <div>
+            <button class="primary" type="submit">
+              Połącz
+              <small>Logujemy się jako administrator</small>
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section id="console" class="hidden">
+        <div class="row">
+          <span>Połączono jako <strong id="who">—</strong></span>
+          <span id="server">—</span>
+        </div>
+
+        <div class="card">
+          <div class="grid">
+            <label>
+              Urządzenie
+              <select id="equipment"></select>
+            </label>
+            <label>
+              Tytuł
+              <input id="title" value="Nowe powiadomienie" maxlength="200" />
+            </label>
+          </div>
+          <label style="margin-top: 14px">
+            Treść
+            <textarea id="message" maxlength="500">
+Termin wzorcowania urządzenia 124/A upływa 2026-09-01.</textarea>
+          </label>
+
+          <div class="actions">
+            <button class="primary" id="push">
+              Powiadomienie push
+              <small>Dzwonek, toast i baner systemowy</small>
+            </button>
+            <button id="scan-nfc">
+              Skan NFC
+              <small>Odczyt tagu wybranego urządzenia</small>
+            </button>
+            <button id="scan-qr">
+              Skan QR
+              <small>Odczyt kodu wybranego urządzenia</small>
+            </button>
+            <button id="open-card">
+              Otwórz kartę
+              <small>Przejście bez skanowania</small>
+            </button>
+            <button id="toast">
+              Komunikat
+              <small>Tytuł i treść na ekranie aplikacji</small>
+            </button>
+          </div>
+          <ul id="log"></ul>
+        </div>
+      </section>
+
+      <p class="hint">
+        Otwórz tę stronę z adresu aplikacji (<code>/demo.html</code>), nie z pliku. Konsola i
+        aplikacja muszą wskazywać ten sam serwer — dla wersji na laptopie to
+        <code>http://localhost:5173</code> (proxy do API).
+      </p>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const state = { base: "", token: null };
+
+      function defaultBase() {
+        if (location.protocol === "file:") {
+          return "http://localhost:8000";
+        }
+        return location.origin;
+      }
+
+      async function call(path, options = {}) {
+        const headers = { "Content-Type": "application/json" };
+        if (state.token !== null) {
+          headers.Authorization = `Bearer ${state.token}`;
+        }
+        const response = await fetch(`${state.base}${path}`, { ...options, headers });
+        const body = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error((body && body.message) || `HTTP ${response.status}`);
+        }
+        return body;
+      }
+
+      function log(text, isError = false) {
+        const item = document.createElement("li");
+        const time = new Date().toLocaleTimeString("pl-PL");
+        item.textContent = `${time}  ${text}`;
+        if (isError) {
+          item.className = "error";
+        }
+        $("log").prepend(item);
+        while ($("log").children.length > 8) {
+          $("log").lastElementChild.remove();
+        }
+      }
+
+      async function login(event) {
+        event.preventDefault();
+        state.base = $("base").value.trim().replace(/\/+$/, "");
+        try {
+          const session = await call("/api/auth/login", {
+            method: "POST",
+            body: JSON.stringify({ login: $("login").value, password: $("password").value }),
+          });
+          state.token = session.token;
+          $("who").textContent = session.user.full_name;
+          $("server").textContent = state.base;
+          $("login-panel").classList.add("hidden");
+          $("console").classList.remove("hidden");
+          await loadEquipment();
+          log("Połączono z serwerem");
+        } catch (error) {
+          log(error.message, true);
+        }
+      }
+
+      async function loadEquipment() {
+        const rows = await call("/api/equipment?q=");
+        const select = $("equipment");
+        select.innerHTML = "";
+        for (const row of rows) {
+          const option = document.createElement("option");
+          option.value = row.public_id;
+          option.textContent = `${row.code} — ${row.name}`;
+          select.append(option);
+        }
+        if (rows.length === 0) {
+          const option = document.createElement("option");
+          option.textContent = "Brak urządzeń";
+          option.value = "";
+          select.append(option);
+        }
+      }
+
+      async function trigger(action, extra) {
+        try {
+          const event = await call("/api/demo/trigger", {
+            method: "POST",
+            body: JSON.stringify({
+              action,
+              title: $("title").value.trim(),
+              message: $("message").value.trim(),
+              ...extra,
+            }),
+          });
+          log(`${action}: ${event.code || event.title || "wysłano"}`);
+        } catch (error) {
+          log(error.message, true);
+        }
+      }
+
+      function selected() {
+        const publicId = $("equipment").value;
+        if (!publicId) {
+          log("Najpierw wybierz urządzenie", true);
+          return null;
+        }
+        return publicId;
+      }
+
+      $("base").value = defaultBase();
+      $("login-form").addEventListener("submit", (event) => void login(event));
+      $("push").addEventListener("click", () => void trigger("push", {}));
+      $("scan-nfc").addEventListener("click", () => {
+        const publicId = selected();
+        if (publicId) {
+          void trigger("scan", { public_id: publicId, source: "nfc" });
+        }
+      });
+      $("scan-qr").addEventListener("click", () => {
+        const publicId = selected();
+        if (publicId) {
+          void trigger("scan", { public_id: publicId, source: "qr" });
+        }
+      });
+      $("open-card").addEventListener("click", () => {
+        const publicId = selected();
+        if (publicId) {
+          void trigger("card", { public_id: publicId });
+        }
+      });
+      $("toast").addEventListener("click", () => void trigger("toast", {}));
+    </script>
+  </body>
+</html>
