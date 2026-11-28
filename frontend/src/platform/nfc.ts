@@ -53,6 +53,7 @@ export type NdefRecordLike = {
 export type EncodedNdefUriRecord = {
   tnf: 1;
   type: number[];
+  id: number[];
   payload: number[];
 };
 
@@ -70,19 +71,25 @@ export type NfcWriteResult =
   | { kind: "error"; message: string };
 
 type CapacitorNfcEvent = {
-  message?: {
-    records?: readonly NdefRecordLike[];
+  type?: string;
+  tag?: {
+    ndefMessage?: readonly NdefRecordLike[] | null;
   };
+  reason?: "userCancelled" | "sessionTimeout" | "invalidated";
 };
 
 type CapacitorNfcPluginShape = {
-  startScanSession: () => Promise<void>;
-  stopScanSession: () => Promise<void>;
+  startScanning: (options?: {
+    invalidateAfterFirstRead?: boolean;
+    alertMessage?: string;
+  }) => Promise<void>;
+  stopScanning: () => Promise<void>;
+  isSupported: () => Promise<{ supported: boolean }>;
   addListener: (
-    eventName: "nfcTagScanned",
+    eventName: "ndefDiscovered" | "nfcEvent" | "nfcSessionEnd",
     listener: (event: CapacitorNfcEvent) => void,
   ) => Promise<{ remove: () => Promise<void> }>;
-  write?: (options: { records: readonly EncodedNdefUriRecord[] }) => Promise<void>;
+  write: (options: { records: readonly EncodedNdefUriRecord[] }) => Promise<void>;
 };
 
 type WebNdefReaderInstance = {
@@ -194,7 +201,11 @@ function getWebNdefConstructor(): WebNdefReaderConstructor | null {
 }
 
 export function isNfcAvailable(): boolean {
-  return Capacitor.isPluginAvailable("CapacitorNfc") || getWebNdefConstructor() !== null;
+  if (Capacitor.isPluginAvailable("CapacitorNfc")) {
+    return true;
+  }
+  // WebView exposes NDEFReader but never grants NFC permission; only real browsers can use it.
+  return !Capacitor.isNativePlatform() && getWebNdefConstructor() !== null;
 }
 
 function readViaCapacitorNfc(signal?: AbortSignal): Promise<NfcReadResult> {
@@ -204,17 +215,17 @@ function readViaCapacitorNfc(signal?: AbortSignal): Promise<NfcReadResult> {
 
   return new Promise<NfcReadResult>((resolve) => {
     let settled = false;
-    let handle: { remove: () => Promise<void> } | null = null;
+    const handles: Array<{ remove: () => Promise<void> }> = [];
 
     const finish = (result: NfcReadResult): void => {
       if (settled) {
         return;
       }
       settled = true;
-      if (handle !== null) {
+      for (const handle of handles) {
         void handle.remove();
       }
-      void CapacitorNfcPlugin.stopScanSession().catch(() => {});
+      void CapacitorNfcPlugin.stopScanning().catch(() => {});
       resolve(result);
     };
 
@@ -222,17 +233,37 @@ function readViaCapacitorNfc(signal?: AbortSignal): Promise<NfcReadResult> {
       signal.addEventListener("abort", () => finish({ kind: "cancelled" }), { once: true });
     }
 
-    void CapacitorNfcPlugin.addListener("nfcTagScanned", (event) => {
-      const records = event.message?.records ?? [];
-      finish(resolveNfcRecords(records));
-    })
-      .then((listenerHandle) => {
-        handle = listenerHandle;
-        return CapacitorNfcPlugin.startScanSession();
-      })
-      .catch(() => {
-        finish({ kind: "cancelled" });
-      });
+    void (async () => {
+      try {
+        const support = await CapacitorNfcPlugin.isSupported();
+        if (!support.supported) {
+          finish({ kind: "unavailable" });
+          return;
+        }
+
+        const onTag = (event: CapacitorNfcEvent): void => {
+          const records = event.tag?.ndefMessage ?? [];
+          finish(
+            records.length === 0
+              ? { kind: "invalid_tag", message: INVALID_TAG_MESSAGE }
+              : resolveNfcRecords(records),
+          );
+        };
+        handles.push(await CapacitorNfcPlugin.addListener("ndefDiscovered", onTag));
+        handles.push(await CapacitorNfcPlugin.addListener("nfcEvent", onTag));
+        handles.push(
+          await CapacitorNfcPlugin.addListener("nfcSessionEnd", () =>
+            finish({ kind: "cancelled" }),
+          ),
+        );
+        await CapacitorNfcPlugin.startScanning({
+          invalidateAfterFirstRead: true,
+          alertMessage: "Zbliż telefon do tagu urządzenia",
+        });
+      } catch {
+        finish({ kind: "unavailable" });
+      }
+    })();
   });
 }
 
@@ -361,6 +392,7 @@ export function encodeNdefUriRecord(uri: string): EncodedNdefUriRecord {
   return {
     tnf: 1,
     type: [0x55],
+    id: [],
     payload: [bestIndex, ...Array.from(suffixBytes)],
   };
 }
@@ -368,6 +400,9 @@ export function encodeNdefUriRecord(uri: string): EncodedNdefUriRecord {
 export function readEquipmentNfcTag(signal?: AbortSignal): Promise<NfcReadResult> {
   if (Capacitor.isPluginAvailable("CapacitorNfc")) {
     return readViaCapacitorNfc(signal);
+  }
+  if (Capacitor.isNativePlatform()) {
+    return Promise.resolve({ kind: "unavailable" });
   }
   const WebNdef = getWebNdefConstructor();
   if (WebNdef !== null) {
