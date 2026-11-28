@@ -103,23 +103,63 @@
 
 .workspace-bell-icon {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .workspace-bell-icon > svg {
   width: 20px;
   height: 20px;
   stroke-width: 1.9;
+  transform-origin: 50% 2px;
+}
+
+.workspace-bell-icon--unread > svg {
+  animation: workspace-bell-wiggle 5.5s ease-in-out infinite;
+}
+
+@keyframes workspace-bell-wiggle {
+  0%,
+  18%,
+  100% {
+    transform: rotate(0deg);
+  }
+  3% {
+    transform: rotate(15deg);
+  }
+  6% {
+    transform: rotate(-14deg);
+  }
+  9% {
+    transform: rotate(11deg);
+  }
+  12% {
+    transform: rotate(-8deg);
+  }
+  15% {
+    transform: rotate(4deg);
+  }
 }
 
 .workspace-bell-dot {
   position: absolute;
-  top: -2px;
-  right: -1px;
-  width: 8px;
-  height: 8px;
-  border: 1px solid #fff;
-  border-radius: 50%;
-  background: var(--brand-lime);
+  top: -6px;
+  right: -8px;
+  display: inline-grid;
+  min-width: 17px;
+  height: 17px;
+  padding-inline: 4px;
+  place-items: center;
+  border: 1.5px solid #fff;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 3px rgb(220 38 38 / 35%);
 }
 
 .workspace-account > svg,

@@ -29,8 +29,9 @@ import { Label } from "@/components/ui/label";
 import { formatMonth } from "@/lib/months";
 import { isValidPublicId, parseEquipmentUrl } from "@/lib/qr";
 import { isStatus } from "@/lib/status";
-import { isNfcAvailable } from "@/platform/nfc";
+import { isNfcAvailable, writeEquipmentNfcTag } from "@/platform/nfc";
 import { canScanQr } from "@/platform/scan";
+import { getApiBaseUrl } from "@/platform/server";
 
 import { CalibrationEntry } from "./CalibrationEntry";
 import {
@@ -528,6 +529,27 @@ function EquipmentDetails({
   const allCheckPlans = useApi<CheckPlan[]>(write ? `${path}/check-plans` : null, token, revision);
   const [history, setHistory] = useState<number>();
   const [openedPlan, setOpenedPlan] = useState<number>();
+  const [nfcWriting, setNfcWriting] = useState(false);
+
+  async function writeNfc() {
+    if (nfcWriting) {
+      return;
+    }
+    setNfcWriting(true);
+    try {
+      const base = getApiBaseUrl() || window.location.origin;
+      const result = await writeEquipmentNfcTag(base, textValue(device.public_id));
+      if (result.kind === "written") {
+        toast.success("Zapisano tag NFC urządzenia", { description: device.code });
+      } else if (result.kind === "error") {
+        toast.error(result.message);
+      } else if (result.kind === "unavailable") {
+        toast.info("Zapis tagów NFC jest niedostępny na tym urządzeniu.");
+      }
+    } finally {
+      setNfcWriting(false);
+    }
+  }
   const planFields = useMemo<Field[]>(
     () => [
       { key: "name", label: "Nazwa sprawdzenia", required: true },
@@ -638,6 +660,12 @@ function EquipmentDetails({
                 Link QR / NFC
               </a>
             </Button>
+            {write && isNfcAvailable() && (
+              <Button variant="outline" size="sm" disabled={nfcWriting} onClick={writeNfc}>
+                <ScanLine />
+                {nfcWriting ? "Zbliż tag NFC…" : "Zapisz tag NFC"}
+              </Button>
+            )}
             {write && (
               <>
                 <Action

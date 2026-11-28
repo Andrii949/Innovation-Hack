@@ -20,11 +20,11 @@ type BarcodeScannerPluginShape = {
   scanBarcode: (options: { hint: number }) => Promise<{ ScanResult?: string }>;
 };
 
-const BarcodeScanner = registerPlugin<BarcodeScannerPluginShape>("BarcodeScanner");
-const QR_HINT_CODE = 0;
+const BarcodeScanner = registerPlugin<BarcodeScannerPluginShape>("CapacitorBarcodeScanner");
+const QR_CODE_HINT = 0;
 
 export function canScanQr(): boolean {
-  return Capacitor.isPluginAvailable("BarcodeScanner");
+  return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("CapacitorBarcodeScanner");
 }
 
 export function resolveScannedPayload(raw: string, source: "nfc" | "qr"): ScanOutcome {
@@ -44,7 +44,7 @@ export async function scanRawQrCode(): Promise<string | null> {
   }
 
   try {
-    const result = await BarcodeScanner.scanBarcode({ hint: QR_HINT_CODE });
+    const result = await BarcodeScanner.scanBarcode({ hint: QR_CODE_HINT });
     const raw = result.ScanResult?.trim() ?? "";
     return raw === "" ? null : raw;
   } catch {

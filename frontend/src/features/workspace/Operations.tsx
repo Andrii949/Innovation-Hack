@@ -14,8 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
 import { scheduleDue } from "@/lib/overview";
-import { enablePushNotifications } from "@/platform/push";
-import { isNativeApp } from "@/platform/server";
+import { enablePushNotifications, isPushAvailable } from "@/platform/push";
 
 import { apiSave, Status } from "./Equipment";
 import {
@@ -365,7 +364,7 @@ export function Notifications({ token, after }: WorkspaceProps & { after: () => 
           <CardDescription>Terminy, przekroczenia i gotowe raporty.</CardDescription>
         </div>
         <div className="flex flex-wrap gap-2">
-          {isNativeApp() && (
+          {isPushAvailable() && (
             <Button size="sm" variant="outline" disabled={pushBusy} onClick={configurePush}>
               Włącz push na telefonie
             </Button>

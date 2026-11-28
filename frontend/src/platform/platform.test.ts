@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
+import { unreadSummaryCopy } from "./localNotify";
 import {
   encodeNdefUriRecord,
   extractNdefUri,
@@ -314,5 +315,13 @@ describe("push notifications", () => {
     expect(
       await registerPushDeviceWithApi({ platform: "ios", fid: "fid-456" }, null, failingFetch),
     ).toBe(false);
+  });
+});
+
+describe("local notification unread summary", () => {
+  it("formats Polish singular, few, and large backlog summaries", () => {
+    expect(unreadSummaryCopy(1).title).toBe("Masz 1 nieprzeczytane powiadomienie");
+    expect(unreadSummaryCopy(3).title).toBe("Masz 3 nieprzeczytane powiadomienia");
+    expect(unreadSummaryCopy(12).title).toBe("Masz dużo powiadomień (12)");
   });
 });

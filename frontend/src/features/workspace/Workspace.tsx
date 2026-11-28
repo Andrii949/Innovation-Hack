@@ -15,18 +15,14 @@ import {
   LogOut,
   PanelTop,
   ScanLine,
+  Server,
   Settings,
 } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
-import {
-  api,
-  ApiError,
-  type ApiRecord,
-  apiVoid,
-  errorMessage,
-  textValue,
-} from "@/api/workspaceClient";
+import { type DemoEvent, fetchDemoEvents } from "@/api/demoEvents";
+import { api, ApiError, apiVoid, errorMessage, textValue } from "@/api/workspaceClient";
 import { CorporateBrand, PlantSkyline } from "@/components/BrandMark";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,7 +46,13 @@ import {
 } from "@/components/ui/sheet";
 import { Toaster } from "@/components/ui/sonner";
 import { parseEquipmentUrl } from "@/lib/qr";
+import {
+  notifyLocally,
+  notifyUnreadSummary,
+  requestLocalNotificationPermission,
+} from "@/platform/localNotify";
 import { canScanQr, scanEquipment } from "@/platform/scan";
+import { clearServerUrl, getServerUrl, isNativeApp } from "@/platform/server";
 import { clearToken, getToken, setToken } from "@/platform/tokenStore";
 
 import { Administration, Audit, roleLabel } from "./Administration";
@@ -58,13 +60,28 @@ import { Equipment } from "./Equipment";
 import { CalibrationPlans, Notifications, Reagents, Schedule } from "./Operations";
 import { Overview } from "./Overview";
 import { Reports, Results } from "./Results";
-import { Control, Loading, Message, useApi } from "./shared";
+import { Control, Loading, Message } from "./shared";
 
 import "@/layout/app-shell.css";
 import "@/layout/workspace-pages.css";
 
 type User = { full_name: string; login: string; role: string; permissions: string[] };
 type Session = { user: User; token: string };
+type NotificationToastPayload = {
+  title: string;
+  count: number;
+  kind: string;
+  ref_type: string;
+  ref_id: number;
+};
+type NotificationPoll = {
+  unread_count: number;
+  latest_id: number;
+  toast: NotificationToastPayload | null;
+};
+
+const POLL_INTERVAL_MS = 4000;
+const SUMMARY_REMINDER_MS = 180_000;
 
 const reviewPassword = import.meta.env.DEV ? import.meta.env.VITE_REVIEW_PASSWORD : undefined;
 const demoAccounts = [
@@ -161,7 +178,7 @@ function Monogram({ name, className }: { name: string; className?: string }) {
   );
 }
 
-export function Workspace() {
+export function Workspace({ onChangeServer }: { onChangeServer?: () => void } = {}) {
   const [session, setSession] = useState<Session | null>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -176,11 +193,24 @@ export function Workspace() {
     publicId === null ? "overview" : "equipment",
   );
   const [notificationRevision, setNotificationRevision] = useState(0);
-  const unread = useApi<ApiRecord[]>(
-    session ? "/notifications?unread=true" : null,
-    session?.token ?? "",
-    notificationRevision,
-  );
+  const [unreadCount, setUnreadCount] = useState(0);
+  const pollStateRef = useRef<{ token: string; cursor: number | null; lastSummaryAt: number }>({
+    token: "",
+    cursor: null,
+    lastSummaryAt: 0,
+  });
+
+  async function changeServer() {
+    scanController.current?.abort();
+    if (session) {
+      await apiVoid("/auth/logout", session.token, "POST").catch(() => undefined);
+    }
+    await clearToken();
+    clearServerUrl();
+    setSession(null);
+    setUnreadCount(0);
+    onChangeServer?.();
+  }
 
   useEffect(() => {
     let active = true;
@@ -222,13 +252,174 @@ export function Workspace() {
 
   useEffect(() => () => scanController.current?.abort(), []);
 
-  function openPublic(id: string | null) {
+  const openPublic = useCallback((id: string | null) => {
     const path = id === null ? "/" : `/e/${id}`;
     if (path !== window.location.pathname) {
       window.history.pushState(null, "", path);
     }
     setPublicId(id);
-  }
+  }, []);
+
+  const navigate = useCallback(
+    (next: Section) => {
+      window.scrollTo(0, 0);
+      scanController.current?.abort();
+      setScannerView(false);
+      setScanError("");
+      if (publicId !== null) {
+        openPublic(null);
+      }
+      if (next !== "results") {
+        setEquipmentId(undefined);
+      }
+      setSection(next);
+    },
+    [openPublic, publicId],
+  );
+
+  // Live notification polling: keeps unread bell badge accurate, coalesces bursts, and triggers native banners.
+  useEffect(() => {
+    if (!session) {
+      setUnreadCount(0);
+      pollStateRef.current = { token: "", cursor: null, lastSummaryAt: 0 };
+      return undefined;
+    }
+    const token = session.token;
+    if (pollStateRef.current.token !== token) {
+      pollStateRef.current = { token, cursor: null, lastSummaryAt: 0 };
+      void requestLocalNotificationPermission();
+    }
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const poll = async (): Promise<void> => {
+      try {
+        const state = pollStateRef.current;
+        const query = state.cursor === null ? "" : `?since_id=${state.cursor}`;
+        const snap = await api<NotificationPoll>(`/notifications/poll${query}`, token);
+        if (cancelled || pollStateRef.current.token !== token) {
+          return;
+        }
+        setUnreadCount(snap.unread_count);
+        if (state.cursor === null) {
+          state.cursor = snap.latest_id;
+          if (snap.unread_count > 0) {
+            state.lastSummaryAt = Date.now();
+            void notifyUnreadSummary(snap.unread_count);
+          }
+        } else {
+          state.cursor = Math.max(state.cursor, snap.latest_id);
+          if (snap.toast !== null) {
+            state.lastSummaryAt = Date.now();
+            setNotificationRevision((value) => value + 1);
+            toast.warning(snap.toast.title, {
+              description:
+                snap.unread_count > 1 ? `Nieprzeczytane łącznie: ${snap.unread_count}` : undefined,
+              action: {
+                label: "Otwórz",
+                onClick: () => navigate("notifications"),
+              },
+            });
+            void notifyLocally(
+              snap.toast.count > 1
+                ? `Nowe powiadomienia (${snap.toast.count})`
+                : "Nowe powiadomienie w laboratorium",
+              snap.toast.title,
+            );
+          } else if (
+            snap.unread_count >= 3 &&
+            Date.now() - state.lastSummaryAt >= SUMMARY_REMINDER_MS
+          ) {
+            state.lastSummaryAt = Date.now();
+            void notifyUnreadSummary(snap.unread_count);
+          }
+        }
+      } catch {
+        // Best effort: transient network hiccups must not interrupt the workspace.
+      }
+      if (!cancelled) {
+        timer = window.setTimeout(() => void poll(), POLL_INTERVAL_MS);
+      }
+    };
+
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [navigate, notificationRevision, session]);
+
+  // Presentation console: the API queues ephemeral signals that drive the app on stage.
+  useEffect(() => {
+    if (!session) {
+      return undefined;
+    }
+    const token = session.token;
+    let after = 0;
+    let primed = false;
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const apply = (event: DemoEvent): void => {
+      switch (event.action) {
+        case "push":
+          setNotificationRevision((value) => value + 1);
+          toast.success(event.title, { description: event.message });
+          void notifyLocally(event.title, event.message);
+          break;
+        case "scan":
+          if (event.public_id !== null) {
+            toast.success(event.source === "qr" ? "Zeskanowano kod QR" : "Odczytano tag NFC", {
+              description: [event.code, event.name].filter(Boolean).join(" · "),
+            });
+            openPublic(event.public_id);
+            setSection("equipment");
+          }
+          break;
+        case "card":
+          if (event.public_id !== null) {
+            openPublic(event.public_id);
+            setSection("equipment");
+          }
+          break;
+        case "toast":
+          toast.info(event.title, { description: event.message });
+          break;
+      }
+    };
+
+    const poll = async (): Promise<void> => {
+      try {
+        const events = await fetchDemoEvents(token, after);
+        if (cancelled) {
+          return;
+        }
+        if (!primed) {
+          primed = true;
+          after = events.reduce((max, event) => Math.max(max, event.id), after);
+        } else {
+          for (const event of events) {
+            after = Math.max(after, event.id);
+            apply(event);
+          }
+        }
+      } catch {
+        // Best effort: a console poll hiccup must not disturb the workspace.
+      }
+      if (!cancelled) {
+        timer = window.setTimeout(() => void poll(), 1200);
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [openPublic, session]);
 
   async function login(loginName: string, password: string) {
     if (busy) {
@@ -293,19 +484,6 @@ export function Workspace() {
     section === "notifications" || permitted.some(({ key }) => key === section)
       ? section
       : permitted[0]?.key;
-  function navigate(next: Section) {
-    window.scrollTo(0, 0);
-    scanController.current?.abort();
-    setScannerView(false);
-    setScanError("");
-    if (publicId !== null) {
-      openPublic(null);
-    }
-    if (next !== "results") {
-      setEquipmentId(undefined);
-    }
-    setSection(next);
-  }
 
   async function scan(preferNfc: boolean) {
     if (scanController.current !== null) {
@@ -358,7 +536,7 @@ export function Workspace() {
   const current = sections.find(({ key }) => key === activeSection);
   const scanningPage = scannerView && publicId === null && activeSection === "equipment";
   const TitleIcon = scanningPage ? ScanLine : (current?.icon ?? Bell);
-  const unreadCount = unread?.data?.length ?? 0;
+  const nativeServerUrl = isNativeApp() ? getServerUrl() : null;
   const overview = activeSection === "overview";
   const hasEquipment = permitted.some(({ key }) => key === "equipment");
   const desktopEquipment = permitted.filter(({ key }) => key === "equipment" || key === "plans");
@@ -402,6 +580,21 @@ export function Workspace() {
               )}
             </DropdownMenuItem>
           ))}
+        </>
+      )}
+      {isNativeApp() && onChangeServer && (
+        <>
+          {(user || reviewPassword) && <DropdownMenuSeparator />}
+          <DropdownMenuItem
+            className="px-2 py-1.5"
+            disabled={busy}
+            onSelect={() => {
+              void changeServer();
+            }}
+          >
+            <Server />
+            Zmień serwer
+          </DropdownMenuItem>
         </>
       )}
       {user && (
@@ -468,9 +661,18 @@ export function Workspace() {
                 aria-current={activeSection === "notifications" ? "page" : undefined}
                 onClick={() => navigate("notifications")}
               >
-                <span className="workspace-bell-icon">
+                <span
+                  className={cn(
+                    "workspace-bell-icon",
+                    unreadCount > 0 && "workspace-bell-icon--unread",
+                  )}
+                >
                   <Bell aria-hidden />
-                  {unreadCount > 0 && <span className="workspace-bell-dot" aria-hidden />}
+                  {unreadCount > 0 && (
+                    <span className="workspace-bell-dot" aria-hidden>
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
                 </span>
                 <span className="workspace-bell-label">Powiadomienia</span>
               </button>
@@ -586,7 +788,14 @@ export function Workspace() {
               {session === undefined ? (
                 <Loading />
               ) : (
-                <LoginForm busy={busy} error={error} login={login} equipment={publicId !== null} />
+                <LoginForm
+                  busy={busy}
+                  error={error}
+                  login={login}
+                  equipment={publicId !== null}
+                  serverUrl={nativeServerUrl}
+                  onChangeServer={isNativeApp() && onChangeServer ? changeServer : undefined}
+                />
               )}
             </div>
           </div>
@@ -673,6 +882,7 @@ export function Workspace() {
                   )}
                   {activeSection === "notifications" && (
                     <Notifications
+                      key={notificationRevision}
                       token={session.token}
                       permissions={session.user.permissions}
                       after={() => setNotificationRevision((value) => value + 1)}
@@ -773,6 +983,21 @@ export function Workspace() {
                       ))}
                     </div>
                   )}
+                  {isNativeApp() && onChangeServer && (
+                    <SheetClose asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => {
+                          void changeServer();
+                        }}
+                      >
+                        <Server aria-hidden />
+                        Zmień serwer
+                      </Button>
+                    </SheetClose>
+                  )}
                   <SheetClose asChild>
                     <Button
                       type="button"
@@ -802,11 +1027,15 @@ function LoginForm({
   busy,
   error,
   equipment,
+  serverUrl,
+  onChangeServer,
 }: {
   login: (name: string, password: string) => Promise<void>;
   busy: boolean;
   error: string;
   equipment: boolean;
+  serverUrl?: string | null;
+  onChangeServer?: () => Promise<void>;
 }) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -842,6 +1071,23 @@ function LoginForm({
             {busy ? "Logowanie…" : "Zaloguj się"}
           </Button>
         </form>
+        {serverUrl && onChangeServer && (
+          <div className="mt-4 flex items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
+            <span className="truncate">Serwer: {serverUrl}</span>
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto px-0"
+              disabled={busy}
+              onClick={() => {
+                void onChangeServer();
+              }}
+            >
+              Zmień serwer
+            </Button>
+          </div>
+        )}
         {reviewPassword && (
           <p className="mt-4 text-xs text-muted-foreground">
             Do przeglądu aplikacji wybierz rolę w prawym górnym rogu.
