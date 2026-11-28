@@ -1,0 +1,60 @@
+{
+  "cert_no": "SW/2026/10/A125",
+  "issue_date": "17 października 2026 r.",
+  "calibration_date": "14 października 2026 r.",
+  "unit": "°C",
+  "lab": {
+    "name": "METRUM Laboratorium Wzorcujące Sp. z o.o.",
+    "address": "ul. Metrologiczna 7, 30-001 Kraków · NIP 675-000-00-00",
+    "contact": "tel. +48 12 000 00 00 · laboratorium@metrum-demo.pl · www.metrum-demo.pl",
+    "ap": "214",
+    "accreditation": "Laboratorium wzorcujące akredytowane przez Polskie Centrum Akredytacji, sygnatariusza porozumień EA MLA i ILAC MRA dotyczących wzajemnego uznawania świadectw wzorcowania."
+  },
+  "client": {
+    "name": "Cementownia Warta S.A.",
+    "address": "Laboratorium Zakładowe, ul. Przemysłowa 1, 42-200 Częstochowa"
+  },
+  "user": {
+    "name": "Pracownia Analityczna (A)",
+    "address": "Laboratorium Zakładowe, ul. Przemysłowa 1, 42-200 Częstochowa"
+  },
+  "object": {
+    "name": "Piec muflowy",
+    "manufacturer": "Nabertherm",
+    "model": "L 9/11",
+    "serial": "NB-L9-2021-0342",
+    "inventory": "125/A",
+    "location": "Pracownia Analityczna — stanowisko prażenia"
+  },
+  "place": "Laboratorium Zakładowe Cementowni Warta S.A., Pracownia Analityczna, stanowisko prażenia, ul. Przemysłowa 1, 42-200 Częstochowa",
+  "method": "PW-04 wyd. 2 z 10.03.2024 — wzorcowanie komór pieców laboratoryjnych metodą porównania z termometrem wzorcowym; PN-EN 60584-1:2013",
+  "conditions": "Temperatura otoczenia: 21,1 °C · Wilgotność względna: 41 % · Ciśnienie: 996 hPa",
+  "traceability": "Wyniki odniesiono do państwowego wzorca temperatury utrzymywanego w GUM poprzez termometr platynowy Pt100 (świadectwo GUM nr 2025/4411), spójny z Międzynarodową Skalą Temperatury MST-90.",
+  "uncertainty": "Niepewność pomiaru określono zgodnie z EA-4/02 M:2022. Podane wartości stanowią niepewność rozszerzoną U przy poziomie ufności ok. 95 % i współczynniku rozszerzenia k = 2.",
+  "adjustments": "Bez adiustacji. Nie zmieniano nastaw regulatora pieca.",
+  "compliance": "Na życzenie Zgłaszającego nie oceniano zgodności z wymaganiami metrologicznymi. Oceny zgodności dokonuje laboratorium użytkownika na podstawie wyników wzorcowania.",
+  "points": [
+    {
+      "reference": "500,0",
+      "indication": "501,2",
+      "error": "1,2",
+      "uncertainty": "2,8"
+    },
+    {
+      "reference": "800,0",
+      "indication": "801,4",
+      "error": "1,4",
+      "uncertainty": "2,9"
+    },
+    {
+      "reference": "950,0",
+      "indication": "951,5",
+      "error": "1,5",
+      "uncertainty": "3,0"
+    }
+  ],
+  "notes": "Pomiary wykonano w środku komory roboczej, po ustabilizowaniu temperatury (15 min). Termopara typu K podłączona do wzorcowego miernika temperatury. Zakres wzorcowania: 500–950 °C.",
+  "performed_by": "mgr Tomasz Zieliński — metrolog temperatur",
+  "authorized_by": "dr inż. Piotr Nowak — kierownik laboratorium",
+  "demo_note": "Dokument demonstracyjny. Laboratorium, numer akredytacji i osoby są fikcyjne."
+}
