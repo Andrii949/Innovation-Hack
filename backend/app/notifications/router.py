@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -9,11 +9,13 @@ from app.auth.deps import current_user
 from app.auth.models import User
 from app.db import get_db
 from app.notifications.service import (
+    NotificationToast,
     RuleSpec,
     list_notifications,
     list_rules,
     mark_all_read,
     mark_read,
+    poll_notifications,
     register_device,
     update_rules,
 )
@@ -37,6 +39,13 @@ class NotificationOut(BaseModel):
     resolved_at: datetime | None
 
 
+class NotificationPollOut(BaseModel):
+    unread_count: int
+    latest_id: int
+    new_items: list[NotificationOut]
+    toast: NotificationToast | None
+
+
 class MarkAllReadOut(BaseModel):
     updated: int
 
@@ -51,8 +60,27 @@ def get_notifications(
     user: Annotated[User, Depends(current_user)],
     db: Annotated[Session, Depends(get_db)],
     unread: bool = False,
+    since_id: Annotated[int | None, Query(ge=0)] = None,
 ) -> list[NotificationOut]:
-    return [NotificationOut.model_validate(n) for n in list_notifications(db, user, unread=unread)]
+    return [
+        NotificationOut.model_validate(n)
+        for n in list_notifications(db, user, unread=unread, since_id=since_id)
+    ]
+
+
+@router.get("/poll")
+def get_notifications_poll(
+    user: Annotated[User, Depends(current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    since_id: Annotated[int | None, Query(ge=0)] = None,
+) -> NotificationPollOut:
+    snap = poll_notifications(db, user, since_id=since_id)
+    return NotificationPollOut(
+        unread_count=snap.unread_count,
+        latest_id=snap.latest_id,
+        new_items=[NotificationOut.model_validate(n) for n in snap.new_items],
+        toast=snap.toast,
+    )
 
 
 @router.post("/read-all")

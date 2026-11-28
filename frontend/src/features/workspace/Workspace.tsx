@@ -1,32 +1,29 @@
+import { cn } from "cn";
 import {
   Bell,
   CalendarDays,
+  ChartLine,
+  Check,
   ChevronDown,
+  ChevronRight,
   ClipboardList,
+  Ellipsis,
+  FileText,
   FlaskConical,
   History,
   LayoutGrid,
   LogOut,
-  Microscope,
+  PanelTop,
+  ScanLine,
+  Server,
   Settings,
-  ShieldCheck,
-  SlidersHorizontal,
 } from "lucide-react";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { type DemoEvent, fetchDemoEvents } from "@/api/demoEvents";
-import {
-  api,
-  ApiError,
-  type ApiRecord,
-  apiVoid,
-  errorMessage,
-  onUnauthorized,
-  textValue,
-} from "@/api/workspaceClient";
-import { BrandMark, PlantSkyline } from "@/components/BrandMark";
-import { Badge } from "@/components/ui/badge";
+import { api, ApiError, apiVoid, errorMessage, textValue } from "@/api/workspaceClient";
+import { CorporateBrand, PlantSkyline } from "@/components/BrandMark";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -38,20 +35,53 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Toaster } from "@/components/ui/sonner";
 import { parseEquipmentUrl } from "@/lib/qr";
-import { notifyLocally } from "@/platform/localNotify";
+import {
+  notifyLocally,
+  notifyUnreadSummary,
+  requestLocalNotificationPermission,
+} from "@/platform/localNotify";
+import { canScanQr, scanEquipment } from "@/platform/scan";
 import { clearServerUrl, getServerUrl, isNativeApp } from "@/platform/server";
 import { clearToken, getToken, setToken } from "@/platform/tokenStore";
 
 import { Administration, Audit, roleLabel } from "./Administration";
 import { Equipment } from "./Equipment";
 import { CalibrationPlans, Notifications, Reagents, Schedule } from "./Operations";
+import { Overview } from "./Overview";
 import { Reports, Results } from "./Results";
-import { Control, Loading, Message, useApi } from "./shared";
+import { Control, Loading, Message } from "./shared";
+
+import "@/layout/app-shell.css";
+import "@/layout/workspace-pages.css";
 
 type User = { full_name: string; login: string; role: string; permissions: string[] };
 type Session = { user: User; token: string };
+type NotificationToastPayload = {
+  title: string;
+  count: number;
+  kind: string;
+  ref_type: string;
+  ref_id: number;
+};
+type NotificationPoll = {
+  unread_count: number;
+  latest_id: number;
+  toast: NotificationToastPayload | null;
+};
+
+const POLL_INTERVAL_MS = 4000;
+const SUMMARY_REMINDER_MS = 180_000;
 
 const reviewPassword = import.meta.env.DEV ? import.meta.env.VITE_REVIEW_PASSWORD : undefined;
 const demoAccounts = [
@@ -60,42 +90,127 @@ const demoAccounts = [
   { login: "laborant", role: "worker" },
 ];
 const sections = [
-  { key: "schedule", label: "Harmonogram", icon: CalendarDays, permissions: ["schedule:read"] },
-  { key: "equipment", label: "Urządzenia", icon: Microscope, permissions: ["equipment:read"] },
+  {
+    key: "overview",
+    label: "Przegląd",
+    icon: LayoutGrid,
+    group: "",
+    permissions: ["schedule:read"],
+  },
+  {
+    key: "schedule",
+    label: "Harmonogram",
+    icon: CalendarDays,
+    group: "Wyposażenie",
+    permissions: ["schedule:read"],
+  },
+  {
+    key: "equipment",
+    label: "Urządzenia",
+    icon: PanelTop,
+    group: "Wyposażenie",
+    permissions: ["equipment:read"],
+  },
   {
     key: "plans",
     label: "Plan wzorcowań",
     icon: ClipboardList,
+    group: "Wyposażenie",
     permissions: ["calibration:write", "calibration:approve"],
   },
-  { key: "results", label: "Wyniki badań", icon: SlidersHorizontal, permissions: ["result:read"] },
-  { key: "reagents", label: "Odczynniki i CRM", icon: FlaskConical, permissions: ["reagent:read"] },
-  { key: "reports", label: "Raporty", icon: LayoutGrid, permissions: ["report:read"] },
+  {
+    key: "results",
+    label: "Wyniki badań",
+    icon: ChartLine,
+    group: "Badania",
+    permissions: ["result:read"],
+  },
+  {
+    key: "reagents",
+    label: "Odczynniki i CRM",
+    icon: FlaskConical,
+    group: "Badania",
+    permissions: ["reagent:read"],
+  },
+  {
+    key: "reports",
+    label: "Raporty",
+    icon: FileText,
+    group: "Badania",
+    permissions: ["report:read"],
+  },
   {
     key: "settings",
     label: "Administracja",
     icon: Settings,
+    group: "System",
     permissions: ["settings:write", "users:write", "equipment:write"],
   },
-  { key: "audit", label: "Historia zmian", icon: History, permissions: ["audit:read"] },
+  {
+    key: "audit",
+    label: "Historia zmian",
+    icon: History,
+    group: "System",
+    permissions: ["audit:read"],
+  },
 ] as const;
 type Section = (typeof sections)[number]["key"] | "notifications";
+const desktopSections = ["overview", "schedule", "equipment", "results", "reagents"] as const;
+const mobileSections = ["overview", "schedule", "equipment"] as const;
+const mobileToastOffset = { bottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))" };
+
+function initials(name: string) {
+  const words = name.split(/\s+/).filter(Boolean);
+  return `${words[0]?.[0] ?? ""}${words.length > 1 ? (words.at(-1)?.[0] ?? "") : ""}`.toUpperCase();
+}
+
+function Monogram({ name, className }: { name: string; className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "grid shrink-0 place-items-center rounded-full bg-brand-lime-soft font-bold text-brand-navy",
+        className,
+      )}
+    >
+      {initials(name)}
+    </span>
+  );
+}
 
 export function Workspace({ onChangeServer }: { onChangeServer?: () => void } = {}) {
   const [session, setSession] = useState<Session | null>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [equipmentId, setEquipmentId] = useState<number>();
+  const [scannerRequest, setScannerRequest] = useState(0);
+  const [scannerView, setScannerView] = useState(false);
+  const [scanError, setScanError] = useState("");
+  const [scanBusy, setScanBusy] = useState(false);
+  const scanController = useRef<AbortController | null>(null);
   const [publicId, setPublicId] = useState(() => parseEquipmentUrl(window.location.pathname));
   const [section, setSection] = useState<Section>(() =>
-    publicId === null ? "schedule" : "equipment",
+    publicId === null ? "overview" : "equipment",
   );
   const [notificationRevision, setNotificationRevision] = useState(0);
-  const unread = useApi<ApiRecord[]>(
-    session ? "/notifications?unread=true" : null,
-    session?.token ?? "",
-    notificationRevision,
-  );
+  const [unreadCount, setUnreadCount] = useState(0);
+  const pollStateRef = useRef<{ token: string; cursor: number | null; lastSummaryAt: number }>({
+    token: "",
+    cursor: null,
+    lastSummaryAt: 0,
+  });
+
+  async function changeServer() {
+    scanController.current?.abort();
+    if (session) {
+      await apiVoid("/auth/logout", session.token, "POST").catch(() => undefined);
+    }
+    await clearToken();
+    clearServerUrl();
+    setSession(null);
+    setUnreadCount(0);
+    onChangeServer?.();
+  }
 
   useEffect(() => {
     let active = true;
@@ -128,31 +243,14 @@ export function Workspace({ onChangeServer }: { onChangeServer?: () => void } = 
     function syncPath() {
       const id = parseEquipmentUrl(window.location.pathname);
       setPublicId(id);
-      setSection(id === null ? "schedule" : "equipment");
+      setScannerView(false);
+      setSection(id === null ? "overview" : "equipment");
     }
     window.addEventListener("popstate", syncPath);
     return () => window.removeEventListener("popstate", syncPath);
   }, []);
 
-  const signedIn = session != null;
-  useEffect(() => {
-    if (!signedIn) {
-      return undefined;
-    }
-    return onUnauthorized(() => {
-      void clearToken();
-      setSession(null);
-      setError("Sesja wygasła. Zaloguj się ponownie.");
-    });
-  }, [signedIn]);
-
-  const native = isNativeApp();
-  const serverUrl = native ? getServerUrl() : null;
-
-  function changeServer() {
-    clearServerUrl();
-    onChangeServer?.();
-  }
+  useEffect(() => () => scanController.current?.abort(), []);
 
   const openPublic = useCallback((id: string | null) => {
     const path = id === null ? "/" : `/e/${id}`;
@@ -161,6 +259,96 @@ export function Workspace({ onChangeServer }: { onChangeServer?: () => void } = 
     }
     setPublicId(id);
   }, []);
+
+  const navigate = useCallback(
+    (next: Section) => {
+      window.scrollTo(0, 0);
+      scanController.current?.abort();
+      setScannerView(false);
+      setScanError("");
+      if (publicId !== null) {
+        openPublic(null);
+      }
+      if (next !== "results") {
+        setEquipmentId(undefined);
+      }
+      setSection(next);
+    },
+    [openPublic, publicId],
+  );
+
+  // Live notification polling: keeps unread bell badge accurate, coalesces bursts, and triggers native banners.
+  useEffect(() => {
+    if (!session) {
+      pollStateRef.current = { token: "", cursor: null, lastSummaryAt: 0 };
+      return undefined;
+    }
+    const token = session.token;
+    if (pollStateRef.current.token !== token) {
+      pollStateRef.current = { token, cursor: null, lastSummaryAt: 0 };
+      void requestLocalNotificationPermission();
+    }
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const poll = async (): Promise<void> => {
+      try {
+        const state = pollStateRef.current;
+        const query = state.cursor === null ? "" : `?since_id=${state.cursor}`;
+        const snap = await api<NotificationPoll>(`/notifications/poll${query}`, token);
+        if (cancelled || pollStateRef.current.token !== token) {
+          return;
+        }
+        setUnreadCount(snap.unread_count);
+        if (state.cursor === null) {
+          state.cursor = snap.latest_id;
+          if (snap.unread_count > 0) {
+            state.lastSummaryAt = Date.now();
+            void notifyUnreadSummary(snap.unread_count);
+          }
+        } else {
+          state.cursor = Math.max(state.cursor, snap.latest_id);
+          if (snap.toast !== null) {
+            state.lastSummaryAt = Date.now();
+            setNotificationRevision((value) => value + 1);
+            toast.warning(snap.toast.title, {
+              description:
+                snap.unread_count > 1 ? `Nieprzeczytane łącznie: ${snap.unread_count}` : undefined,
+              action: {
+                label: "Otwórz",
+                onClick: () => navigate("notifications"),
+              },
+            });
+            void notifyLocally(
+              snap.toast.count > 1
+                ? `Nowe powiadomienia (${snap.toast.count})`
+                : "Nowe powiadomienie w laboratorium",
+              snap.toast.title,
+            );
+          } else if (
+            snap.unread_count >= 3 &&
+            Date.now() - state.lastSummaryAt >= SUMMARY_REMINDER_MS
+          ) {
+            state.lastSummaryAt = Date.now();
+            void notifyUnreadSummary(snap.unread_count);
+          }
+        }
+      } catch {
+        // Best effort: transient network hiccups must not interrupt the workspace.
+      }
+      if (!cancelled) {
+        timer = window.setTimeout(() => void poll(), POLL_INTERVAL_MS);
+      }
+    };
+
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [navigate, session]);
 
   // Presentation console: the API queues ephemeral signals that drive the app on stage.
   useEffect(() => {
@@ -250,9 +438,13 @@ export function Workspace({ onChangeServer }: { onChangeServer?: () => void } = 
       if (previous) {
         await apiVoid("/auth/logout", previous, "POST").catch(() => undefined);
       }
+      scanController.current?.abort();
+      setScanError("");
+      setScannerRequest(0);
       setSession(next);
+      setScannerView(false);
       setEquipmentId(undefined);
-      setSection(publicId !== null || next.user.role === "worker" ? "equipment" : "schedule");
+      setSection(publicId !== null || next.user.role === "worker" ? "equipment" : "overview");
     } catch (failure) {
       setError(errorMessage(failure));
     } finally {
@@ -274,6 +466,10 @@ export function Workspace({ onChangeServer }: { onChangeServer?: () => void } = 
       }
     } finally {
       await clearToken();
+      scanController.current?.abort();
+      setScanError("");
+      setScannerRequest(0);
+      setScannerView(false);
       setSession(null);
       setBusy(false);
     }
@@ -287,243 +483,540 @@ export function Workspace({ onChangeServer }: { onChangeServer?: () => void } = 
     section === "notifications" || permitted.some(({ key }) => key === section)
       ? section
       : permitted[0]?.key;
-  function navigate(next: Section) {
-    if (next !== "equipment" && publicId !== null) {
-      openPublic(null);
+
+  async function scan(preferNfc: boolean) {
+    if (scanController.current !== null) {
+      return;
     }
-    if (next !== "results") {
-      setEquipmentId(undefined);
+    const controller = new AbortController();
+    scanController.current = controller;
+    setScanBusy(true);
+    setScanError("");
+    try {
+      const outcome = await scanEquipment({ preferNfc, signal: controller.signal });
+      if (controller.signal.aborted) {
+        return;
+      }
+      if (outcome.status === "ok") {
+        openPublic(outcome.publicId);
+      } else if (outcome.status !== "cancelled") {
+        setScanError(outcome.message);
+      }
+    } catch (failure) {
+      if (!controller.signal.aborted) {
+        setScanError(errorMessage(failure));
+      }
+    } finally {
+      scanController.current = null;
+      setScanBusy(false);
     }
-    setSection(next);
+  }
+
+  function openScanner() {
+    window.scrollTo(0, 0);
+    openPublic(null);
+    setSection("equipment");
+    setEquipmentId(undefined);
+    setScannerView(true);
+    setScanError("");
+    setScannerRequest((request) => request + 1);
+    if (canScanQr()) {
+      void scan(false);
+    }
+  }
+
+  function openDevice(id: string) {
+    setScannerView(false);
+    openPublic(id);
+    setEquipmentId(undefined);
+    setSection("equipment");
+    window.scrollTo(0, 0);
+  }
+  const current = sections.find(({ key }) => key === activeSection);
+  const scanningPage = scannerView && publicId === null && activeSection === "equipment";
+  const TitleIcon = scanningPage ? ScanLine : (current?.icon ?? Bell);
+  const nativeServerUrl = isNativeApp() ? getServerUrl() : null;
+  const overview = activeSection === "overview";
+  const hasEquipment = permitted.some(({ key }) => key === "equipment");
+  const desktopEquipment = permitted.filter(({ key }) => key === "equipment" || key === "plans");
+  const desktopMore = permitted.filter(
+    ({ key }) => !desktopSections.some((sectionKey) => key === sectionKey) && key !== "plans",
+  );
+  const mobileMore = permitted.filter(
+    ({ key }) => !mobileSections.some((sectionKey) => key === sectionKey),
+  );
+  const accountItems = (
+    <>
+      {user && (
+        <div className="flex items-center gap-3 px-2 py-2.5">
+          <Monogram name={user.full_name} className="size-10 text-sm" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{user.full_name}</p>
+            <p className="truncate text-xs text-muted-foreground">{roleLabel(user.role)}</p>
+          </div>
+        </div>
+      )}
+      {reviewPassword && (
+        <>
+          {user && <DropdownMenuSeparator />}
+          <DropdownMenuLabel className="px-2 text-xs font-normal text-muted-foreground">
+            Konto testowe
+          </DropdownMenuLabel>
+          {demoAccounts.map((account) => (
+            <DropdownMenuItem
+              key={account.login}
+              className="px-2 py-1.5"
+              disabled={busy}
+              onSelect={() => {
+                if (account.login !== user?.login) {
+                  void login(account.login, reviewPassword);
+                }
+              }}
+            >
+              {roleLabel(account.role)}
+              {account.login === user?.login && (
+                <Check className="ml-auto text-brand-lime-ink" aria-label="Bieżące" />
+              )}
+            </DropdownMenuItem>
+          ))}
+        </>
+      )}
+      {isNativeApp() && onChangeServer && (
+        <>
+          {(user || reviewPassword) && <DropdownMenuSeparator />}
+          <DropdownMenuItem
+            className="px-2 py-1.5"
+            disabled={busy}
+            onSelect={() => {
+              void changeServer();
+            }}
+          >
+            <Server />
+            Zmień serwer
+          </DropdownMenuItem>
+        </>
+      )}
+      {user && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="px-2 py-1.5"
+            disabled={busy}
+            onSelect={() => {
+              void logout();
+            }}
+          >
+            <LogOut />
+            Wyloguj
+          </DropdownMenuItem>
+        </>
+      )}
+    </>
+  );
+
+  function sectionMenuItems(items: typeof permitted) {
+    return items.map(({ key, icon: Icon, label }) => (
+      <DropdownMenuItem key={key} onSelect={() => navigate(key)}>
+        <Icon aria-hidden />
+        {label}
+        {activeSection === key && <Check className="ml-auto" aria-label="Bieżące" />}
+      </DropdownMenuItem>
+    ));
+  }
+
+  function mobileSection(key: (typeof mobileSections)[number], title?: string) {
+    const item = permitted.find((entry) => entry.key === key);
+    if (item === undefined) {
+      return null;
+    }
+    const Icon = item.icon;
+    return (
+      <button
+        type="button"
+        aria-current={activeSection === key && !scanningPage ? "page" : undefined}
+        onClick={() => navigate(key)}
+      >
+        <span className="workspace-nav-icon">
+          <Icon aria-hidden />
+        </span>
+        {title ?? item.label}
+      </button>
+    );
   }
 
   return (
-    <div className="min-h-dvh bg-background">
-      <header className="sticky top-0 z-30 border-t-4 border-t-brand-lime border-b bg-white">
-        <div className="mx-auto flex h-[4.25rem] max-w-[90rem] items-center gap-3 px-3 sm:px-7">
-          {user ? (
-            <button
-              type="button"
-              onClick={() => navigate(permitted[0]?.key ?? "schedule")}
-              className="flex min-w-0 flex-1 items-center gap-3 text-left"
-            >
-              <BrandMark className="size-9 sm:size-10" />
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-bold text-brand-navy sm:text-base">
-                  Laboratorium zakładowe
-                </span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  Cementownia Warta S.A.
-                </span>
-              </span>
-            </button>
-          ) : (
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              <BrandMark className="size-9 sm:size-10" />
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-bold text-brand-navy sm:text-base">
-                  Laboratorium zakładowe
-                </span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  Cementownia Warta S.A.
-                </span>
-              </span>
-            </div>
-          )}
-          {user && (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Powiadomienia: ${unread?.data?.length ?? 0} nowych`}
-              onClick={() => navigate("notifications")}
-              className="relative"
-            >
-              <Bell />
-              {!!unread?.data?.length && (
+    <div className="workspace">
+      <header className={cn("workspace-header", !user && "workspace-header--signed-out")}>
+        <div className="workspace-container workspace-header-inner">
+          <a href="/" className="workspace-brand">
+            <CorporateBrand />
+          </a>
+          <div className="workspace-utilities">
+            {user && (
+              <button
+                type="button"
+                className="workspace-bell"
+                aria-label={`Powiadomienia: ${unreadCount} nowych`}
+                aria-current={activeSection === "notifications" ? "page" : undefined}
+                onClick={() => navigate("notifications")}
+              >
                 <span
-                  className="absolute top-1 right-1 size-2 rounded-full bg-brand-lime ring-2 ring-white"
-                  aria-hidden
-                />
-              )}
-            </Button>
-          )}
-          {(user || reviewPassword || native) && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={busy}
-                  className="max-w-[46vw]"
-                  aria-label={reviewPassword ? "Wybierz rolę" : user ? "Menu konta" : "Serwer"}
+                  className={cn(
+                    "workspace-bell-icon",
+                    unreadCount > 0 && "workspace-bell-icon--unread",
+                  )}
                 >
-                  <ShieldCheck />
-                  <span className="truncate">
-                    {user ? roleLabel(user.role) : reviewPassword ? "Wybierz rolę" : "Serwer"}
-                  </span>
-                  <ChevronDown />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                {user && <DropdownMenuLabel>{user.full_name}</DropdownMenuLabel>}
-                {native && serverUrl !== null && (
-                  <>
-                    <DropdownMenuLabel className="truncate text-xs font-normal text-muted-foreground">
-                      Serwer: {serverUrl}
-                    </DropdownMenuLabel>
-                    <DropdownMenuItem onSelect={changeServer}>Zmień serwer</DropdownMenuItem>
-                  </>
-                )}
-                {reviewPassword && (
-                  <>
-                    <DropdownMenuLabel className="text-xs text-muted-foreground">
-                      Konta podglądu
-                    </DropdownMenuLabel>
-                    {demoAccounts.map((account) => (
-                      <DropdownMenuItem
-                        disabled={account.login === user?.login}
-                        key={account.login}
-                        onSelect={() => {
-                          void login(account.login, reviewPassword);
-                        }}
-                      >
-                        {roleLabel(account.role)}
-                      </DropdownMenuItem>
-                    ))}
-                  </>
-                )}
-                {user && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        void logout();
-                      }}
+                  <Bell aria-hidden />
+                  {unreadCount > 0 && (
+                    <span className="workspace-bell-dot" aria-hidden>
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </span>
+                <span className="workspace-bell-label">Powiadomienia</span>
+              </button>
+            )}
+            {(user || reviewPassword) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" disabled={busy} className="workspace-account">
+                    {user ? "Konto" : "Wybierz rolę"}
+                    <ChevronDown aria-hidden />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" sideOffset={8} className="workspace-menu w-64">
+                  {accountItems}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+          {user && (
+            <nav aria-label="Sekcje laboratorium" className="workspace-desktop-nav">
+              {desktopSections.map((key) => {
+                if (key === "equipment" && desktopEquipment.length > 1) {
+                  return (
+                    <DropdownMenu key={key}>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          aria-current={
+                            !scanningPage &&
+                            (activeSection === "equipment" || activeSection === "plans")
+                              ? "page"
+                              : undefined
+                          }
+                        >
+                          Urządzenia
+                          <ChevronDown aria-hidden />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="workspace-menu min-w-48">
+                        {sectionMenuItems(desktopEquipment)}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  );
+                }
+                const item =
+                  key === "equipment"
+                    ? desktopEquipment[0]
+                    : permitted.find((entry) => entry.key === key);
+                if (item === undefined) {
+                  return null;
+                }
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    aria-current={activeSection === item.key && !scanningPage ? "page" : undefined}
+                    onClick={() => navigate(item.key)}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+              {desktopMore.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      aria-current={
+                        desktopMore.some(({ key }) => activeSection === key) ? "page" : undefined
+                      }
                     >
-                      <LogOut />
-                      Wyloguj
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                      Więcej
+                      <ChevronDown aria-hidden />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="workspace-menu min-w-48">
+                    {sectionMenuItems(desktopMore)}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </nav>
+          )}
+          {hasEquipment && (
+            <button
+              className="workspace-desktop-scan"
+              aria-current={scanningPage ? "page" : undefined}
+              type="button"
+              disabled={scanBusy}
+              onClick={openScanner}
+            >
+              Skanuj QR
+              <ScanLine aria-hidden />
+            </button>
           )}
         </div>
       </header>
       {!session ? (
-        <main className="mx-auto grid max-w-5xl items-center gap-6 px-4 py-10 sm:grid-cols-[1.2fr_1fr] sm:py-24">
-          <div className="warta-hero relative isolate overflow-hidden rounded-xl px-6 py-9 text-white sm:px-9 sm:py-12">
-            <div className="h-1 w-12 bg-brand-lime" aria-hidden />
-            <h1 className="my-4 text-3xl font-bold leading-tight sm:text-4xl">
-              Laboratorium
-              <br />
-              Cementowni Warta
-            </h1>
-            <p className="max-w-md text-sm leading-relaxed text-white/85">
-              Urządzenia, terminy wzorcowań i wyniki badań w jednym miejscu.
-            </p>
-            <PlantSkyline className="mt-8 w-full max-w-sm text-white/40" />
-          </div>
-          {session === undefined ? (
-            <Loading />
-          ) : (
-            <LoginForm
-              busy={busy}
-              error={error}
-              login={login}
-              equipment={publicId !== null}
-              serverUrl={serverUrl}
-              onChangeServer={onChangeServer ? changeServer : undefined}
-            />
-          )}
-        </main>
-      ) : (
-        <main className="mx-auto grid max-w-[90rem] gap-4 px-3 py-4 sm:px-7 sm:py-6 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-6">
-          <nav aria-label="Sekcje laboratorium" className="flex flex-wrap gap-1.5 lg:flex-col">
-            {permitted.map(({ key, icon: Icon, label }) => (
-              <Button
-                key={key}
-                type="button"
-                variant={activeSection === key ? "default" : "ghost"}
-                className="justify-start"
-                aria-current={activeSection === key ? "page" : undefined}
-                onClick={() => navigate(key)}
-              >
-                <Icon aria-hidden />
-                {label}
-              </Button>
-            ))}
-          </nav>
-          <div className="min-w-0 space-y-4">
-            <div className="warta-hero relative isolate flex min-h-32 flex-wrap items-center justify-between gap-3 overflow-hidden rounded-xl px-5 py-5 text-white sm:px-7">
-              <div className="z-10">
-                <div className="mb-2 h-1 w-8 bg-brand-lime" aria-hidden />
-                <h1 className="text-2xl font-bold sm:text-3xl">
-                  {activeSection === "notifications"
-                    ? "Powiadomienia"
-                    : permitted.find(({ key }) => key === activeSection)?.label}
-                </h1>
-              </div>
-              <PlantSkyline className="pointer-events-none absolute right-4 bottom-0 w-72 text-white/30 sm:right-12 sm:w-96" />
-              {reviewPassword && (
-                <Badge className="z-10 border-white/35 bg-white/12 text-white" variant="outline">
-                  Podgląd · dane testowe
-                </Badge>
+        <main className="workspace-login grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <section className="workspace-login-intro hidden flex-col justify-between gap-12 overflow-hidden px-12 pt-16 lg:flex">
+            <div className="max-w-lg">
+              <h1 className="text-4xl leading-tight font-bold">
+                Nadzór nad wyposażeniem laboratorium
+              </h1>
+              <p className="mt-4 max-w-md text-[15px] leading-relaxed text-foreground/75">
+                Rejestr urządzeń, terminy wzorcowań i sprawdzeń, odczynniki oraz wyniki badań
+                cementu. Każda zmiana zostaje w historii.
+              </p>
+            </div>
+            <PlantSkyline className="mt-12 w-full text-brand-navy-deep/35" />
+          </section>
+          <div className="flex items-start justify-center px-4 py-10 sm:items-center sm:px-8">
+            <div className="w-full max-w-sm">
+              {session === undefined ? (
+                <Loading />
+              ) : (
+                <LoginForm
+                  busy={busy}
+                  error={error}
+                  login={login}
+                  equipment={publicId !== null}
+                  serverUrl={nativeServerUrl}
+                  onChangeServer={isNativeApp() && onChangeServer ? changeServer : undefined}
+                />
               )}
             </div>
-            {error && <Message>{error}</Message>}
-            {activeSection === "schedule" && (
-              <Schedule token={session.token} permissions={session.user.permissions} />
-            )}
-            {activeSection === "equipment" && (
-              <Equipment
-                key={session.token}
-                token={session.token}
-                permissions={session.user.permissions}
-                publicId={publicId}
-                onPublicId={openPublic}
-                onResults={(id) => {
-                  setEquipmentId(id);
-                  navigate("results");
-                }}
-              />
-            )}
-            {activeSection === "plans" && (
-              <CalibrationPlans token={session.token} permissions={session.user.permissions} />
-            )}
-            {activeSection === "results" && (
-              <Results
-                key={session.token}
-                token={session.token}
-                permissions={session.user.permissions}
-                equipmentId={equipmentId}
-                onClearEquipment={() => setEquipmentId(undefined)}
-              />
-            )}
-            {activeSection === "reagents" && (
-              <Reagents token={session.token} permissions={session.user.permissions} />
-            )}
-            {activeSection === "reports" && (
-              <Reports token={session.token} permissions={session.user.permissions} />
-            )}
-            {activeSection === "settings" && (
-              <Administration token={session.token} permissions={session.user.permissions} />
-            )}
-            {activeSection === "audit" && (
-              <Audit token={session.token} permissions={session.user.permissions} />
-            )}
-            {activeSection === "notifications" && (
-              <Notifications
-                key={notificationRevision}
-                token={session.token}
-                permissions={session.user.permissions}
-                after={() => setNotificationRevision((value) => value + 1)}
-              />
-            )}
           </div>
         </main>
+      ) : (
+        <>
+          <main className="workspace-main">
+            {overview ? (
+              <>
+                {error && (
+                  <div className="workspace-container pt-4">
+                    <Message>{error}</Message>
+                  </div>
+                )}
+                <Overview
+                  token={session.token}
+                  permissions={session.user.permissions}
+                  onOpenDevice={openDevice}
+                  onNavigate={navigate}
+                />
+              </>
+            ) : (
+              <>
+                <div className="workspace-page-heading">
+                  <div className="workspace-container workspace-page-heading-inner">
+                    <p>
+                      <TitleIcon aria-hidden />
+                      {current?.group || "Laboratorium"}
+                    </p>
+                    <h1>{scanningPage ? "Skanuj QR" : (current?.label ?? "Powiadomienia")}</h1>
+                  </div>
+                </div>
+                <div className="workspace-container workspace-content">
+                  {error && <Message>{error}</Message>}
+                  {activeSection === "schedule" && (
+                    <Schedule token={session.token} permissions={session.user.permissions} />
+                  )}
+                  {activeSection === "equipment" && (
+                    <Equipment
+                      key={`${session.token}:${scannerRequest}`}
+                      token={session.token}
+                      permissions={session.user.permissions}
+                      publicId={publicId}
+                      focusScanner={scanningPage && !canScanQr()}
+                      scannerView={scanningPage}
+                      onCloseScanner={() => navigate("equipment")}
+                      scanBusy={scanBusy}
+                      scanError={scanError}
+                      onCancelScan={() => scanController.current?.abort()}
+                      onDismissScanError={() => setScanError("")}
+                      onScan={scan}
+                      onPublicId={openPublic}
+                      onResults={(id) => {
+                        setEquipmentId(id);
+                        navigate("results");
+                      }}
+                    />
+                  )}
+                  {activeSection === "plans" && (
+                    <CalibrationPlans
+                      token={session.token}
+                      permissions={session.user.permissions}
+                    />
+                  )}
+                  {activeSection === "results" && (
+                    <Results
+                      key={session.token}
+                      token={session.token}
+                      permissions={session.user.permissions}
+                      equipmentId={equipmentId}
+                    />
+                  )}
+                  {activeSection === "reagents" && (
+                    <Reagents token={session.token} permissions={session.user.permissions} />
+                  )}
+                  {activeSection === "reports" && (
+                    <Reports token={session.token} permissions={session.user.permissions} />
+                  )}
+                  {activeSection === "settings" && (
+                    <Administration token={session.token} permissions={session.user.permissions} />
+                  )}
+                  {activeSection === "audit" && (
+                    <Audit token={session.token} permissions={session.user.permissions} />
+                  )}
+                  {activeSection === "notifications" && (
+                    <Notifications
+                      key={notificationRevision}
+                      token={session.token}
+                      permissions={session.user.permissions}
+                      after={() => setNotificationRevision((value) => value + 1)}
+                    />
+                  )}
+                </div>
+              </>
+            )}
+          </main>
+          <nav aria-label="Sekcje laboratorium" className="workspace-mobile-nav">
+            {mobileSection("overview")}
+            {mobileSection("schedule", "Terminy")}
+            {hasEquipment && (
+              <button
+                type="button"
+                className="workspace-mobile-scan"
+                aria-current={scanningPage ? "page" : undefined}
+                disabled={scanBusy}
+                onClick={openScanner}
+              >
+                <span className="workspace-nav-icon">
+                  <ScanLine aria-hidden />
+                </span>
+                Skanuj QR
+              </button>
+            )}
+            {mobileSection("equipment")}
+            <Sheet>
+              <SheetTrigger asChild>
+                <button
+                  type="button"
+                  aria-current={
+                    mobileMore.some(({ key }) => activeSection === key) ? "page" : undefined
+                  }
+                >
+                  <span className="workspace-nav-icon">
+                    <Ellipsis aria-hidden />
+                  </span>
+                  Więcej
+                </button>
+              </SheetTrigger>
+              <SheetContent side="bottom" className="workspace-more-sheet">
+                <SheetHeader>
+                  <SheetTitle>Więcej</SheetTitle>
+                  <SheetDescription className="sr-only">
+                    Pozostałe sekcje laboratorium i konto użytkownika
+                  </SheetDescription>
+                </SheetHeader>
+                {mobileMore.length > 0 && (
+                  <div className="workspace-more-links">
+                    {mobileMore.map(({ key, label, icon: Icon }) => (
+                      <SheetClose key={key} asChild>
+                        <button
+                          type="button"
+                          aria-current={activeSection === key ? "page" : undefined}
+                          onClick={() => navigate(key)}
+                        >
+                          <Icon aria-hidden />
+                          <span>{label}</span>
+                          {activeSection === key ? (
+                            <Check aria-hidden />
+                          ) : (
+                            <ChevronRight aria-hidden />
+                          )}
+                        </button>
+                      </SheetClose>
+                    ))}
+                  </div>
+                )}
+                <section className="workspace-more-account">
+                  <h3>Konto</h3>
+                  {user && (
+                    <div className="workspace-account-identity">
+                      <Monogram name={user.full_name} className="size-9 text-xs" />
+                      <div>
+                        <p>{user.full_name}</p>
+                        <p>{roleLabel(user.role)}</p>
+                      </div>
+                    </div>
+                  )}
+                  {reviewPassword && (
+                    <div className="workspace-more-links">
+                      {demoAccounts.map((account) => (
+                        <SheetClose key={account.login} asChild>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              if (account.login !== user?.login) {
+                                void login(account.login, reviewPassword);
+                              }
+                            }}
+                          >
+                            <span>{roleLabel(account.role)}</span>
+                            {account.login === user?.login && <Check aria-label="Bieżące" />}
+                          </button>
+                        </SheetClose>
+                      ))}
+                    </div>
+                  )}
+                  {isNativeApp() && onChangeServer && (
+                    <SheetClose asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => {
+                          void changeServer();
+                        }}
+                      >
+                        <Server aria-hidden />
+                        Zmień serwer
+                      </Button>
+                    </SheetClose>
+                  )}
+                  <SheetClose asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => {
+                        void logout();
+                      }}
+                    >
+                      <LogOut aria-hidden />
+                      Wyloguj
+                    </Button>
+                  </SheetClose>
+                </section>
+              </SheetContent>
+            </Sheet>
+          </nav>
+        </>
       )}
-      <Toaster position="bottom-center" richColors />
+      <Toaster position="bottom-center" mobileOffset={mobileToastOffset} richColors />
     </div>
   );
 }
@@ -540,8 +1033,8 @@ function LoginForm({
   busy: boolean;
   error: string;
   equipment: boolean;
-  serverUrl: string | null;
-  onChangeServer?: () => void;
+  serverUrl?: string | null;
+  onChangeServer?: () => Promise<void>;
 }) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -549,7 +1042,7 @@ function LoginForm({
     void login(textValue(values.get("login"), "").trim(), textValue(values.get("password"), ""));
   }
   return (
-    <Card className="border-t-4 border-t-brand-lime">
+    <Card className="workspace-login-card">
       <CardHeader>
         <CardTitle className="text-xl text-brand-navy">Zaloguj się</CardTitle>
         <CardDescription>
@@ -577,20 +1070,21 @@ function LoginForm({
             {busy ? "Logowanie…" : "Zaloguj się"}
           </Button>
         </form>
-        {serverUrl !== null && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+        {serverUrl && onChangeServer && (
+          <div className="mt-4 flex items-center justify-between gap-2 border-t pt-3 text-xs text-muted-foreground">
             <span className="truncate">Serwer: {serverUrl}</span>
-            {onChangeServer && (
-              <Button
-                type="button"
-                variant="link"
-                size="sm"
-                className="h-auto p-0"
-                onClick={onChangeServer}
-              >
-                Zmień serwer
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto px-0"
+              disabled={busy}
+              onClick={() => {
+                void onChangeServer();
+              }}
+            >
+              Zmień serwer
+            </Button>
           </div>
         )}
         {reviewPassword && (

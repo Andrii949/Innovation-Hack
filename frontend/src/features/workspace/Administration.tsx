@@ -4,6 +4,7 @@ import { api, type ApiRecord, textValue } from "@/api/workspaceClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { describeAudit } from "@/lib/audit";
 
 import { apiSave, calibrationFields, modelFields } from "./Equipment";
 import {
@@ -32,10 +33,10 @@ const catalogFields: Field[] = [
   ...modelFields.map((field) =>
     Object.assign({}, field, { required: field.key !== "software_version" }),
   ),
-  { key: "suggested_lab_code", label: "Kod sugerowanej pracowni", clear: true },
+  { key: "suggested_lab_code", label: "Kod sugerowanej pracowni" },
   ...calibrationFields.filter((field) => field.key !== "calibration_interval_months"),
   { key: "calibration_interval_months", label: "Cykl (miesiące)", type: "number" },
-  { key: "search_aliases", label: "Hasła wyszukiwania", clear: true },
+  { key: "search_aliases", label: "Hasła wyszukiwania" },
   { key: "active", label: "Aktywny", type: "boolean" },
 ];
 
@@ -115,35 +116,38 @@ const notificationLabels: Record<string, string> = {
 
 export function Administration(props: WorkspaceProps) {
   const { permissions } = props;
-  const defaultTab = permissions.includes("equipment:write")
-    ? "catalog"
-    : permissions.includes("settings:write")
-      ? "templates"
-      : "users";
+  const canEditEquipment = permissions.includes("equipment:write");
+  const canEditSettings = permissions.includes("settings:write");
+  const canEditUsers = permissions.includes("users:write");
+  const firstTab = canEditEquipment ? "catalog" : canEditSettings ? "templates" : "users";
   return (
-    <Tabs defaultValue={defaultTab} className="min-w-0">
-      <TabsList className="h-auto w-full flex-wrap justify-start p-1.5">
-        {permissions.includes("equipment:write") && (
-          <TabsTrigger value="catalog">Katalog modeli</TabsTrigger>
-        )}
-        {permissions.includes("settings:write") && (
+    <Tabs defaultValue={firstTab} className="min-w-0 gap-4">
+      <TabsList
+        aria-label="Sekcje administracji"
+        variant="line"
+        className="workspace-admin-tabs w-full flex-wrap justify-start gap-0 px-0 py-0 [&>button]:flex-none [&>button]:rounded-none [&>button]:after:bottom-[-1px]"
+      >
+        {canEditEquipment && <TabsTrigger value="catalog">Katalog modeli</TabsTrigger>}
+        {canEditSettings && (
           <>
             <TabsTrigger value="templates">Szablony sprawdzeń</TabsTrigger>
             <TabsTrigger value="settings">Ustawienia ogólne</TabsTrigger>
             <TabsTrigger value="rules">Reguły powiadomień</TabsTrigger>
+          </>
+        )}
+        {canEditUsers && (
+          <>
+            <TabsTrigger value="users">Użytkownicy</TabsTrigger>
             <TabsTrigger value="labs">Pracownie</TabsTrigger>
           </>
         )}
-        {permissions.includes("users:write") && (
-          <TabsTrigger value="users">Użytkownicy</TabsTrigger>
-        )}
       </TabsList>
-      {permissions.includes("equipment:write") && (
+      {canEditEquipment && (
         <TabsContent value="catalog">
           <Catalog {...props} />
         </TabsContent>
       )}
-      {permissions.includes("settings:write") && (
+      {canEditSettings && (
         <>
           <TabsContent value="templates">
             <Templates {...props} />
@@ -154,15 +158,17 @@ export function Administration(props: WorkspaceProps) {
           <TabsContent value="rules">
             <Rules {...props} />
           </TabsContent>
+        </>
+      )}
+      {canEditUsers && (
+        <>
+          <TabsContent value="users">
+            <Users {...props} />
+          </TabsContent>
           <TabsContent value="labs">
             <Labs {...props} />
           </TabsContent>
         </>
-      )}
-      {permissions.includes("users:write") && (
-        <TabsContent value="users">
-          <Users {...props} />
-        </TabsContent>
       )}
     </Tabs>
   );
@@ -489,33 +495,45 @@ function Users({ token }: WorkspaceProps) {
 
 export function Audit({ token }: WorkspaceProps) {
   const [offset, setOffset] = useState(0);
-  const state = useApi<ApiRecord[]>(`/audit?limit=51&offset=${offset}`, token);
+  const state = useApi<ApiRecord[]>("/audit", token);
+  const page = useMemo(
+    () => state?.data?.slice(offset, offset + 50).map(auditRow) ?? [],
+    [state, offset],
+  );
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Historia zmian</CardTitle>
+        <CardTitle>Dziennik operacji</CardTitle>
         <CardDescription>Zapis operacji wykonanych w laboratorium.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
         {state?.data ? (
           <>
-            <Rows rows={state.data.slice(0, 50)} columns={auditColumns} />
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                disabled={offset === 0}
-                onClick={() => setOffset((value) => Math.max(0, value - 50))}
-              >
-                Nowsze
-              </Button>
-              <Button
-                variant="outline"
-                disabled={state.data.length <= 50}
-                onClick={() => setOffset((value) => value + 50)}
-              >
-                Starsze
-              </Button>
-            </div>
+            <Rows rows={page} columns={auditColumns} />
+            {state.data.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                <p className="text-xs text-muted-foreground">
+                  Wpisy {offset + 1}–{Math.min(offset + 50, state.data.length)} z{" "}
+                  {state.data.length}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={offset === 0}
+                    onClick={() => setOffset((value) => value - 50)}
+                  >
+                    Nowsze
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={state.data.length <= offset + 50}
+                    onClick={() => setOffset((value) => value + 50)}
+                  >
+                    Starsze
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <Loading state={state} />
@@ -578,10 +596,21 @@ const userColumns: Columns = [
   ["active", "Aktywny", (value) => (value ? "Tak" : "Nie")],
 ];
 
+function auditRow(row: ApiRecord): ApiRecord {
+  const entry = describeAudit({
+    action: textValue(row.action),
+    entity: textValue(row.entity),
+    entity_id: typeof row.entity_id === "string" ? row.entity_id : null,
+    before: row.before,
+    after: row.after,
+  });
+  return { ...row, operation: entry.title, subject: entry.subject };
+}
+
 const auditColumns: Columns = [
   ["at", "Czas", (value) => textValue(value).replace("T", " ").slice(0, 19)],
-  ["action", "Operacja"],
-  ["entity", "Obiekt"],
+  ["operation", "Operacja"],
+  ["subject", "Obiekt"],
   ["entity_id", "Identyfikator"],
   ["user_id", "Użytkownik"],
   ["reason", "Powód"],

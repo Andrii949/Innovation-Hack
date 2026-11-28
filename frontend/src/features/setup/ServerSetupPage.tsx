@@ -2,7 +2,7 @@ import { QrCode } from "lucide-react";
 import type { SyntheticEvent } from "react";
 import { useState } from "react";
 
-import { BrandMark, PlantSkyline } from "@/components/BrandMark";
+import { CorporateBrand } from "@/components/BrandMark";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,9 @@ import {
   parseServerConfigQr,
   setServerUrl,
 } from "@/platform/server";
+
+import "@/layout/app-shell.css";
+import "@/layout/workspace-pages.css";
 
 type Props = {
   onDone: () => void;
@@ -80,22 +83,16 @@ export default function ServerSetupPage({ onDone }: Props) {
   };
 
   return (
-    <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-primary px-4 py-10 text-primary-foreground">
-      <PlantSkyline className="pointer-events-none absolute -right-8 bottom-0 h-44 w-[40rem] text-primary-foreground/10" />
-      <div className="relative w-full max-w-md">
-        <div className="mb-6 flex items-center gap-3">
-          <BrandMark className="size-11" />
-          <div>
-            <p className="font-mono text-[9px] tracking-[0.24em] text-chart-2 uppercase">
-              Cementownia Warta S.A.
-            </p>
-            <p className="text-lg font-semibold tracking-tight">Laboratorium zakładowe</p>
-            <p className="font-mono text-[10px] tracking-[0.14em] text-white/55 uppercase">
-              PN-EN ISO/IEC 17025
-            </p>
+    <main className="workspace workspace-setup">
+      <header className="workspace-setup-header">
+        <div className="workspace-container workspace-brand-container">
+          <div className="workspace-brand">
+            <CorporateBrand />
           </div>
         </div>
-        <Card className="bg-card text-card-foreground shadow-2xl">
+      </header>
+      <div className="workspace-container workspace-content mx-auto max-w-md">
+        <Card className="workspace-login-card">
           <CardHeader>
             <CardTitle className="text-xl">Adres serwera</CardTitle>
             <CardDescription>
@@ -147,9 +144,6 @@ export default function ServerSetupPage({ onDone }: Props) {
             </CardFooter>
           </form>
         </Card>
-        <p className="mt-4 text-center font-mono text-[9px] tracking-[0.16em] text-white/50 uppercase">
-          Połączenie z serwerem zakładowym
-        </p>
       </div>
     </main>
   );

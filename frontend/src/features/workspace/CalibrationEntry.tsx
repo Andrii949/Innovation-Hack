@@ -1,5 +1,5 @@
-import { Camera, FileUp, Plus, ScanText, Trash2 } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { Camera, Plus, ScanText, Trash2 } from "lucide-react";
+import { type FormEvent, type ReactElement, useState } from "react";
 import { toast } from "sonner";
 
 import { api, errorMessage, upload } from "@/api/workspaceClient";
@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { capturePhoto } from "@/platform/camera";
 
-import { Control, Message, selectStyle, today } from "./shared";
+import { Control, FilePicker, Message, selectStyle, today } from "./shared";
 
 type Point = { point: string; error: string; uncertainty: string; unit: string };
 type Draft = {
@@ -38,11 +38,13 @@ export function CalibrationEntry({
   equipmentId,
   name,
   after,
+  children,
 }: {
   token: string;
   equipmentId: number;
   name: string;
   after: () => void;
+  children?: ReactElement;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -163,10 +165,12 @@ export function CalibrationEntry({
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button">
-          <Plus />
-          Zarejestruj wzorcowanie
-        </Button>
+        {children ?? (
+          <Button type="button">
+            <Plus />
+            Zarejestruj wzorcowanie
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
@@ -179,14 +183,12 @@ export function CalibrationEntry({
           <div className="rounded-lg border bg-muted/60 p-3">
             <Control label="Świadectwo wzorcowania (opcjonalnie)" htmlFor="cert-file">
               <div className="flex flex-wrap items-center gap-2">
-                <FileUp className="size-4" aria-hidden />
-                <Input
+                <FilePicker
                   id="cert-file"
-                  className="max-w-72"
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={(event) => {
-                    setFile(event.currentTarget.files?.[0]);
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  file={file}
+                  onChange={(value) => {
+                    setFile(value);
                     setAttachment(undefined);
                     setDraft(undefined);
                   }}
@@ -213,7 +215,6 @@ export function CalibrationEntry({
                   Odczytaj świadectwo (OCR)
                 </Button>
               </div>
-              {file !== undefined && <p className="text-xs text-muted-foreground">{file.name}</p>}
             </Control>
           </div>
           {draft && (
